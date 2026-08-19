@@ -102,16 +102,16 @@ export function PdfSplitViewer({
   const currentImage = pageImages[currentPage];
 
   return (
-    <div className="flex flex-col h-full bg-slate-950 border-r border-slate-800 text-slate-100 overflow-hidden">
+    <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 overflow-hidden">
       {/* Top Header Bar */}
-      <header className="flex items-center justify-between px-4 py-3 border-b border-slate-800 bg-slate-900/90 backdrop-blur z-10 shrink-0">
+      <header className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-900/90 backdrop-blur z-10 shrink-0">
         <div className="flex items-center gap-3 min-w-0">
-          <div className="grid size-8 place-items-center rounded-lg bg-indigo-600/20 text-indigo-400">
+          <div className="grid size-8 place-items-center rounded-lg bg-indigo-50 dark:bg-indigo-600/20 text-indigo-600 dark:text-indigo-400">
             <span className="material-symbols-outlined text-base">picture_as_pdf</span>
           </div>
           <div className="min-w-0">
-            <h3 className="font-semibold text-sm text-slate-100 truncate">{material.title}</h3>
-            <p className="text-[11px] text-slate-400">
+            <h3 className="font-semibold text-sm text-slate-900 dark:text-slate-100 truncate">{material.title}</h3>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400">
               Página {currentPage} de {material.pageCount}
             </p>
           </div>
@@ -120,20 +120,20 @@ export function PdfSplitViewer({
         {/* Toolbar Controls */}
         <div className="flex items-center gap-1.5 shrink-0">
           {/* Zoom */}
-          <div className="flex items-center rounded-lg bg-slate-800/80 p-0.5 border border-slate-700/60 mr-2">
+          <div className="flex items-center rounded-lg bg-slate-100 dark:bg-slate-800/80 p-0.5 border border-slate-200 dark:border-slate-700/60 mr-2">
             <button
               type="button"
               onClick={() => setZoom((z) => Math.max(50, z - 15))}
-              className="p-1 rounded text-slate-300 hover:text-white hover:bg-slate-700/60"
+              className="p-1 rounded text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-700/60"
               title="Reducir zoom"
             >
               <span className="material-symbols-outlined text-sm">remove</span>
             </button>
-            <span className="px-2 text-xs font-mono text-slate-300">{zoom}%</span>
+            <span className="px-2 text-xs font-mono text-slate-700 dark:text-slate-300">{zoom}%</span>
             <button
               type="button"
               onClick={() => setZoom((z) => Math.min(200, z + 15))}
-              className="p-1 rounded text-slate-300 hover:text-white hover:bg-slate-700/60"
+              className="p-1 rounded text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-700/60"
               title="Aumentar zoom"
             >
               <span className="material-symbols-outlined text-sm">add</span>
@@ -144,7 +144,7 @@ export function PdfSplitViewer({
           <button
             type="button"
             onClick={() => onAskAboutPage && onAskAboutPage(material.title, currentPage)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 text-xs font-medium transition"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-600/20 hover:bg-indigo-100 dark:hover:bg-indigo-600/30 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-500/30 text-xs font-medium transition"
             title="Preguntar al tutor sobre esta página"
           >
             <span className="material-symbols-outlined text-sm">psychology</span>
@@ -156,7 +156,7 @@ export function PdfSplitViewer({
             <button
               type="button"
               onClick={onClose}
-              className="p-1.5 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800"
+              className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
               title="Cerrar visor"
             >
               <span className="material-symbols-outlined text-base">close</span>
@@ -168,7 +168,7 @@ export function PdfSplitViewer({
       {/* Main Content: Thumbnails Sidebar + Rendered Page Canvas */}
       <div className="flex flex-1 min-h-0 overflow-hidden">
         {/* Thumbnails Sidebar */}
-        <aside className="w-20 sm:w-28 shrink-0 border-r border-slate-800/80 bg-slate-900/50 overflow-y-auto p-2 flex flex-col gap-2">
+        <aside className="w-20 sm:w-28 shrink-0 border-r border-slate-200 dark:border-slate-800/80 bg-slate-100/60 dark:bg-slate-900/50 overflow-y-auto p-2 flex flex-col gap-2">
           {Array.from({ length: material.pageCount }, (_, i) => i + 1).map((pageNum) => (
             <button
               key={pageNum}
@@ -176,11 +176,11 @@ export function PdfSplitViewer({
               onClick={() => setCurrentPage(pageNum)}
               className={`w-full text-center p-1.5 rounded-xl border transition flex flex-col items-center gap-1 ${
                 currentPage === pageNum
-                  ? "border-indigo-500 bg-indigo-950/40 text-indigo-300 shadow-sm"
-                  : "border-slate-800/80 bg-slate-950/60 hover:border-slate-700 text-slate-400 hover:text-slate-200"
+                  ? "border-indigo-500 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 shadow-sm"
+                  : "border-slate-200 dark:border-slate-800/80 bg-white/70 dark:bg-slate-950/60 hover:border-slate-300 dark:hover:border-slate-700 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
               }`}
             >
-              <div className="w-full aspect-[3/4] rounded-lg bg-slate-900 flex items-center justify-center border border-slate-800/60 overflow-hidden">
+              <div className="w-full aspect-[3/4] rounded-lg bg-slate-100 dark:bg-slate-900 flex items-center justify-center border border-slate-200 dark:border-slate-800/60 overflow-hidden">
                 {pageImages[pageNum] ? (
                   <img
                     src={pageImages[pageNum]}
@@ -188,7 +188,7 @@ export function PdfSplitViewer({
                     className="w-full h-full object-cover"
                   />
                 ) : (
-                  <span className="font-mono text-xs font-bold text-slate-500">{pageNum}</span>
+                  <span className="font-mono text-xs font-bold text-slate-400 dark:text-slate-500">{pageNum}</span>
                 )}
               </div>
               <span className="text-[10px] font-medium font-mono">Pág. {pageNum}</span>
@@ -197,25 +197,25 @@ export function PdfSplitViewer({
         </aside>
 
         {/* Center Page Canvas */}
-        <main className="flex-1 overflow-auto p-4 sm:p-6 flex flex-col items-center justify-start bg-slate-950 relative">
+        <main className="flex-1 overflow-auto p-4 sm:p-6 flex flex-col items-center justify-start bg-slate-50 dark:bg-slate-950 relative">
           {loadingPage && !currentImage && (
-            <div className="flex flex-col items-center justify-center h-80 gap-3 text-slate-400">
+            <div className="flex flex-col items-center justify-center h-80 gap-3 text-slate-500 dark:text-slate-400">
               <div className="size-8 animate-spin rounded-full border-2 border-indigo-500 border-t-transparent"></div>
               <p className="text-sm font-medium">Renderizando página {currentPage} con Poppler…</p>
             </div>
           )}
 
           {error && (
-            <div className="m-auto max-w-md p-5 rounded-2xl border border-red-900/60 bg-red-950/30 text-red-200 text-center">
-              <span className="material-symbols-outlined text-3xl text-red-400 mb-2">error</span>
+            <div className="m-auto max-w-md p-5 rounded-2xl border border-red-200 dark:border-red-900/60 bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-200 text-center">
+              <span className="material-symbols-outlined text-3xl text-red-500 mb-2">error</span>
               <p className="font-semibold text-sm mb-1">No se pudo cargar la página</p>
-              <p className="text-xs text-red-300/80">{error}</p>
+              <p className="text-xs text-red-600 dark:text-red-300/80">{error}</p>
             </div>
           )}
 
           {currentImage && (
             <div
-              className="transition-all duration-150 shadow-2xl rounded-lg overflow-hidden border border-slate-800 bg-white"
+              className="transition-all duration-150 shadow-2xl rounded-lg overflow-hidden border border-slate-200 dark:border-slate-800 bg-white"
               style={{
                 width: `${zoom}%`,
                 maxWidth: `${Math.max(100, zoom)}%`
@@ -230,24 +230,24 @@ export function PdfSplitViewer({
           )}
 
           {/* Floating Navigation Controls */}
-          <div className="sticky bottom-4 mt-auto flex items-center gap-2 rounded-full border border-slate-800 bg-slate-900/90 px-4 py-2 shadow-xl backdrop-blur">
+          <div className="sticky bottom-4 mt-auto flex items-center gap-2 rounded-full border border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-900/90 px-4 py-2 shadow-xl backdrop-blur">
             <button
               type="button"
               disabled={currentPage <= 1}
               onClick={handlePrev}
-              className="p-1.5 rounded-full hover:bg-slate-800 disabled:opacity-30 disabled:cursor-not-allowed text-slate-200"
+              className="p-1.5 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:cursor-not-allowed text-slate-700 dark:text-slate-200"
               title="Página anterior"
             >
               <span className="material-symbols-outlined text-lg">chevron_left</span>
             </button>
-            <span className="text-xs font-mono px-2 text-slate-300">
+            <span className="text-xs font-mono px-2 text-slate-700 dark:text-slate-300">
               {currentPage} / {material.pageCount}
             </span>
             <button
               type="button"
               disabled={currentPage >= material.pageCount}
               onClick={handleNext}
-              className="p-1.5 rounded-full hover:bg-slate-800 disabled:opacity-30 disabled:cursor-not-allowed text-slate-200"
+              className="p-1.5 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:cursor-not-allowed text-slate-700 dark:text-slate-200"
               title="Página siguiente"
             >
               <span className="material-symbols-outlined text-lg">chevron_right</span>

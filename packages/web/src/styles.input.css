@@ -11,13 +11,32 @@
 @layer base {
   :root {
     color-scheme: dark;
+    --app-bg: #090d16;
+    --app-text: #f1f5f9;
+    --panel-bg: #0b0f19;
+    --surface-bg: #0f172a;
+    --card-bg: rgba(15, 23, 42, 0.75);
+    --border-color: rgba(51, 65, 85, 0.6);
+    --border-subtle: rgba(51, 65, 85, 0.35);
+  }
+
+  :root.light {
+    color-scheme: light;
+    --app-bg: #f8fafc;
+    --app-text: #0f172a;
+    --panel-bg: #ffffff;
+    --surface-bg: #f1f5f9;
+    --card-bg: rgba(255, 255, 255, 0.9);
+    --border-color: rgba(226, 232, 240, 0.9);
+    --border-subtle: rgba(241, 245, 249, 0.9);
   }
 
   body {
     margin: 0;
     font-family: var(--font-sans);
-    background-color: #090d16;
-    color: #f1f5f9;
+    background-color: var(--app-bg);
+    color: var(--app-text);
+    transition: background-color 0.2s ease, color 0.2s ease;
   }
 
   h1, h2, h3, h4, h5, h6, .font-display {
@@ -39,10 +58,37 @@
     background: transparent;
   }
   ::-webkit-scrollbar-thumb {
-    background: rgba(148, 163, 184, 0.2);
+    background: rgba(148, 163, 184, 0.25);
     border-radius: 9999px;
   }
+  :root.light ::-webkit-scrollbar-thumb {
+    background: rgba(100, 116, 139, 0.3);
+  }
   ::-webkit-scrollbar-thumb:hover {
-    background: rgba(148, 163, 184, 0.4);
+    background: rgba(148, 163, 184, 0.5);
+  }
+
+  /* Drag Resizer Handle */
+  .resizer-handle {
+    position: relative;
+    width: 6px;
+    cursor: col-resize;
+    user-select: none;
+    touch-action: none;
+    transition: background-color 0.15s ease;
+    z-index: 20;
+  }
+  .resizer-handle:hover,
+  .resizer-handle.is-active {
+    background-color: rgba(99, 102, 241, 0.7);
+  }
+
+  .is-resizing {
+    user-select: none !important;
+    cursor: col-resize !important;
+  }
+  .is-resizing * {
+    user-select: none !important;
+    pointer-events: none !important;
   }
 }
