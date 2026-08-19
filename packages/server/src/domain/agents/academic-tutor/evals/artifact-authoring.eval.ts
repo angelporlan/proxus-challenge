@@ -254,6 +254,14 @@ const makeMaterialRepository = (materials: readonly MaterialFixture[]) => Materi
       ? Effect.fail(new MaterialNotFound({ materialId: id }))
       : Effect.succeed(toPdfMaterial(material));
   },
+  upload: (payload) => Effect.succeed({
+    id: payload.fileName.replace(/\.pdf$/, ""),
+    title: payload.title ?? payload.fileName.replace(/\.pdf$/, ""),
+    fileName: payload.fileName,
+    pageCount: 1,
+    uploadedAt: new Date().toISOString()
+  }),
+  delete: (_id) => Effect.void,
   renderPages: (id, pages) => {
     const material = materials.find((candidate) => candidate.id === id);
     if (material === undefined) {

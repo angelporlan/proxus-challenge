@@ -1,11 +1,13 @@
 import { Effect, FileSystem, Layer, Option, Path } from "effect";
 import {
+  InvalidMaterialError,
   MaterialNotFound,
   MaterialRepository,
   MaterialRepositoryError,
   type MaterialPageImages,
   type MaterialRepository as MaterialRepositoryType,
-  type PdfMaterial
+  type PdfMaterial,
+  type UploadMaterialPayload
 } from "../../domain/materials/material.ts";
 import { PdfService } from "../../domain/materials/pdf-service.ts";
 
@@ -22,6 +24,18 @@ export const FileMaterialRepository = {
     const mapError = (reason: unknown) => new MaterialRepositoryError({ reason });
 
     const pdfPath = (fileName: string) => path.join(directory, fileName);
+
+    const sanitizeFileName = (rawName: string) => {
+      const base = path.basename(rawName).trim();
+      const withoutExt = path.basename(base, path.extname(base)).replace(/[^a-zA-Z0-9_\u00C0-\u017F-]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
+      const cleanBase = withoutExt.length > 0 ? withoutExt : "document";
+      return `${cleanBase}.pdf`;
+    };
+
+    const hasPdfHeader = (bytes: Uint8Array) => {
+      if (bytes.length < 4) return false;
+      return bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46;
+    };
 
     const listFiles = (): Effect.Effect<readonly PdfFile[], MaterialRepositoryError> => Effect.gen(function* () {
       yield* fs.makeDirectory(directory, { recursive: true }).pipe(
@@ -69,6 +83,61 @@ export const FileMaterialRepository = {
       Effect.map((file) => file.material)
     );
 
+    const upload = (
+      payload: UploadMaterialPayload
+    ): Effect.Effect<PdfMaterial, InvalidMaterialError | MaterialRepositoryError> => Effect.gen(function* () {
+      if (!hasPdfHeader(payload.content)) {
+        return yield* new InvalidMaterialError({
+          reason: "The uploaded file does not appear to be a valid PDF (missing PDF header magic bytes)."
+        });
+      }
+
+      yield* fs.makeDirectory(directory, { recursive: true }).pipe(
+        Effect.mapError(mapError)
+      );
+
+      const fileName = sanitizeFileName(payload.fileName);
+      const fullPath = pdfPath(fileName);
+
+      yield* fs.writeFile(fullPath, payload.content).pipe(
+        Effect.mapError(mapError)
+      );
+
+      const pageCountResult = yield* pdf.pageCount(fullPath).pipe(
+        Effect.map((count) => ({ ok: true as const, count })),
+        Effect.catch((err) =>
+          fs.remove(fullPath, { force: true }).pipe(
+            Effect.catch(() => Effect.void),
+            Effect.as({ ok: false as const, error: String(err) })
+          )
+        )
+      );
+
+      if (!pageCountResult.ok) {
+        return yield* new InvalidMaterialError({
+          reason: `Uploaded PDF is corrupted or cannot be processed: ${pageCountResult.error}`
+        });
+      }
+
+      const stat = yield* fs.stat(fullPath).pipe(Effect.mapError(mapError));
+      const materialId = path.basename(fileName, ".pdf");
+
+      return {
+        id: materialId,
+        title: (payload.title !== undefined && payload.title.trim().length > 0) ? payload.title.trim() : materialId,
+        fileName,
+        pageCount: pageCountResult.count,
+        uploadedAt: Option.getOrElse(stat.mtime, () => new Date()).toISOString()
+      };
+    });
+
+    const remove = (id: string): Effect.Effect<void, MaterialNotFound | MaterialRepositoryError> => Effect.gen(function* () {
+      const file = yield* getFile(id);
+      yield* fs.remove(file.path, { force: true }).pipe(
+        Effect.mapError(mapError)
+      );
+    });
+
     const renderPages = (
       id: string,
       pages: readonly number[]
@@ -92,7 +161,8 @@ export const FileMaterialRepository = {
       };
     });
 
-    return { list, get, renderPages };
+    return { list, get, upload, delete: remove, renderPages };
   }),
   layer: (directory: string) => Layer.effect(MaterialRepository)(FileMaterialRepository.make(directory))
 };
+

@@ -27,3 +27,17 @@ export const MaterialListResponse = Schema.Struct({
   materials: Schema.Array(PdfMaterial)
 });
 export type MaterialListResponse = typeof MaterialListResponse.Type;
+
+export const UploadMaterialInput = Schema.Struct({
+  fileName: Schema.String,
+  contentBase64: Schema.String,
+  title: Schema.optional(Schema.String)
+});
+export type UploadMaterialInput = typeof UploadMaterialInput.Type;
+
+export const DeleteMaterialResponse = Schema.Struct({
+  success: Schema.Boolean,
+  id: Schema.String
+});
+export type DeleteMaterialResponse = typeof DeleteMaterialResponse.Type;
+

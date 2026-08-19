@@ -1,6 +1,11 @@
 import { Schema } from "effect";
 import { HttpApiEndpoint, HttpApiGroup } from "effect/unstable/httpapi";
-import { MaterialListResponse, PdfMaterial } from "../schemas/material.ts";
+import {
+  DeleteMaterialResponse,
+  MaterialListResponse,
+  PdfMaterial,
+  UploadMaterialInput
+} from "../schemas/material.ts";
 
 export class MaterialsApi extends HttpApiGroup.make("materials")
   .add(
@@ -12,7 +17,18 @@ export class MaterialsApi extends HttpApiGroup.make("materials")
         id: Schema.String
       },
       success: PdfMaterial
+    }),
+    HttpApiEndpoint.post("upload", "/upload", {
+      payload: UploadMaterialInput,
+      success: PdfMaterial
+    }),
+    HttpApiEndpoint.delete("delete", "/:id", {
+      params: {
+        id: Schema.String
+      },
+      success: DeleteMaterialResponse
     })
   )
   .prefix("/materials")
 {}
+

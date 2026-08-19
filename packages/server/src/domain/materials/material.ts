@@ -20,6 +20,16 @@ export interface MaterialPageImages {
   readonly pages: readonly PageImage[];
 }
 
+export interface UploadMaterialPayload {
+  readonly fileName: string;
+  readonly content: Uint8Array;
+  readonly title?: string | undefined;
+}
+
+export class InvalidMaterialError extends Data.TaggedError("InvalidMaterialError")<{
+  readonly reason: string;
+}> {}
+
 export class MaterialNotFound extends Data.TaggedError("MaterialNotFound")<{
   readonly materialId: string;
 }> {}
@@ -36,6 +46,12 @@ export class MaterialRepositoryError extends Data.TaggedError("MaterialRepositor
 export interface MaterialRepository {
   readonly list: () => Effect.Effect<readonly PdfMaterial[], MaterialRepositoryError>;
   readonly get: (id: string) => Effect.Effect<PdfMaterial, MaterialNotFound | MaterialRepositoryError>;
+  readonly upload: (
+    payload: UploadMaterialPayload
+  ) => Effect.Effect<PdfMaterial, InvalidMaterialError | MaterialRepositoryError>;
+  readonly delete: (
+    id: string
+  ) => Effect.Effect<void, MaterialNotFound | MaterialRepositoryError>;
   readonly renderPages: (
     id: string,
     pages: readonly number[]

@@ -17,6 +17,12 @@ export const TutorHttpHandlers = HttpApiBuilder.group(
   })
 );
 
+const decodeBase64 = (data: string): Uint8Array => {
+  const parts = data.split(",");
+  const base64Content = parts.length > 1 ? (parts[1] ?? "") : data;
+  return Uint8Array.from(Buffer.from(base64Content, "base64"));
+};
+
 export const MaterialsHttpHandlers = HttpApiBuilder.group(
   ProxusApi,
   "materials",
@@ -28,7 +34,19 @@ export const MaterialsHttpHandlers = HttpApiBuilder.group(
         Effect.map((items) => ({ materials: items })),
         Effect.orDie
       ))
-      .handle("get", ({ params }) => materials.get(params.id).pipe(Effect.orDie));
+      .handle("get", ({ params }) => materials.get(params.id).pipe(Effect.orDie))
+      .handle("upload", ({ payload }) => {
+        const content = decodeBase64(payload.contentBase64);
+        return materials.upload({
+          fileName: payload.fileName,
+          content,
+          title: payload.title
+        }).pipe(Effect.orDie);
+      })
+      .handle("delete", ({ params }) => materials.delete(params.id).pipe(
+        Effect.map(() => ({ success: true, id: params.id })),
+        Effect.orDie
+      ));
   })
 );
 

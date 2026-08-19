@@ -64,7 +64,24 @@ export const makeMaterialCommands = (repository: MaterialRepository) => {
     )
   );
 
-  return AgentCli.Command.group("materials", [list, view] as const).pipe(
+  const remove = AgentCli.Command.withExamples([
+    { command: "materials delete algebra-notes", description: "Delete a material by its ID" }
+  ])(
+    AgentCli.Command.withDescription("Delete an uploaded PDF material by ID")(
+      AgentCli.Command.exec("delete", {
+        materialId: AgentCli.Argument.string("materialId").pipe(
+          AgentCli.Argument.withDescription("Material id from `materials list`")
+        )
+      }, ({ materialId }) =>
+        repository.delete(materialId).pipe(
+          Effect.map(() => `Material deleted: ${materialId}`),
+          Effect.catch((error) => Effect.succeed(renderMaterialError(error)))
+        )
+      )
+    )
+  );
+
+  return AgentCli.Command.group("materials", [list, view, remove] as const).pipe(
     AgentCli.Command.withDescription("Uploaded PDF material commands")
   );
 };

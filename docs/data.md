@@ -20,11 +20,16 @@ packages/server/.data/
 
 ## Materials
 
-Los PDFs viven en:
+Los documentos y temarios en PDF se guardan en:
 
 ```txt
 packages/server/.data/materials/pdfs/
 ```
+
+### Ingesta de Documentos
+- **Desde la UI**: El estudiante puede subir apuntes o temarios directamente arrastrando y soltando o seleccionando archivos PDF en la plataforma.
+- **Desde la API**: Mediante `POST /api/materials/upload` con validación de integridad y extracción automática de páginas.
+- **Eliminación**: Directamente desde la UI o mediante `DELETE /api/materials/:id`.
 
 El repo espera que Poppler esté instalado para inspeccionar/renderizar PDFs:
 
@@ -36,6 +41,7 @@ El tutor puede usar:
 ```txt
 materials list
 materials view <materialId> <pages>
+materials delete <materialId>
 ```
 
 `materials view` renderiza páginas como imágenes para Gemini multimodal.

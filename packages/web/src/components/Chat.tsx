@@ -14,7 +14,12 @@ const starterPrompts = [
   "Explain the hardest concept in my notes step by step"
 ] as const;
 
-export function Chat() {
+interface ChatProps {
+  readonly prefillPrompt?: string | null;
+  readonly onClearPrefill?: () => void;
+}
+
+export function Chat({ prefillPrompt, onClearPrefill }: ChatProps = {}) {
   const [messages, setMessages] = useState<readonly AgentMessage[]>([]);
   const [input, setInput] = useState("");
   const [isSending, setIsSending] = useState(false);
@@ -22,6 +27,12 @@ export function Chat() {
   const refreshArtifacts = useAtomRefresh(artifactsQuery);
   const refreshMaterials = useAtomRefresh(materialsQuery);
   const pendingInvalidations = useRef<Array<ReturnType<typeof invalidationsForToolCall>>>([]);
+
+  if (prefillPrompt && prefillPrompt !== input && !isSending) {
+    setInput(prefillPrompt);
+    onClearPrefill?.();
+  }
+
 
   const submit = async (nextInput: string) => {
     const trimmed = nextInput.trim();

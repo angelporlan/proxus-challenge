@@ -30,9 +30,14 @@ La ruta streaming está implementada manualmente para soportar eventos increment
 ```http
 GET /api/materials/
 GET /api/materials/:id
+POST /api/materials/upload
+DELETE /api/materials/:id
 ```
 
-Los materiales representan PDFs disponibles para el tutor. El server puede renderizar páginas vía Poppler para que Gemini las procese como imágenes.
+Los materiales representan PDFs disponibles para el tutor (apuntes, temarios, diapositivas).
+- `POST /api/materials/upload`: Permite la ingesta de documentos subiendo el PDF codificado en Base64 con metadatos (`fileName`, `contentBase64`, `title`). Valida la integridad del PDF y extrae el conteo de páginas.
+- `DELETE /api/materials/:id`: Elimina un documento subido del repositorio y filesystem.
+- El server puede renderizar páginas vía Poppler (`pdftoppm`) para que Gemini las procese como imágenes.
 
 ### Artifacts
 

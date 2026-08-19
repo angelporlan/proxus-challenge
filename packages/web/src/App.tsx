@@ -5,6 +5,7 @@ import { Sidebar } from "./components/Sidebar.tsx";
 
 export function App() {
   const [selectedArtifactId, setSelectedArtifactId] = useState<string | null>(null);
+  const [chatPrompt, setChatPrompt] = useState<string | null>(null);
 
   return (
     <div
@@ -15,9 +16,13 @@ export function App() {
           : "340px minmax(0, 1fr) 420px"
       }}
     >
-      <Sidebar selectedArtifactId={selectedArtifactId} onSelectArtifact={setSelectedArtifactId} />
+      <Sidebar
+        selectedArtifactId={selectedArtifactId}
+        onSelectArtifact={setSelectedArtifactId}
+        onAskTutor={(prompt) => setChatPrompt(prompt)}
+      />
       {selectedArtifactId !== null && <ArtifactWorkspace artifactId={selectedArtifactId} />}
-      <Chat />
+      <Chat prefillPrompt={chatPrompt} onClearPrefill={() => setChatPrompt(null)} />
     </div>
   );
 }
