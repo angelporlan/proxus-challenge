@@ -13,6 +13,7 @@
   "devDependencies": {
     "@effect/language-service": "^0.86.2",
     "@types/node": "^25.9.3",
+    "pdf-lib": "^1.17.1",
     "tsx": "^4.22.4",
     "typescript": "^5"
   },
