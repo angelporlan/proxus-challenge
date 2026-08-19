@@ -41,3 +41,8 @@ export const DeleteMaterialResponse = Schema.Struct({
 });
 export type DeleteMaterialResponse = typeof DeleteMaterialResponse.Type;
 
+export const RenderPagesInput = Schema.Struct({
+  pages: Schema.Array(Schema.Number)
+});
+export type RenderPagesInput = typeof RenderPagesInput.Type;
+

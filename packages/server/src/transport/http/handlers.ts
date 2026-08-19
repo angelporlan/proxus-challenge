@@ -43,6 +43,9 @@ export const MaterialsHttpHandlers = HttpApiBuilder.group(
           title: payload.title
         }).pipe(Effect.orDie);
       })
+      .handle("renderPages", ({ params, payload }) =>
+        materials.renderPages(params.id, payload.pages).pipe(Effect.orDie)
+      )
       .handle("delete", ({ params }) => materials.delete(params.id).pipe(
         Effect.map(() => ({ success: true, id: params.id })),
         Effect.orDie

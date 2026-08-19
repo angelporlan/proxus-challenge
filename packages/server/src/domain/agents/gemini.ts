@@ -218,14 +218,54 @@ const decodeGeminiResponse = (json: unknown) =>
 const toResponseParts = (
   parts: ReadonlyArray<GeminiPart>,
   tools: LanguageModel.ProviderOptions["tools"]
-) => {
+): Response.PartEncoded[] => {
   const functionCall = firstFunctionCall(parts);
+  const toolNames = new Set(tools.map((tool) => tool.name));
 
   if (functionCall?.name === undefined) {
-    return parts.flatMap((part) => part.text === undefined ? [] : [Response.makePart("text", { text: part.text })]);
-  }
+    return parts.flatMap((part): Response.PartEncoded[] => {
+      if (part.text === undefined || part.text.trim().length === 0) {
+        return [];
+      }
 
-  const toolNames = new Set(tools.map((tool) => tool.name));
+      const text = part.text.trim();
+
+      // Check if model emitted tool call as text: Tool call cli: {"input":"..."} or cli: {"input":"..."}
+      const toolMatch = /^(?:Tool call\s+)?([a-zA-Z0-9_-]+)\s*:\s*(\{.+\})$/s.exec(text);
+      if (toolMatch && toolMatch[1] && toolMatch[2] && toolNames.has(toolMatch[1])) {
+        try {
+          const parsed = JSON.parse(toolMatch[2]);
+          return [
+            Response.makePart("tool-call", {
+              id: `call_${crypto.randomUUID()}`,
+              name: toolMatch[1],
+              params: parsed,
+              providerExecuted: false
+            })
+          ];
+        } catch {}
+      }
+
+      // Check if model emitted raw JSON tool call: {"name":"cli","args":{"input":"..."}}
+      if (text.startsWith("{") && text.endsWith("}")) {
+        try {
+          const parsed = JSON.parse(text);
+          if (parsed && typeof parsed === "object" && typeof parsed.name === "string" && toolNames.has(parsed.name)) {
+            return [
+              Response.makePart("tool-call", {
+                id: `call_${crypto.randomUUID()}`,
+                name: parsed.name,
+                params: parsed.args ?? parsed.params ?? {},
+                providerExecuted: false
+              })
+            ];
+          }
+        } catch {}
+      }
+
+      return [Response.makePart("text", { text: part.text })];
+    });
+  }
 
   const toolCall = toolNames.has(functionCall.name)
     ? {

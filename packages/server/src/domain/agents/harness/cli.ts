@@ -231,6 +231,29 @@ const withCommandMetadata = <C extends Command>(
 
 export const tokenize = (input: string): Effect.Effect<readonly string[], CliError> =>
   Effect.gen(function* () {
+    const trimmed = input.trim();
+
+    // Fast-path robust JSON parameter extraction for create/submit commands
+    const jsonCommandMatch = /^([a-zA-Z0-9_-]+\s+(?:create|submit))\s+(.+)$/s.exec(trimmed);
+    if (jsonCommandMatch && jsonCommandMatch[1] && jsonCommandMatch[2]) {
+      const prefix = jsonCommandMatch[1];
+      let payloadStr = jsonCommandMatch[2].trim();
+
+      if (
+        (payloadStr.startsWith("'") && payloadStr.endsWith("'")) ||
+        (payloadStr.startsWith('"') && payloadStr.endsWith('"'))
+      ) {
+        payloadStr = payloadStr.slice(1, -1).trim();
+      } else if (payloadStr.startsWith("```json") && payloadStr.endsWith("```")) {
+        payloadStr = payloadStr.slice(7, -3).trim();
+      } else if (payloadStr.startsWith("```") && payloadStr.endsWith("```")) {
+        payloadStr = payloadStr.slice(3, -3).trim();
+      }
+
+      const prefixTokens = prefix.split(/\s+/);
+      return [...prefixTokens, payloadStr];
+    }
+
     const tokens: string[] = [];
     const tokenPattern = /\s*(?:"((?:\\.|[^"\\])*)"|'((?:\\.|[^'\\])*)'|([^\s"']+))/gy;
     let index = 0;
@@ -266,7 +289,7 @@ export const executeTokens = (roots: readonly Command[], tokens: readonly string
   Effect.gen(function* () {
     const [rootName, ...rest] = tokens;
 
-    if (rootName === undefined || rootName === "help" || rootName === "--help") {
+    if (rootName === undefined || rootName === "help" || rootName === "--help" || rootName === "-h") {
       return yield* new HelpRequested({ help: rootHelp(roots) });
     }
 
@@ -280,14 +303,14 @@ export const executeTokens = (roots: readonly Command[], tokens: readonly string
 
 const executeCommand = (command: Command, tokens: readonly string[], path: string): Effect.Effect<unknown, CliError> =>
   Effect.gen(function* () {
-    if (tokens[0] === "help") {
+    if (tokens[0] === "help" || tokens[0] === "--help" || tokens[0] === "-h") {
       return yield* new HelpRequested({ help: commandHelp(command, path) });
     }
 
     switch (command.kind) {
       case "group": {
         const [subcommandName, ...rest] = tokens;
-        if (subcommandName === undefined) {
+        if (subcommandName === undefined || subcommandName === "help" || subcommandName === "--help" || subcommandName === "-h") {
           return yield* new HelpRequested({ help: commandHelp(command, path) });
         }
 
@@ -303,7 +326,7 @@ const executeCommand = (command: Command, tokens: readonly string[], path: strin
         return yield* executeCommand(subcommand, rest, `${path} ${subcommand.name}`);
       }
       case "exec":
-        if (tokens.includes("--help")) {
+        if (tokens.includes("--help") || tokens.includes("-h")) {
           return yield* new HelpRequested({ help: commandHelp(command, path) });
         }
         return yield* command.execute(tokens);

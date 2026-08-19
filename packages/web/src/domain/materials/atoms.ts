@@ -42,3 +42,13 @@ export const deleteMaterialAction = apiRuntime.fn(
   { reactivityKeys: ["materials"] }
 );
 
+export const renderMaterialPagesAction = apiRuntime.fn(
+  (input: { readonly id: string; readonly pages: readonly number[] }) =>
+    ApiClient.use((client) =>
+      client.materials.renderPages({
+        params: { id: input.id },
+        payload: { pages: input.pages as number[] }
+      })
+    ).pipe(Effect.withSpan("materials.renderPages", { kind: "client" }))
+);
+
