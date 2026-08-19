@@ -930,7 +930,8 @@ export function MindMapViewer({
     return resolveMindMap(selectedMaterialId, materialsList);
   }, [initialData, selectedMaterialId, materialsList]);
 
-  const [selectedNode, setSelectedNode] = useState<MindMapNode | null>(currentMindMap);
+  const [selectedNode, setSelectedNode] = useState<MindMapNode>(currentMindMap);
+  const [isDrawerOpen, setIsDrawerOpen] = useState<boolean>(true);
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set());
 
   // Infinite Canvas Pan & Zoom state
@@ -944,10 +945,15 @@ export function MindMapViewer({
 
   const isLight = theme === "light";
 
-  // When selected material changes, reset selection to root
+  // When selected material changes, reset selection to root and open drawer
   useEffect(() => {
     setSelectedNode(currentMindMap);
   }, [currentMindMap]);
+
+  const handleSelectNode = (node: MindMapNode) => {
+    setSelectedNode(node);
+    setIsDrawerOpen(true);
+  };
 
   // Toggle collapse state of branch
   const toggleCollapse = (id: string, e: React.MouseEvent) => {
@@ -1165,6 +1171,24 @@ export function MindMapViewer({
             >
               <span className="material-symbols-outlined text-sm">map</span>
             </button>
+
+            <button
+              type="button"
+              onClick={() => setIsDrawerOpen(!isDrawerOpen)}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-semibold transition ${
+                isDrawerOpen
+                  ? "bg-indigo-600 text-white border-indigo-500 shadow-sm"
+                  : isLight
+                  ? "border-slate-200 bg-white text-slate-700 hover:bg-slate-100 shadow-sm"
+                  : "border-slate-800 bg-slate-900 text-slate-300 hover:bg-slate-800"
+              }`}
+              title={isDrawerOpen ? "Ocultar ficha de concepto" : "Abrir ficha de concepto"}
+            >
+              <span className="material-symbols-outlined text-xs">
+                {isDrawerOpen ? "dock_to_right" : "dock_to_left"}
+              </span>
+              <span>{isDrawerOpen ? "Ocultar Ficha" : "Ver Ficha"}</span>
+            </button>
           </div>
         </header>
 
@@ -1185,6 +1209,35 @@ export function MindMapViewer({
             backgroundPosition: `${pan.x}px ${pan.y}px`
           }}
         >
+          {/* Floating Drawer Reopen Tab */}
+          {!isDrawerOpen && (
+            <button
+              type="button"
+              onClick={() => setIsDrawerOpen(true)}
+              className={`absolute top-4 right-4 z-20 flex items-center gap-2 px-3.5 py-2 rounded-2xl border shadow-xl backdrop-blur transition-all duration-200 hover:scale-105 animate-in fade-in slide-in-from-right-3 cursor-pointer ${
+                isLight
+                  ? "bg-white/95 border-indigo-200 text-indigo-700 hover:border-indigo-400 shadow-indigo-100"
+                  : "bg-slate-900/95 border-indigo-800/80 text-indigo-300 hover:border-indigo-500 shadow-black/80"
+              }`}
+              title="Abrir ficha del concepto"
+            >
+              <span className="material-symbols-outlined text-base text-indigo-500">
+                dock_to_left
+              </span>
+              <div className="text-left max-w-[150px]">
+                <span className="block text-[9px] font-mono font-bold uppercase text-indigo-500 tracking-wider">
+                  Ficha de Concepto
+                </span>
+                <span className="block text-xs font-semibold truncate">
+                  {selectedNode.label}
+                </span>
+              </div>
+              <span className="material-symbols-outlined text-sm text-indigo-400">
+                chevron_left
+              </span>
+            </button>
+          )}
+
           {/* Pan Hint Overlay */}
           <div className="absolute bottom-4 left-4 z-10 flex items-center gap-2 pointer-events-none opacity-60 hover:opacity-100 transition">
             <span
@@ -1214,7 +1267,7 @@ export function MindMapViewer({
                   direction="left"
                   selectedId={selectedNode?.id}
                   collapsedIds={collapsedIds}
-                  onSelect={(node) => setSelectedNode(node)}
+                  onSelect={(node) => handleSelectNode(node)}
                   onToggleCollapse={toggleCollapse}
                   isLight={isLight}
                 />
@@ -1223,7 +1276,10 @@ export function MindMapViewer({
 
             {/* Central Root Node */}
             <div
-              onClick={() => setSelectedNode(currentMindMap)}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleSelectNode(currentMindMap);
+              }}
               className={`node-card cursor-pointer rounded-3xl p-6 border-2 shadow-2xl transition-all duration-300 min-w-[240px] max-w-[280px] text-center relative z-10 ${
                 selectedNode?.id === currentMindMap.id
                   ? isLight
@@ -1268,7 +1324,7 @@ export function MindMapViewer({
                   direction="right"
                   selectedId={selectedNode?.id}
                   collapsedIds={collapsedIds}
-                  onSelect={(node) => setSelectedNode(node)}
+                  onSelect={(node) => handleSelectNode(node)}
                   onToggleCollapse={toggleCollapse}
                   isLight={isLight}
                 />
@@ -1329,7 +1385,7 @@ export function MindMapViewer({
       </div>
 
       {/* 4. Right Detail Drawer (Concept & Article Details) */}
-      {selectedNode && (
+      {isDrawerOpen && (
         <aside
           className={`w-88 border-l backdrop-blur p-5 flex flex-col h-full overflow-y-auto shrink-0 z-30 transition-all duration-200 animate-in slide-in-from-right ${
             isLight
@@ -1357,13 +1413,13 @@ export function MindMapViewer({
             </div>
             <button
               type="button"
-              onClick={() => setSelectedNode(null)}
+              onClick={() => setIsDrawerOpen(false)}
               className={`p-1.5 rounded-xl transition ${
                 isLight
                   ? "text-slate-400 hover:text-slate-800 hover:bg-slate-100"
                   : "text-slate-400 hover:text-slate-200 hover:bg-slate-900"
               }`}
-              title="Cerrar detalle"
+              title="Ocultar ficha"
             >
               <span className="material-symbols-outlined text-sm">close</span>
             </button>
@@ -1452,7 +1508,7 @@ export function MindMapViewer({
                     <button
                       key={child.id}
                       type="button"
-                      onClick={() => setSelectedNode(child)}
+                      onClick={() => handleSelectNode(child)}
                       className={`w-full text-left p-2.5 rounded-xl border text-xs transition flex items-center justify-between group ${
                         isLight
                           ? "bg-white hover:bg-indigo-50/60 border-slate-200 text-slate-800 hover:border-indigo-300 shadow-sm"
@@ -1557,7 +1613,10 @@ function BranchTree({
     >
       {/* Main Branch Card */}
       <div
-        onClick={() => onSelect(node)}
+        onClick={(e) => {
+          e.stopPropagation();
+          onSelect(node);
+        }}
         className={`node-card group relative cursor-pointer rounded-2xl p-4 border transition-all duration-200 min-w-[210px] max-w-[260px] shadow-lg ${
           isSelected
             ? isLight
@@ -1633,7 +1692,10 @@ function BranchTree({
           {node.children?.map((child) => (
             <div
               key={child.id}
-              onClick={() => onSelect(child)}
+              onClick={(e) => {
+                e.stopPropagation();
+                onSelect(child);
+              }}
               className={`node-card cursor-pointer rounded-xl p-3 border text-left transition-all duration-200 min-w-[170px] max-w-[220px] shadow-sm ${
                 selectedId === child.id
                   ? isLight
