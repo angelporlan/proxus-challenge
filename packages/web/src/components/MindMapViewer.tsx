@@ -1,4 +1,4 @@
-import { useAtomValue } from "@effect/atom-react";
+import { useAtomRefresh, useAtomValue } from "@effect/atom-react";
 import * as AsyncResult from "effect/unstable/reactivity/AsyncResult";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { materialsQuery } from "../domain/materials/atoms.ts";
@@ -943,6 +943,12 @@ const mindMapsByMaterialId: Record<string, MindMapNode> = {
   }
 };
 
+const EMPTY_MIND_MAP: MindMapNode = {
+  id: "empty-map",
+  label: "Esquema",
+  children: []
+};
+
 // Fallback generator for custom uploaded PDFs
 function buildFallbackMindMap(materialId: string, title: string, pageCount = 2): MindMapNode {
   return {
@@ -1065,10 +1071,7 @@ function resolveMindMap(
     return mindMapsByMaterialId[firstMat.id]!;
   }
 
-  return (
-    mindMapsByMaterialId["document-1"] ??
-    mindMapsByMaterialId["tema-1-constitucion-espanola"]!
-  );
+  return EMPTY_MIND_MAP;
 }
 
 // ---------------------------------------------------------------------------
@@ -1107,22 +1110,22 @@ interface ConnectorLine {
 
 function getNodeDimensions(label: string, level: number): { width: number; height: number } {
   if (level === 0) {
-    return { width: 240, height: 58 };
+    return { width: 280, height: 64 };
   }
   if (level === 1) {
     const length = label.length;
-    const width = Math.min(270, Math.max(200, length * 6.5 + 45));
-    return { width, height: length > 30 ? 54 : 44 };
+    const width = Math.min(320, Math.max(220, length * 7.0 + 50));
+    return { width, height: length > 28 ? 58 : 46 };
   }
   if (level === 2) {
     const length = label.length;
-    const width = Math.min(250, Math.max(180, length * 6.2 + 35));
-    return { width, height: length > 28 ? 48 : 38 };
+    const width = Math.min(300, Math.max(200, length * 6.6 + 40));
+    return { width, height: length > 26 ? 54 : 42 };
   }
   // Level 3+
   const length = label.length;
-  const width = Math.min(260, Math.max(170, length * 5.8 + 30));
-  return { width, height: length > 32 ? 46 : 36 };
+  const width = Math.min(310, Math.max(190, length * 6.2 + 36));
+  return { width, height: length > 28 ? 52 : 40 };
 }
 
 function computeSubtreeHeight(
@@ -1268,6 +1271,7 @@ export function MindMapViewer({
   theme = "dark"
 }: MindMapViewerProps) {
   const materialsResult = useAtomValue(materialsQuery);
+  const refreshMaterials = useAtomRefresh(materialsQuery);
 
   const materialsList = useMemo(() => {
     return AsyncResult.match(materialsResult, {
@@ -1277,10 +1281,22 @@ export function MindMapViewer({
     });
   }, [materialsResult]);
 
+  const materialsStatus = useMemo(
+    () =>
+      AsyncResult.match(materialsResult, {
+        onInitial: () => "loading" as const,
+        onFailure: () => "error" as const,
+        onSuccess: ({ value }) => (value.materials.length > 0 ? "ready" : "empty")
+      }),
+    [materialsResult]
+  );
+
+  const activeMaterialId = selectedMaterialId ?? materialsList[0]?.id ?? null;
+
   const currentMindMap = useMemo(() => {
     if (initialData) return initialData;
-    return resolveMindMap(selectedMaterialId, materialsList);
-  }, [initialData, selectedMaterialId, materialsList]);
+    return resolveMindMap(activeMaterialId, materialsList);
+  }, [activeMaterialId, initialData, materialsList]);
 
   const [selectedNode, setSelectedNode] = useState<MindMapNode>(currentMindMap);
   const [isDrawerOpen, setIsDrawerOpen] = useState<boolean>(true);
@@ -1294,6 +1310,7 @@ export function MindMapViewer({
 
   const canvasRef = useRef<HTMLDivElement>(null);
   const panStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const drawerToggleRef = useRef<HTMLButtonElement>(null);
 
   const isLight = theme === "light";
 
@@ -1304,6 +1321,11 @@ export function MindMapViewer({
   const handleSelectNode = (node: MindMapNode) => {
     setSelectedNode(node);
     setIsDrawerOpen(true);
+  };
+
+  const closeDrawer = () => {
+    setIsDrawerOpen(false);
+    requestAnimationFrame(() => drawerToggleRef.current?.focus());
   };
 
   const toggleCollapse = (id: string, e: React.MouseEvent) => {
@@ -1476,6 +1498,34 @@ export function MindMapViewer({
     };
   }, [currentMindMap, collapsedIds]);
 
+  if (!initialData && materialsStatus !== "ready") {
+    return (
+      <div className={`flex h-full items-center justify-center p-6 text-center ${isLight ? "bg-slate-50 text-slate-600" : "bg-slate-950 text-slate-300"}`}>
+        <div className="max-w-sm">
+          {materialsStatus === "loading" ? (
+            <>
+              <span className="ui-spinner mx-auto" aria-hidden="true" />
+              <p className="mt-3 text-sm">Cargando esquema…</p>
+            </>
+          ) : materialsStatus === "error" ? (
+            <>
+              <span className="material-symbols-outlined text-3xl text-red-500" aria-hidden="true">error</span>
+              <p className="mt-3 text-sm">No se pudo cargar el esquema.</p>
+              <button type="button" className="ui-secondary-action mt-4" onClick={() => refreshMaterials()}>
+                Reintentar
+              </button>
+            </>
+          ) : (
+            <>
+              <span className="material-symbols-outlined text-3xl text-slate-400" aria-hidden="true">schema</span>
+              <p className="mt-3 text-sm">Aún no hay materiales para crear un esquema.</p>
+            </>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
       className={`flex h-full w-full overflow-hidden relative select-none transition-colors ${
@@ -1508,8 +1558,9 @@ export function MindMapViewer({
               </label>
               <select
                 id="material-select"
-                value={selectedMaterialId ?? currentMindMap.id}
+                value={activeMaterialId ?? ""}
                 onChange={(e) => onSelectMaterialId?.(e.target.value)}
+                disabled={materialsList.length === 0}
                 className={`text-xs font-semibold rounded-xl px-3 py-1.5 border transition cursor-pointer outline-none max-w-[260px] truncate ${
                   isLight
                     ? "bg-white border-slate-300 text-slate-800 hover:border-indigo-500 shadow-sm"
@@ -1518,7 +1569,7 @@ export function MindMapViewer({
               >
                 {materialsList.map((m) => (
                   <option key={m.id} value={m.id}>
-                    📖 {m.title} ({m.pageCount} págs)
+                    {m.title} ({m.pageCount} págs)
                   </option>
                 ))}
               </select>
@@ -1527,13 +1578,11 @@ export function MindMapViewer({
                 <button
                   type="button"
                   onClick={() => onGenerateAiMap(currentMindMap.label)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white text-xs font-semibold shadow-md shadow-indigo-600/20 transition"
-                  title="Pedir al tutor de IA que profundice en el esquema"
+                  className="ui-primary-action"
+                  title="Pedir al tutor que profundice en el esquema"
                 >
-                  <span className="material-symbols-outlined text-xs animate-spin-slow">
-                    auto_awesome
-                  </span>
-                  <span className="hidden sm:inline">Regenerar con IA</span>
+                  <span className="material-symbols-outlined text-[16px]">account_tree</span>
+                  <span className="hidden sm:inline">Profundizar</span>
                 </button>
               )}
             </div>
@@ -1549,12 +1598,13 @@ export function MindMapViewer({
               <button
                 type="button"
                 onClick={() => setZoom((z) => Math.max(0.35, Number((z - 0.1).toFixed(2))))}
-                className={`size-7 grid place-items-center rounded-lg transition ${
+                className={`grid size-9 place-items-center rounded-lg transition ${
                   isLight
                     ? "text-slate-600 hover:text-slate-900 hover:bg-slate-200"
                     : "text-slate-400 hover:text-slate-200 hover:bg-slate-800"
                 }`}
                 title="Reducir zoom (−)"
+                aria-label="Reducir zoom del esquema"
               >
                 <span className="material-symbols-outlined text-sm">remove</span>
               </button>
@@ -1568,12 +1618,13 @@ export function MindMapViewer({
               <button
                 type="button"
                 onClick={() => setZoom((z) => Math.min(2.0, Number((z + 0.1).toFixed(2))))}
-                className={`size-7 grid place-items-center rounded-lg transition ${
+                className={`grid size-9 place-items-center rounded-lg transition ${
                   isLight
                     ? "text-slate-600 hover:text-slate-900 hover:bg-slate-200"
                     : "text-slate-400 hover:text-slate-200 hover:bg-slate-800"
                 }`}
                 title="Aumentar zoom (+)"
+                aria-label="Aumentar zoom del esquema"
               >
                 <span className="material-symbols-outlined text-sm">add</span>
               </button>
@@ -1618,13 +1669,16 @@ export function MindMapViewer({
                   : "border-slate-800 bg-slate-900 text-slate-400 hover:bg-slate-800"
               }`}
               title={showMinimap ? "Ocultar radar de mapa" : "Mostrar radar de mapa"}
+              aria-pressed={showMinimap}
+              aria-label={showMinimap ? "Ocultar minimapa" : "Mostrar minimapa"}
             >
               <span className="material-symbols-outlined text-sm">map</span>
             </button>
 
             <button
               type="button"
-              onClick={() => setIsDrawerOpen(!isDrawerOpen)}
+              ref={drawerToggleRef}
+              onClick={() => (isDrawerOpen ? closeDrawer() : setIsDrawerOpen(true))}
               className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-semibold transition ${
                 isDrawerOpen
                   ? "bg-indigo-600 text-white border-indigo-500 shadow-sm"
@@ -1633,11 +1687,12 @@ export function MindMapViewer({
                   : "border-slate-800 bg-slate-900 text-slate-300 hover:bg-slate-800"
               }`}
               title={isDrawerOpen ? "Ocultar ficha de concepto" : "Abrir ficha de concepto"}
+              aria-expanded={isDrawerOpen}
             >
               <span className="material-symbols-outlined text-xs">
                 {isDrawerOpen ? "dock_to_right" : "dock_to_left"}
               </span>
-              <span>{isDrawerOpen ? "Ocultar Ficha" : "Ver Ficha"}</span>
+              <span>{isDrawerOpen ? "Ocultar ficha" : "Ver ficha"}</span>
             </button>
           </div>
         </header>
@@ -1664,7 +1719,7 @@ export function MindMapViewer({
             <button
               type="button"
               onClick={() => setIsDrawerOpen(true)}
-              className={`absolute top-4 right-4 z-20 flex items-center gap-2 px-3.5 py-2 rounded-2xl border shadow-xl backdrop-blur transition-all duration-200 hover:scale-105 animate-in fade-in slide-in-from-right-3 cursor-pointer ${
+              className={`ui-float-enter absolute top-4 right-4 z-20 flex items-center gap-2 px-3.5 py-2 rounded-xl border shadow-lg backdrop-blur transition-colors ${
                 isLight
                   ? "bg-white/95 border-indigo-200 text-indigo-700 hover:border-indigo-400 shadow-indigo-100"
                   : "bg-slate-900/95 border-indigo-800/80 text-indigo-300 hover:border-indigo-500 shadow-black/80"
@@ -1689,15 +1744,16 @@ export function MindMapViewer({
           )}
 
           {/* Pan Hint Overlay */}
-          <div className="absolute bottom-4 left-4 z-10 flex items-center gap-2 pointer-events-none opacity-60 hover:opacity-100 transition">
+          <div className="pointer-events-none absolute bottom-4 left-4 z-10 flex items-center gap-2 opacity-70">
             <span
-              className={`px-2.5 py-1 rounded-full text-[11px] font-mono border backdrop-blur ${
+              className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-[11px] ${
                 isLight
                   ? "bg-white/80 border-slate-200 text-slate-600"
                   : "bg-slate-950/80 border-slate-800 text-slate-400"
               }`}
             >
-              🖱️ Arrastra el fondo para moverte libremente · Ctrl+Rueda para zoom
+              <span className="material-symbols-outlined text-sm" aria-hidden="true">pan_tool_alt</span>
+              Arrastra el fondo para moverte · Ctrl + rueda para ampliar
             </span>
           </div>
 
@@ -1716,9 +1772,6 @@ export function MindMapViewer({
               style={{ zIndex: 1 }}
             >
               <defs>
-                <filter id="glow-curve" x="-20%" y="-20%" width="140%" height="140%">
-                  <feDropShadow dx="0" dy="0" stdDeviation="2" floodOpacity="0.4" />
-                </filter>
               </defs>
               {allConnectors.map((conn) => (
                 <path
@@ -1730,10 +1783,8 @@ export function MindMapViewer({
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   opacity={isLight ? 0.85 : 0.75}
-                  className="transition-all duration-300"
-                  style={{
-                    filter: isLight ? undefined : `drop-shadow(0 0 3px ${conn.color}50)`
-                  }}
+                  className="transition-[stroke,opacity] duration-200"
+                  style={{ filter: undefined }}
                 />
               ))}
             </svg>
@@ -1748,10 +1799,6 @@ export function MindMapViewer({
                 return (
                   <div
                     key={pNode.id}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleSelectNode(pNode.rawNode);
-                    }}
                     style={{
                       position: "absolute",
                       left: `${pNode.x}px`,
@@ -1772,33 +1819,41 @@ export function MindMapViewer({
                           ? `0 0 16px ${pNode.color}40`
                           : undefined
                     }}
-                    className={`mindmap-node pointer-events-auto cursor-pointer rounded-2xl transition-all duration-200 flex items-center justify-between gap-2 shadow-lg ${
+                    className={`mindmap-node pointer-events-auto rounded-2xl transition-[background-color,border-color,color,box-shadow,transform] duration-200 flex items-center justify-between gap-2 shadow-lg ${
                       isRoot
                         ? isLight
-                          ? "rounded-full px-5 py-3 border-2 border-cyan-500 bg-white shadow-xl shadow-cyan-100 ring-4 ring-cyan-400/20"
-                          : "rounded-full px-5 py-3 border-2 border-cyan-400 bg-slate-900/95 shadow-2xl shadow-cyan-950/80 ring-4 ring-cyan-500/30"
+                          ? "rounded-xl px-5 py-3 border-2 border-cyan-500 bg-white shadow-md"
+                          : "rounded-xl px-5 py-3 border-2 border-cyan-400 bg-slate-900/95 shadow-md"
                         : isLevel1
                         ? isSelected
                           ? isLight
-                            ? "px-3.5 py-2 border-2 bg-white shadow-xl ring-2 scale-[1.03]"
-                            : "px-3.5 py-2 border-2 bg-slate-900 shadow-2xl ring-2 scale-[1.03]"
+                            ? "px-3.5 py-2 border-2 bg-white shadow-md ring-1"
+                            : "px-3.5 py-2 border-2 bg-slate-900 shadow-md ring-1"
                           : isLight
-                          ? "px-3.5 py-2 border-2 bg-white/95 hover:bg-white hover:scale-[1.02] shadow-md"
-                          : "px-3.5 py-2 border-2 bg-slate-900/90 hover:bg-slate-900 hover:scale-[1.02] shadow-md shadow-black/40"
+                          ? "px-3.5 py-2 border-2 bg-white/95 hover:bg-white shadow-sm"
+                          : "px-3.5 py-2 border-2 bg-slate-900/90 hover:bg-slate-900 shadow-sm"
                         : isSelected
                         ? isLight
-                          ? "px-3 py-1.5 rounded-xl border bg-indigo-50/90 shadow-md ring-2 ring-indigo-400 scale-[1.02]"
-                          : "px-3 py-1.5 rounded-xl border bg-indigo-950/80 shadow-lg ring-2 ring-indigo-400 scale-[1.02]"
+                          ? "px-3 py-1.5 rounded-xl border bg-indigo-50/90 shadow-sm ring-1 ring-indigo-400"
+                          : "px-3 py-1.5 rounded-xl border bg-indigo-950/80 shadow-sm ring-1 ring-indigo-400"
                         : isLight
-                        ? "px-3 py-1.5 rounded-xl border bg-white/90 hover:bg-white hover:scale-[1.01] shadow-sm"
-                        : "px-3 py-1.5 rounded-xl border bg-slate-950/90 hover:bg-slate-900 hover:scale-[1.01] shadow-sm"
+                          ? "px-3 py-1.5 rounded-xl border bg-white/90 hover:bg-white shadow-sm"
+                          : "px-3 py-1.5 rounded-xl border bg-slate-950/90 hover:bg-slate-900 shadow-sm"
                     }`}
                   >
                     {/* Node Content */}
-                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        handleSelectNode(pNode.rawNode);
+                      }}
+                      aria-label={`Abrir concepto ${pNode.label}`}
+                      className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                    >
                       {isRoot ? (
                         <div className="flex items-center gap-2.5">
-                          <span className="grid size-8 place-items-center rounded-full bg-cyan-500/20 text-cyan-500 font-bold text-sm">
+                          <span className="grid size-8 place-items-center rounded-lg bg-cyan-500/20 text-cyan-500 font-bold text-sm">
                             <span className="material-symbols-outlined text-base">
                               {pNode.icon || "gavel"}
                             </span>
@@ -1819,7 +1874,8 @@ export function MindMapViewer({
                               style={{ backgroundColor: pNode.color }}
                             />
                             <span
-                              className={`block font-display truncate leading-snug ${
+                              title={pNode.label}
+                              className={`block font-display break-words line-clamp-2 leading-snug ${
                                 isLevel1
                                   ? isLight
                                     ? "font-bold text-xs text-slate-900"
@@ -1835,7 +1891,8 @@ export function MindMapViewer({
 
                           {pNode.references && pNode.references[0] && (
                             <span
-                              className={`block text-[9px] font-mono truncate mt-0.5 ${
+                              title={pNode.references[0]}
+                              className={`block text-[9px] font-mono break-words line-clamp-1 mt-0.5 ${
                                 isLight ? "text-slate-500" : "text-slate-400"
                               }`}
                             >
@@ -1844,14 +1901,14 @@ export function MindMapViewer({
                           )}
                         </div>
                       )}
-                    </div>
+                    </button>
 
                     {/* Expand/Collapse Toggle Button for Branches */}
                     {pNode.hasChildren && !isRoot && (
                       <button
                         type="button"
                         onClick={(e) => toggleCollapse(pNode.id, e)}
-                        className={`size-5 grid place-items-center rounded-full text-[10px] font-mono font-bold shrink-0 transition ${
+                        className={`size-8 grid place-items-center rounded-lg text-xs font-bold shrink-0 transition ${
                           isLight
                             ? "bg-slate-100 hover:bg-slate-200 text-slate-700"
                             : "bg-slate-800 hover:bg-slate-700 text-slate-300"
@@ -1861,6 +1918,11 @@ export function MindMapViewer({
                         }}
                         title={
                           pNode.isCollapsed ? "Expandir conceptos" : "Colapsar conceptos"
+                        }
+                        aria-label={
+                          pNode.isCollapsed
+                            ? `Expandir conceptos de ${pNode.label}`
+                            : `Colapsar conceptos de ${pNode.label}`
                         }
                       >
                         {pNode.isCollapsed ? "+" : "−"}
@@ -1874,9 +1936,9 @@ export function MindMapViewer({
         </div>
 
         {/* 3. Floating Radar / Minimap Overlay */}
-        {showMinimap && (
+        {showMinimap && !isDrawerOpen && (
           <div
-            className={`absolute bottom-4 right-4 z-20 w-48 h-36 rounded-2xl border p-2.5 shadow-2xl backdrop-blur transition-all flex flex-col justify-between ${
+            className={`ui-float-enter absolute bottom-4 right-4 z-20 flex h-36 w-48 flex-col justify-between rounded-2xl border p-2.5 shadow-2xl backdrop-blur ${
               isLight
                 ? "bg-white/90 border-slate-300 text-slate-700 shadow-slate-200"
                 : "bg-slate-950/90 border-slate-800 text-slate-300"
@@ -1884,15 +1946,16 @@ export function MindMapViewer({
           >
             <div className="flex items-center justify-between text-[10px] font-mono font-semibold">
               <span className="flex items-center gap-1 text-cyan-500">
-                <span className="size-1.5 rounded-full bg-cyan-500 animate-pulse"></span>
-                <span>Radar Dendrítico</span>
+                <span className="size-1.5 rounded-full bg-cyan-500"></span>
+                <span>Vista general</span>
               </span>
               <button
                 type="button"
                 onClick={() => setShowMinimap(false)}
-                className="text-slate-400 hover:text-slate-600"
+                className="grid size-9 min-h-9 min-w-9 shrink-0 place-items-center rounded-lg text-slate-400 hover:bg-slate-500/10 hover:text-slate-600"
+                aria-label="Ocultar minimapa"
               >
-                ✕
+                <span className="material-symbols-outlined text-base" aria-hidden="true">close</span>
               </button>
             </div>
 
@@ -1904,7 +1967,7 @@ export function MindMapViewer({
               <div className="absolute right-3 top-3 size-2 rounded-full bg-teal-500"></div>
               <div className="absolute right-3 bottom-3 size-2 rounded-full bg-purple-500"></div>
               <div
-                className="absolute border-2 border-cyan-500 bg-cyan-500/10 rounded pointer-events-none transition-all"
+                className="pointer-events-none absolute rounded border-2 border-cyan-500 bg-cyan-500/10"
                 style={{
                   width: `${Math.max(25, Math.min(80, 50 / zoom))}%`,
                   height: `${Math.max(25, Math.min(80, 50 / zoom))}%`,
@@ -1914,7 +1977,7 @@ export function MindMapViewer({
             </div>
 
             <span className="text-[9px] text-center text-slate-400 font-mono">
-              Zoom: {Math.round(zoom * 100)}% · {allNodes.length} Nodos
+              Zoom: {Math.round(zoom * 100)}% · {allNodes.length} conceptos
             </span>
           </div>
         )}
@@ -1923,7 +1986,7 @@ export function MindMapViewer({
       {/* 4. Right Detail Drawer (Concept & Article Details) */}
       {isDrawerOpen && (
         <aside
-          className={`w-92 border-l backdrop-blur p-5 flex flex-col h-full overflow-y-auto shrink-0 z-30 transition-all duration-200 animate-in slide-in-from-right ${
+          className={`ui-panel-enter absolute inset-y-0 right-0 z-30 flex h-full w-[min(23rem,calc(100%-3rem))] max-w-full flex-col overflow-y-auto border-l p-5 backdrop-blur ${
             isLight
               ? "border-slate-200 bg-white/95 text-slate-900 shadow-2xl"
               : "border-slate-800 bg-slate-950/95 text-slate-100 shadow-2xl"
@@ -1944,18 +2007,19 @@ export function MindMapViewer({
                   isLight ? "text-slate-500" : "text-slate-400"
                 }`}
               >
-                Ficha del Concepto
+                Ficha del concepto
               </span>
             </div>
             <button
               type="button"
-              onClick={() => setIsDrawerOpen(false)}
-              className={`p-1.5 rounded-xl transition ${
+              onClick={closeDrawer}
+              className={`grid size-9 place-items-center rounded-lg transition ${
                 isLight
                   ? "text-slate-400 hover:text-slate-800 hover:bg-slate-100"
                   : "text-slate-400 hover:text-slate-200 hover:bg-slate-900"
               }`}
               title="Ocultar ficha"
+              aria-label="Ocultar ficha de concepto"
             >
               <span className="material-symbols-outlined text-sm">close</span>
             </button>
@@ -1997,7 +2061,7 @@ export function MindMapViewer({
                     isLight ? "text-slate-500" : "text-slate-400"
                   }`}
                 >
-                  Definición & Contenido Pedagógico
+                  Explicación
                 </span>
                 <p className="text-sm font-normal">{selectedNode.notes}</p>
               </div>
@@ -2010,7 +2074,7 @@ export function MindMapViewer({
                     isLight ? "text-slate-500" : "text-slate-400"
                   }`}
                 >
-                  Referencias Normativas & Artículos
+                  Referencias
                 </span>
                 <div className="flex flex-wrap gap-1.5">
                   {selectedNode.references.map((ref, idx) => (
@@ -2037,7 +2101,7 @@ export function MindMapViewer({
                     isLight ? "text-slate-500" : "text-slate-400"
                   }`}
                 >
-                  Subconceptos Vinculados ({selectedNode.children.length})
+                  Apartados relacionados ({selectedNode.children.length})
                 </span>
                 <div className="space-y-1.5">
                   {selectedNode.children.map((child) => (
@@ -2094,10 +2158,10 @@ export function MindMapViewer({
               <span>Crear quiz de este apartado</span>
             </button>
 
-            {selectedNode.page && onOpenPdfPage && selectedMaterialId && (
+            {selectedNode.page && onOpenPdfPage && activeMaterialId && (
               <button
                 type="button"
-                onClick={() => onOpenPdfPage(selectedMaterialId, selectedNode.page!)}
+                onClick={() => onOpenPdfPage(activeMaterialId, selectedNode.page!)}
                 className={`w-full flex items-center justify-center gap-2 p-2 rounded-xl border text-xs font-medium transition ${
                   isLight
                     ? "border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-50"
