@@ -141,6 +141,10 @@ export function App() {
           onSelectArtifact={handleSelectArtifact}
           selectedMaterialId={selectedMaterialId}
           onSelectMaterial={handleSelectMaterial}
+          onOpenMindMap={(id) => {
+            setSelectedMaterialId(id);
+            setActiveTab("mindmap");
+          }}
           onAskTutor={(prompt) => setChatPrompt(prompt)}
           theme={theme}
           onToggleTheme={toggleTheme}
@@ -281,11 +285,21 @@ export function App() {
           {activeTab === "mindmap" ? (
             <MindMapViewer
               theme={theme}
+              selectedMaterialId={selectedMaterialId}
+              onSelectMaterialId={(id) => setSelectedMaterialId(id)}
               onAskTutorAboutConcept={(concept, notes) => {
                 setChatPrompt(`Explica detalladamente el concepto "${concept}" en el contexto de mis apuntes: ${notes || ""}`);
               }}
               onGenerateQuizForBranch={(branch) => {
                 setChatPrompt(`Crea un quiz de 3 preguntas de opción múltiple enfocado exclusivamente en el apartado: "${branch}"`);
+              }}
+              onOpenPdfPage={(matId, page) => {
+                setSelectedMaterialId(matId);
+                setPdfPage(page);
+                setActiveTab("pdf");
+              }}
+              onGenerateAiMap={(title) => {
+                setChatPrompt(`Genera y profundiza con el tutor en un esquema detallado del tema "${title}", desglosando sus conceptos fundamentales, artículos de referencia y casos prácticos.`);
               }}
             />
           ) : activeTab === "upload" ? (

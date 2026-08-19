@@ -10,6 +10,7 @@ interface SidebarProps {
   readonly onSelectArtifact: (artifactId: string) => void;
   readonly selectedMaterialId?: string | null | undefined;
   readonly onSelectMaterial?: ((materialId: string) => void) | undefined;
+  readonly onOpenMindMap?: ((materialId: string) => void) | undefined;
   readonly onAskTutor?: ((prompt: string) => void) | undefined;
   readonly theme?: "dark" | "light" | undefined;
   readonly onToggleTheme?: (() => void) | undefined;
@@ -20,6 +21,7 @@ export function Sidebar({
   onSelectArtifact,
   selectedMaterialId,
   onSelectMaterial,
+  onOpenMindMap,
   onAskTutor,
   theme = "dark",
   onToggleTheme
@@ -179,8 +181,19 @@ export function Sidebar({
                               onClick={() => onSelectMaterial?.(material.id)}
                             >
                               <span className="material-symbols-outlined text-xs">visibility</span>
-                              <span>Ver PDF</span>
+                              <span>PDF</span>
                             </button>
+
+                            {onOpenMindMap && (
+                              <button
+                                type="button"
+                                className="flex items-center gap-1 text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300"
+                                onClick={() => onOpenMindMap(material.id)}
+                              >
+                                <span className="material-symbols-outlined text-xs">schema</span>
+                                <span>Esquema</span>
+                              </button>
+                            )}
 
                             {onAskTutor && (
                               <button
