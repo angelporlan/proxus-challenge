@@ -4,12 +4,13 @@ import * as AsyncResult from "effect/unstable/reactivity/AsyncResult";
 import { useState } from "react";
 import { ArtifactWorkspace } from "./components/ArtifactWorkspace.tsx";
 import { Chat } from "./components/Chat.tsx";
+import { MindMapViewer } from "./components/MindMapViewer.tsx";
 import { OnboardingUpload } from "./components/OnboardingUpload.tsx";
 import { PdfSplitViewer } from "./components/PdfSplitViewer.tsx";
 import { Sidebar } from "./components/Sidebar.tsx";
 import { materialQuery, materialsQuery } from "./domain/materials/atoms.ts";
 
-type ActiveTab = "workspace" | "pdf" | "upload";
+type ActiveTab = "workspace" | "mindmap" | "pdf" | "upload";
 
 export function App() {
   const [selectedArtifactId, setSelectedArtifactId] = useState<string | null>(null);
@@ -70,11 +71,11 @@ export function App() {
         onAskTutor={(prompt) => setChatPrompt(prompt)}
       />
 
-      {/* 2. Center Content Workspace / PDF Viewer / Onboarding */}
+      {/* 2. Center Content Workspace / MindMap / PDF Viewer / Onboarding */}
       <div className="flex flex-col h-screen overflow-hidden border-r border-slate-800 bg-slate-950/70">
         {/* Navigation Tab Bar */}
         <header className="flex items-center justify-between px-4 py-2.5 border-b border-slate-800 bg-slate-900/60 shrink-0">
-          <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs">
+          <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs flex-wrap">
             <button
               type="button"
               onClick={() => setActiveTab("workspace")}
@@ -86,6 +87,19 @@ export function App() {
             >
               <span className="material-symbols-outlined text-sm">school</span>
               <span>Ejercicios & Notas</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab("mindmap")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium transition ${
+                activeTab === "mindmap"
+                  ? "bg-indigo-600 text-white shadow-sm"
+                  : "text-slate-400 hover:text-slate-200"
+              }`}
+            >
+              <span className="material-symbols-outlined text-sm">schema</span>
+              <span>🗺️ Esquema Mental</span>
             </button>
 
             <button
@@ -129,7 +143,16 @@ export function App() {
 
         {/* Tab Views */}
         <div className="flex-1 min-h-0 overflow-hidden">
-          {activeTab === "upload" ? (
+          {activeTab === "mindmap" ? (
+            <MindMapViewer
+              onAskTutorAboutConcept={(concept, notes) => {
+                setChatPrompt(`Explica detalladamente el concepto "${concept}" en el contexto de mis apuntes: ${notes || ""}`);
+              }}
+              onGenerateQuizForBranch={(branch) => {
+                setChatPrompt(`Crea un quiz de 3 preguntas de opción múltiple enfocado exclusivamente en el apartado: "${branch}"`);
+              }}
+            />
+          ) : activeTab === "upload" ? (
             <div className="h-full overflow-y-auto">
               <OnboardingUpload
                 onUploaded={(mat) => {
@@ -197,6 +220,7 @@ export function App() {
         prefillPrompt={chatPrompt}
         onClearPrefill={() => setChatPrompt(null)}
         onSelectArtifact={handleSelectArtifact}
+        onOpenMindMap={() => setActiveTab("mindmap")}
       />
     </div>
   );

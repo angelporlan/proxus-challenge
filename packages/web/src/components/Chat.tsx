@@ -37,6 +37,7 @@ interface ChatProps {
   readonly prefillPrompt?: string | null | undefined;
   readonly onClearPrefill?: (() => void) | undefined;
   readonly onSelectArtifact?: ((id: string) => void) | undefined;
+  readonly onOpenMindMap?: (() => void) | undefined;
 }
 
 type ChatItem =
@@ -44,7 +45,7 @@ type ChatItem =
   | { readonly kind: "tools"; readonly items: readonly AgentMessage[]; readonly active: boolean }
   | { readonly kind: "assistant"; readonly message: AgentMessage & { readonly role: "assistant" }; readonly isLatest: boolean };
 
-export function Chat({ prefillPrompt, onClearPrefill, onSelectArtifact }: ChatProps = {}) {
+export function Chat({ prefillPrompt, onClearPrefill, onSelectArtifact, onOpenMindMap }: ChatProps = {}) {
   const [messages, setMessages] = useState<readonly AgentMessage[]>([]);
   const [input, setInput] = useState("");
   const [isSending, setIsSending] = useState(false);
@@ -300,6 +301,47 @@ export function Chat({ prefillPrompt, onClearPrefill, onSelectArtifact }: ChatPr
                     animate={item.isLatest}
                     onUpdate={scrollToBottom}
                   />
+
+                  {/* Quick Action Buttons */}
+                  <div className="mt-4 pt-3 border-t border-slate-800/80 flex flex-wrap items-center gap-2">
+                    <span className="text-[10px] font-mono uppercase font-semibold text-slate-500 mr-1">
+                      Acciones rápidas:
+                    </span>
+                    {onOpenMindMap && (
+                      <button
+                        type="button"
+                        onClick={() => onOpenMindMap()}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-950/60 hover:bg-indigo-900/60 border border-indigo-800/50 text-indigo-300 text-xs font-semibold shadow-sm transition"
+                      >
+                        <span className="material-symbols-outlined text-xs">schema</span>
+                        <span>🗺️ Ver Esquema Mental</span>
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => void submit("Genera un test evaluable de 5 preguntas tipo test basado en esta explicación.")}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-800 border border-slate-700/60 text-slate-200 text-xs font-medium transition"
+                    >
+                      <span className="material-symbols-outlined text-xs">quiz</span>
+                      <span>🎯 Crear Test (5 preg)</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void submit("Crea una nota de estudio estructurada con este contenido.")}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-800 border border-slate-700/60 text-slate-200 text-xs font-medium transition"
+                    >
+                      <span className="material-symbols-outlined text-xs">edit_note</span>
+                      <span>📝 Guardar Nota</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void submit("[Modo Socrático] Hazme una pregunta de razonamiento sobre este tema para comprobar mi nivel.")}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-800 border border-slate-700/60 text-slate-200 text-xs font-medium transition"
+                    >
+                      <span className="material-symbols-outlined text-xs">psychology</span>
+                      <span>🧠 Pregunta de Repaso</span>
+                    </button>
+                  </div>
                 </div>
               </article>
             );
