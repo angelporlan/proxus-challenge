@@ -52,7 +52,8 @@ export function Chat({
   onClearPrefill,
   onSelectArtifact,
   onOpenMindMap,
-  theme = "dark"
+  theme = "dark",
+  onToggleTheme
 }: ChatProps = {}) {
   const isLight = theme === "light";
   const [messages, setMessages] = useState<readonly AgentMessage[]>([]);
@@ -243,6 +244,23 @@ export function Chat({
               Socrático
             </button>
           </div>
+
+          {onToggleTheme && (
+            <button
+              type="button"
+              onClick={onToggleTheme}
+              className={`p-1.5 rounded-xl border transition ${
+                isLight
+                  ? "border-slate-200 text-slate-700 hover:text-slate-900 hover:bg-slate-100"
+                  : "border-slate-800 text-amber-300 hover:text-amber-200 hover:bg-slate-900"
+              }`}
+              title={isLight ? "Cambiar a Modo Oscuro" : "Cambiar a Modo Claro"}
+            >
+              <span className="material-symbols-outlined text-base">
+                {isLight ? "dark_mode" : "light_mode"}
+              </span>
+            </button>
+          )}
 
           <button
             className={`p-1.5 rounded-xl border transition ${

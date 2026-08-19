@@ -243,19 +243,37 @@ export function App() {
             </button>
           </div>
 
-          {selectedArtifactId && activeTab === "workspace" && (
+          <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={() => setSelectedArtifactId(null)}
-              className={`text-xs font-mono transition ${
+              onClick={toggleTheme}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold shadow-sm transition ${
                 isLight
-                  ? "text-slate-500 hover:text-slate-800"
-                  : "text-slate-400 hover:text-slate-200"
+                  ? "bg-slate-100 hover:bg-slate-200 border-slate-300 text-slate-800"
+                  : "bg-slate-900 hover:bg-slate-800 border-slate-700 text-slate-200"
               }`}
+              title={isLight ? "Cambiar a Modo Oscuro" : "Cambiar a Modo Claro"}
             >
-              Cerrar recurso ✕
+              <span className={`material-symbols-outlined text-sm ${isLight ? "text-slate-700" : "text-amber-300"}`}>
+                {isLight ? "dark_mode" : "light_mode"}
+              </span>
+              <span>{isLight ? "Modo Oscuro" : "Modo Claro"}</span>
             </button>
-          )}
+
+            {selectedArtifactId && activeTab === "workspace" && (
+              <button
+                type="button"
+                onClick={() => setSelectedArtifactId(null)}
+                className={`text-xs font-mono transition ${
+                  isLight
+                    ? "text-slate-500 hover:text-slate-800"
+                    : "text-slate-400 hover:text-slate-200"
+                }`}
+              >
+                Cerrar recurso ✕
+              </button>
+            )}
+          </div>
         </header>
 
         {/* Tab Views */}
