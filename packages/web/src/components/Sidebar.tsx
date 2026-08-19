@@ -160,7 +160,7 @@ export function Sidebar({
                         type="button"
                         onClick={() => onSelectMaterial?.(material.id)}
                         disabled={isDeleting || onSelectMaterial === undefined}
-                        className="min-w-0 flex-1 rounded-lg px-2 py-1.5 pr-[7.75rem] text-left disabled:cursor-not-allowed"
+                        className="min-w-0 flex-1 rounded-lg px-2.5 py-2 text-left disabled:cursor-not-allowed"
                         aria-current={isSelected ? "page" : undefined}
                         aria-label={`Abrir ${material.title}, ${pageLabel}`}
                         title={material.title}
@@ -177,21 +177,28 @@ export function Sidebar({
                         </span>
                       </button>
 
-                      <div className="pointer-events-auto absolute right-1 top-1/2 z-10 flex -translate-y-1/2 items-center gap-0.5 rounded-lg bg-inherit p-0.5 opacity-100 shadow-sm transition min-[1440px]:pointer-events-none min-[1440px]:opacity-0 min-[1440px]:group-hover:pointer-events-auto min-[1440px]:group-hover:opacity-100 min-[1440px]:group-focus-within:pointer-events-auto min-[1440px]:group-focus-within:opacity-100">
+                      {/* Floating Quick Action Overlay Buttons (Appears on Hover) */}
+                      <div
+                        className={`absolute right-1.5 top-1/2 z-20 flex -translate-y-1/2 items-center gap-0.5 rounded-xl border p-0.5 shadow-md backdrop-blur-md transition-all duration-150 opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto ${
+                          isLight
+                            ? "bg-white/95 border-slate-200 shadow-slate-200/80 text-slate-700"
+                            : "bg-slate-900/95 border-slate-800 shadow-black/80 text-slate-200"
+                        }`}
+                      >
                         {onOpenMindMap && (
                           <button
                             type="button"
-                            className={`grid size-9 place-items-center rounded-lg transition ${
+                            className={`grid size-8 place-items-center rounded-lg transition ${
                               isLight
-                                ? "text-slate-500 hover:bg-slate-200 hover:text-slate-900"
-                                : "text-slate-400 hover:bg-slate-800 hover:text-slate-100"
+                                ? "text-slate-600 hover:bg-indigo-50 hover:text-indigo-600"
+                                : "text-slate-400 hover:bg-indigo-950/60 hover:text-indigo-300"
                             }`}
                             onClick={() => onOpenMindMap(material.id)}
                             disabled={isDeleting}
                             aria-label={`Abrir el esquema de ${material.title}`}
                             title="Abrir esquema"
                           >
-                            <span className="material-symbols-outlined text-base" aria-hidden="true">
+                            <span className="material-symbols-outlined text-[17px]" aria-hidden="true">
                               schema
                             </span>
                           </button>
@@ -200,10 +207,10 @@ export function Sidebar({
                         {onAskTutor && (
                           <button
                             type="button"
-                            className={`grid size-9 place-items-center rounded-lg transition ${
+                            className={`grid size-8 place-items-center rounded-lg transition ${
                               isLight
-                                ? "text-slate-500 hover:bg-slate-200 hover:text-slate-900"
-                                : "text-slate-400 hover:bg-slate-800 hover:text-slate-100"
+                                ? "text-slate-600 hover:bg-indigo-50 hover:text-indigo-600"
+                                : "text-slate-400 hover:bg-indigo-950/60 hover:text-indigo-300"
                             }`}
                             onClick={() =>
                               onAskTutor(`Explica los conceptos principales de los apuntes "${material.title}".`)
@@ -212,7 +219,7 @@ export function Sidebar({
                             aria-label={`Preguntar al tutor sobre ${material.title}`}
                             title="Preguntar al tutor"
                           >
-                            <span className="material-symbols-outlined text-base" aria-hidden="true">
+                            <span className="material-symbols-outlined text-[17px]" aria-hidden="true">
                               chat
                             </span>
                           </button>
@@ -225,11 +232,11 @@ export function Sidebar({
                             onRequestDelete(material, event.currentTarget);
                           }}
                           disabled={isDeleting}
-                          className="grid size-9 place-items-center rounded-lg text-slate-400 transition hover:bg-red-500/10 hover:text-red-500 disabled:cursor-not-allowed disabled:opacity-50"
+                          className="grid size-8 place-items-center rounded-lg text-slate-400 transition hover:bg-red-500/10 hover:text-red-500 disabled:cursor-not-allowed disabled:opacity-50"
                           aria-label={`Eliminar ${material.title}`}
                           title="Eliminar PDF"
                         >
-                          <span className="material-symbols-outlined text-base" aria-hidden="true">
+                          <span className="material-symbols-outlined text-[17px]" aria-hidden="true">
                             {isDeleting ? "progress_activity" : "delete"}
                           </span>
                         </button>
