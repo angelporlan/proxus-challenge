@@ -28,6 +28,15 @@ export class ArtifactsApi extends HttpApiGroup.make("artifacts")
       },
       payload: SubmitAttemptInput,
       success: ArtifactAttempt
+    }),
+    HttpApiEndpoint.delete("delete", "/:id", {
+      params: {
+        id: Schema.String
+      },
+      success: Schema.Struct({
+        success: Schema.Boolean,
+        id: Schema.String
+      })
     })
   )
   .prefix("/artifacts")

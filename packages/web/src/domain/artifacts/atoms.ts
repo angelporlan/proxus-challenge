@@ -34,15 +34,26 @@ export const artifactQuery = Atom.family((id: string) =>
 
 export const submitArtifactAttemptAction = apiRuntime.fn(
   (input: SubmitAttemptInput) =>
-    ApiClient.use((client) => input.artifactKind === "quiz"
-      ? client.artifacts.submit({
-          params: { id: input.artifactId },
-          payload: input
-        })
-      : client.artifacts.submit({
-          params: { id: input.artifactId },
-          payload: input
-        })
+    ApiClient.use((client) =>
+      input.artifactKind === "quiz"
+        ? client.artifacts.submit({
+            params: { id: input.artifactId },
+            payload: input
+          })
+        : client.artifacts.submit({
+            params: { id: input.artifactId },
+            payload: input
+          })
     ).pipe(Effect.withSpan("artifacts.submit", { kind: "client" })),
+  { reactivityKeys: ["artifacts"] }
+);
+
+export const deleteArtifactAction = apiRuntime.fn(
+  (id: string) =>
+    ApiClient.use((client) =>
+      client.artifacts.delete({
+        params: { id }
+      })
+    ).pipe(Effect.withSpan("artifacts.delete", { kind: "client" })),
   { reactivityKeys: ["artifacts"] }
 );

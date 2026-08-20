@@ -27,6 +27,7 @@ import {
   materialQuery,
   materialsQuery
 } from "./domain/materials/atoms.ts";
+import { deleteArtifactAction } from "./domain/artifacts/atoms.ts";
 
 type ActiveTab = "workspace" | "mindmap" | "pdf";
 type Theme = "dark" | "light";
@@ -285,6 +286,21 @@ export function App() {
     }
   };
 
+  const deleteArtifact = useAtomSet(deleteArtifactAction, { mode: "promise" });
+
+  const handleDeleteArtifact = async (artifact: { readonly id: string; readonly title: string; readonly kind: "note" | "quiz" | "test" }) => {
+    try {
+      await deleteArtifact(artifact.id);
+      if (selectedArtifactId === artifact.id) {
+        setSelectedArtifactId(null);
+        setActiveTab("workspace");
+      }
+      notify({ tone: "success", title: "Recurso de estudio eliminado" });
+    } catch {
+      notify({ tone: "error", title: "No se pudo eliminar el recurso" });
+    }
+  };
+
   const handleAskAboutMistake = (context: {
     question: string;
     studentAnswer: string;
@@ -398,6 +414,7 @@ export function App() {
           onAskTutor={(prompt) => openTutor(prompt)}
           onRequestUpload={() => setIsUploadOpen(true)}
           onRequestDelete={requestDelete}
+          onRequestDeleteArtifact={handleDeleteArtifact}
           deletingMaterialId={isDeleting ? pendingDeletion?.id ?? null : null}
           recentlyUploadedId={recentlyUploadedId}
           theme={theme}

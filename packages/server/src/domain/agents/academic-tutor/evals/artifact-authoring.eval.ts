@@ -232,11 +232,18 @@ const InMemoryArtifactRepository = Layer.effect(
         ))
       );
 
+    const deleteArtifact = (id: string): Effect.Effect<void, ArtifactRepositoryError> =>
+      Ref.update(ref, (state) => ({
+        ...state,
+        artifacts: state.artifacts.filter((a) => a.id !== id)
+      }));
+
     return ArtifactRepository.of({
       createArtifact,
       saveArtifact,
       getArtifact,
       listArtifacts,
+      deleteArtifact,
       submitAttempt,
       saveAttempt,
       getAttempt,

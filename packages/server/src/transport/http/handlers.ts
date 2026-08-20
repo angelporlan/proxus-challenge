@@ -77,6 +77,10 @@ export const ArtifactsHttpHandlers = HttpApiBuilder.group(
       }).pipe(
         Effect.flatMap((attempt) => artifacts.gradeAttempt(attempt.id)),
         Effect.orDie
+      ))
+      .handle("delete", ({ params }) => artifacts.deleteArtifact(params.id).pipe(
+        Effect.map(() => ({ success: true, id: params.id })),
+        Effect.orDie
       ));
   })
 );

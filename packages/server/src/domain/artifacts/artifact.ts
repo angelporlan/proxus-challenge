@@ -310,6 +310,7 @@ export interface ArtifactRepository {
   readonly saveArtifact: (artifact: Artifact) => Effect.Effect<void, ArtifactRepositoryError>;
   readonly getArtifact: (id: string) => Effect.Effect<Artifact, ArtifactRepositoryError>;
   readonly listArtifacts: (input?: ListArtifactsInput) => Effect.Effect<readonly Artifact[], ArtifactRepositoryError>;
+  readonly deleteArtifact: (id: string) => Effect.Effect<void, ArtifactRepositoryError>;
   readonly submitAttempt: (input: SubmitAttemptInput) => Effect.Effect<ArtifactAttempt, ArtifactRepositoryError>;
   readonly saveAttempt: (attempt: ArtifactAttempt) => Effect.Effect<void, ArtifactRepositoryError>;
   readonly getAttempt: (id: string) => Effect.Effect<ArtifactAttempt, ArtifactRepositoryError>;

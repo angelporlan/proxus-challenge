@@ -154,11 +154,21 @@ export const FileArtifactRepository = {
       return graded;
     });
 
+    const deleteArtifact = (id: string) => Effect.gen(function* () {
+      const filePath = artifactPath(id);
+      const exists = yield* fs.exists(filePath).pipe(Effect.mapError(mapStorageError));
+      if (!exists) {
+        return yield* new ArtifactNotFound({ artifactId: id });
+      }
+      yield* fs.remove(filePath).pipe(Effect.mapError(mapStorageError));
+    });
+
     return {
       createArtifact,
       saveArtifact: writeArtifactFile,
       getArtifact: readArtifactFile,
       listArtifacts,
+      deleteArtifact,
       submitAttempt,
       saveAttempt: writeAttemptFile,
       getAttempt: readAttemptFile,

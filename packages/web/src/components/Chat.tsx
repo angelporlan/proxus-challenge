@@ -8,6 +8,7 @@ import { artifactsQuery } from "../domain/artifacts/atoms.ts";
 import { materialsQuery, uploadMaterialAction } from "../domain/materials/atoms.ts";
 import { applyInvalidations, invalidationsForToolCall } from "../domain/tutor/invalidation.ts";
 import { streamTutorMessage } from "../domain/tutor/stream.ts";
+import { ArtifactChatCard } from "./ArtifactChatCard.tsx";
 
 const starterPrompts = [
   {
@@ -773,6 +774,27 @@ export function Chat({
                   <div className="prose dark:prose-invert max-w-none text-sm space-y-2">
                     <Streamdown>{item.message.content}</Streamdown>
                   </div>
+
+                  {/* Interactive Artifact Cards (if artifacts were created/referenced) */}
+                  {(() => {
+                    const uuidRegex = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
+                    const matches = item.message.content.match(uuidRegex);
+                    const artifactIds = matches ? Array.from(new Set(matches)) : [];
+                    if (artifactIds.length === 0) return null;
+                    return (
+                      <div className="flex flex-col gap-2.5 my-3">
+                        {artifactIds.map((artId) => (
+                          <ArtifactChatCard
+                            key={artId}
+                            artifactId={artId}
+                            onOpenInWorkspace={(id) => onSelectArtifact?.(id)}
+                            onOpenMindMap={onOpenMindMap}
+                            isLight={isLight}
+                          />
+                        ))}
+                      </div>
+                    );
+                  })()}
 
                   {/* Quick Action Buttons */}
                   {index === groupedItems.length - 1 && (

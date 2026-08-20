@@ -14,6 +14,7 @@ interface SidebarProps {
   readonly onAskTutor?: ((prompt: string) => void) | undefined;
   readonly onRequestUpload: () => void;
   readonly onRequestDelete: (material: PdfMaterial, trigger?: HTMLButtonElement) => void;
+  readonly onRequestDeleteArtifact?: ((artifact: { readonly id: string; readonly title: string; readonly kind: "note" | "quiz" | "test" }) => void) | undefined;
   readonly deletingMaterialId?: string | null | undefined;
   readonly recentlyUploadedId?: string | null | undefined;
   readonly theme?: "dark" | "light" | undefined;
@@ -28,6 +29,7 @@ export function Sidebar({
   onAskTutor,
   onRequestUpload,
   onRequestDelete,
+  onRequestDeleteArtifact,
   deletingMaterialId = null,
   recentlyUploadedId = null,
   theme = "dark"
@@ -378,35 +380,53 @@ export function Sidebar({
                             items.map((artifact) => {
                               const isSelected = selectedArtifactId === artifact.id;
                               return (
-                                <button
-                                  key={artifact.id}
-                                  type="button"
-                                  onClick={() => onSelectArtifact(artifact.id)}
-                                  className={`group flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left transition ${
-                                    isSelected
-                                      ? isLight
-                                        ? "bg-indigo-50 border border-indigo-300/80 text-indigo-950 font-semibold shadow-xs"
-                                        : "bg-indigo-950/60 border border-indigo-500/50 text-indigo-100 font-semibold shadow-xs"
-                                      : isLight
-                                      ? "text-slate-700 hover:bg-slate-100 hover:text-slate-900 border border-transparent"
-                                      : "text-slate-300 hover:bg-slate-800/60 hover:text-slate-100 border border-transparent"
-                                  }`}
-                                  aria-current={isSelected ? "page" : undefined}
-                                  title={artifact.title}
-                                >
-                                  <span
-                                    className={`size-1.5 rounded-full shrink-0 ${
+                                <div key={artifact.id} className="group relative flex items-center min-w-0">
+                                  <button
+                                    type="button"
+                                    onClick={() => onSelectArtifact(artifact.id)}
+                                    className={`flex flex-1 items-center gap-2 rounded-lg px-2.5 py-2 text-left transition pr-7 ${
                                       isSelected
-                                        ? "bg-indigo-600 dark:bg-indigo-400"
+                                        ? isLight
+                                          ? "bg-indigo-50 border border-indigo-300/80 text-indigo-950 font-semibold shadow-xs"
+                                          : "bg-indigo-950/60 border border-indigo-500/50 text-indigo-100 font-semibold shadow-xs"
                                         : isLight
-                                        ? "bg-slate-400 group-hover:bg-indigo-500"
-                                        : "bg-slate-600 group-hover:bg-indigo-400"
+                                        ? "text-slate-700 hover:bg-slate-100 hover:text-slate-900 border border-transparent"
+                                        : "text-slate-300 hover:bg-slate-800/60 hover:text-slate-100 border border-transparent"
                                     }`}
-                                  />
-                                  <span className="truncate text-xs flex-1 leading-snug">
-                                    {artifact.title}
-                                  </span>
-                                </button>
+                                    aria-current={isSelected ? "page" : undefined}
+                                    title={artifact.title}
+                                  >
+                                    <span
+                                      className={`size-1.5 rounded-full shrink-0 ${
+                                        isSelected
+                                          ? "bg-indigo-600 dark:bg-indigo-400"
+                                          : isLight
+                                          ? "bg-slate-400 group-hover:bg-indigo-500"
+                                          : "bg-slate-600 group-hover:bg-indigo-400"
+                                      }`}
+                                    />
+                                    <span className="truncate text-xs flex-1 leading-snug">
+                                      {artifact.title}
+                                    </span>
+                                  </button>
+
+                                  {onRequestDeleteArtifact && (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        onRequestDeleteArtifact(artifact);
+                                      }}
+                                      className={`absolute right-1 top-1/2 -translate-y-1/2 grid size-6 place-items-center rounded-md text-slate-400 hover:text-red-500 hover:bg-red-500/10 transition opacity-0 group-hover:opacity-100 focus:opacity-100 ${
+                                        isLight ? "bg-white/90 shadow-xs" : "bg-slate-900/90 shadow-xs"
+                                      }`}
+                                      title="Eliminar recurso de estudio"
+                                      aria-label={`Eliminar ${artifact.title}`}
+                                    >
+                                      <span className="material-symbols-outlined text-[13px]">delete</span>
+                                    </button>
+                                  )}
+                                </div>
                               );
                             })
                           )}
