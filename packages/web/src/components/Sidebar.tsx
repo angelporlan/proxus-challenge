@@ -40,6 +40,14 @@ export function Sidebar({
   const refreshArtifacts = useAtomRefresh(artifactsQuery);
   const isLight = theme === "light";
   const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>({});
+  const [hoveredTooltip, setHoveredTooltip] = useState<{
+    id: string;
+    title: string;
+    subtitle?: string;
+    badge?: string;
+    top: number;
+    left: number;
+  } | null>(null);
 
   const toggleCategory = (kind: string) => {
     setCollapsedCategories((prev) => ({
@@ -50,6 +58,7 @@ export function Sidebar({
 
   return (
     <aside
+      onScroll={() => setHoveredTooltip(null)}
       className={`h-full max-h-none overflow-x-hidden overflow-y-auto border-r p-4 sm:p-5 max-md:border-r-0 max-md:border-b transition-colors ${
         isLight
           ? "border-slate-200 bg-white text-slate-900"
@@ -151,6 +160,17 @@ export function Sidebar({
                   return (
                     <li
                       key={material.id}
+                      onMouseEnter={(e) => {
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        setHoveredTooltip({
+                          id: material.id,
+                          title: material.title,
+                          subtitle: `${pageLabel} · ${material.fileName}`,
+                          top: rect.top + rect.height / 2,
+                          left: rect.right + 12
+                        });
+                      }}
+                      onMouseLeave={() => setHoveredTooltip(null)}
                       className={`group relative flex min-w-0 items-center gap-1 rounded-xl border p-1 transition ${
                         isSelected
                           ? isLight
@@ -186,21 +206,6 @@ export function Sidebar({
                           {pageLabel} · {material.fileName}
                         </span>
                       </button>
-
-                      {/* Absolute Floating Tooltip on Hover (Top-Right) */}
-                      <div
-                        role="tooltip"
-                        className={`absolute right-1 bottom-full z-40 mb-1.5 max-w-[280px] rounded-xl border px-3 py-2 text-xs font-medium shadow-xl backdrop-blur-md transition-all duration-150 pointer-events-none opacity-0 translate-y-1 group-hover:opacity-100 group-hover:translate-y-0 ${
-                          isLight
-                            ? "bg-slate-900 text-white border-slate-700 shadow-slate-900/30"
-                            : "bg-slate-950 text-slate-100 border-slate-700 shadow-black/80"
-                        }`}
-                      >
-                        <p className="font-semibold text-xs leading-snug break-words whitespace-normal text-white">{material.title}</p>
-                        <p className="text-[11px] text-slate-400 mt-1 leading-tight break-all whitespace-normal">
-                          {pageLabel} · {material.fileName}
-                        </p>
-                      </div>
 
                       {/* Floating Quick Action Overlay Buttons (Appears on Hover) */}
                       <div
@@ -394,7 +399,27 @@ export function Sidebar({
                             items.map((artifact) => {
                               const isSelected = selectedArtifactId === artifact.id;
                               return (
-                                <div key={artifact.id} className="group relative flex items-center min-w-0">
+                                <div
+                                  key={artifact.id}
+                                  onMouseEnter={(e) => {
+                                    const rect = e.currentTarget.getBoundingClientRect();
+                                    const kindLabel =
+                                      artifact.kind === "quiz"
+                                        ? "Quiz de práctica"
+                                        : artifact.kind === "note"
+                                        ? "Nota de estudio"
+                                        : "Simulacro de examen";
+                                    setHoveredTooltip({
+                                      id: artifact.id,
+                                      title: artifact.title,
+                                      badge: kindLabel,
+                                      top: rect.top + rect.height / 2,
+                                      left: rect.right + 12
+                                    });
+                                  }}
+                                  onMouseLeave={() => setHoveredTooltip(null)}
+                                  className="group relative flex items-center min-w-0"
+                                >
                                   <button
                                     type="button"
                                     onClick={() => onSelectArtifact(artifact.id)}
@@ -422,18 +447,6 @@ export function Sidebar({
                                       {artifact.title}
                                     </span>
                                   </button>
-
-                                  {/* Absolute Floating Tooltip on Hover (Top-Right) */}
-                                  <div
-                                    role="tooltip"
-                                    className={`absolute right-1 bottom-full z-40 mb-1.5 max-w-[260px] rounded-xl border px-3 py-1.5 text-xs font-medium shadow-xl backdrop-blur-md transition-all duration-150 pointer-events-none opacity-0 translate-y-1 group-hover:opacity-100 group-hover:translate-y-0 ${
-                                      isLight
-                                        ? "bg-slate-900 text-white border-slate-700 shadow-slate-900/30"
-                                        : "bg-slate-950 text-slate-100 border-slate-700 shadow-black/80"
-                                    }`}
-                                  >
-                                    <p className="leading-snug break-words whitespace-normal">{artifact.title}</p>
-                                  </div>
 
                                   {onRequestDeleteArtifact && (
                                     <button
@@ -465,6 +478,38 @@ export function Sidebar({
           }
         })}
       </section>
+
+      {/* Floating Tooltip positioned fixed to the right of the sidebar / trash can */}
+      {hoveredTooltip && (
+        <div
+          role="tooltip"
+          className={`fixed z-[9999] pointer-events-none rounded-xl border px-3.5 py-2.5 text-xs font-medium shadow-2xl backdrop-blur-md transition-all duration-150 animate-in fade-in zoom-in-95 ${
+            isLight
+              ? "bg-slate-900/95 text-white border-slate-700 shadow-slate-900/40"
+              : "bg-slate-950/95 text-slate-100 border-slate-700 shadow-black/90"
+          }`}
+          style={{
+            top: `${hoveredTooltip.top}px`,
+            left: `${hoveredTooltip.left}px`,
+            transform: "translateY(-50%)",
+            maxWidth: "320px"
+          }}
+        >
+          {hoveredTooltip.badge && (
+            <span className="inline-block text-[10px] font-semibold uppercase tracking-wider text-indigo-400 mb-1">
+              {hoveredTooltip.badge}
+            </span>
+          )}
+          <p className="font-semibold text-xs leading-snug break-words whitespace-normal text-white">
+            {hoveredTooltip.title}
+          </p>
+          {hoveredTooltip.subtitle && (
+            <p className="text-[11px] text-slate-400 mt-1 leading-tight break-all whitespace-normal">
+              {hoveredTooltip.subtitle}
+            </p>
+          )}
+        </div>
+      )}
     </aside>
   );
 }
