@@ -746,14 +746,13 @@ export function Chat({
                           return parts.map((part, pIdx) => {
                             if (part.startsWith("@")) {
                               return (
-                                <span
+                                <strong
                                   key={pIdx}
-                                  className="inline-flex items-center gap-1 rounded-lg bg-white/20 px-1.5 py-0.5 font-semibold text-white border border-white/30 shadow-xs mx-0.5 align-baseline"
+                                  className="font-bold text-white bg-white/20 px-1.5 py-0.5 rounded-md inline-flex items-center gap-1 border border-white/30 shadow-2xs mx-0.5 align-baseline"
                                 >
                                   <span className="material-symbols-outlined text-[13px] text-red-200">picture_as_pdf</span>
                                   <span>{part}</span>
-                                  <span className="material-symbols-outlined text-[12px] text-emerald-300">check_circle</span>
-                                </span>
+                                </strong>
                               );
                             }
                             return <span key={pIdx}>{part}</span>;
@@ -934,10 +933,6 @@ export function Chat({
                   {doc.pageCount && (
                     <span className="text-[10px] text-purple-600 dark:text-purple-400">({doc.pageCount} pág{doc.pageCount > 1 ? "s" : ""})</span>
                   )}
-                  <span className="inline-flex items-center gap-0.5 rounded-md bg-emerald-500/15 dark:bg-emerald-500/25 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
-                    <span className="material-symbols-outlined text-[11px] text-emerald-500">check_circle</span>
-                    <span>Cargado</span>
-                  </span>
                   <button
                     type="button"
                     onClick={() => setAttachedDocs((prev) => prev.filter((d) => d.id !== doc.id))}
