@@ -86,7 +86,7 @@ export function App() {
     setTimeout(() => {
       setIsChatMaximized(false);
       setIsChatClosing(false);
-    }, 200);
+    }, 320);
   }, []);
 
   useEffect(() => {
@@ -550,25 +550,38 @@ export function App() {
           role="dialog"
           aria-modal="true"
           aria-label="Tutor en Modo Chat Completo"
-          className={`fixed inset-0 z-50 flex flex-col h-screen w-screen overflow-hidden ${
-            isChatClosing ? "ui-chat-collapse" : "ui-chat-expand"
-          } ${isLight ? "bg-slate-50 text-slate-900" : "bg-[#090d16] text-slate-100"}`}
+          className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden"
         >
-          <Chat
-            prefillPrompt={chatPrompt}
-            onClearPrefill={() => setChatPrompt(null)}
-            onSelectArtifact={(id) => {
-              handleSelectArtifact(id);
-              handleCloseFullscreenChat();
-            }}
-            onOpenMindMap={() => {
-              setActiveTab("mindmap");
-              handleCloseFullscreenChat();
-            }}
-            theme={theme}
-            isMaximized={true}
-            onToggleMaximize={handleCloseFullscreenChat}
+          {/* Dimmed Backdrop with fade transition */}
+          <div
+            className={`absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity duration-300 ${
+              isChatClosing ? "opacity-0" : "opacity-100"
+            }`}
+            onClick={handleCloseFullscreenChat}
           />
+
+          {/* Animated Fullscreen Chat Container */}
+          <div
+            className={`relative z-10 flex flex-col h-full w-full overflow-hidden shadow-2xl ${
+              isChatClosing ? "ui-chat-collapse" : "ui-chat-expand"
+            } ${isLight ? "bg-slate-50 text-slate-900" : "bg-[#090d16] text-slate-100"}`}
+          >
+            <Chat
+              prefillPrompt={chatPrompt}
+              onClearPrefill={() => setChatPrompt(null)}
+              onSelectArtifact={(id) => {
+                handleSelectArtifact(id);
+                handleCloseFullscreenChat();
+              }}
+              onOpenMindMap={() => {
+                setActiveTab("mindmap");
+                handleCloseFullscreenChat();
+              }}
+              theme={theme}
+              isMaximized={true}
+              onToggleMaximize={handleCloseFullscreenChat}
+            />
+          </div>
         </div>
       )}
 
