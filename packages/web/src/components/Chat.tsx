@@ -57,25 +57,23 @@ interface MentionPart {
   readonly value: string;
 }
 
-/**
- * Splits mentions using the real document titles instead of treating a title
- * with spaces as several independent words ("@document 1" -> one mention).
- */
-function splitMentionParts(
-  value: string,
-  materials: readonly { readonly title: string }[]
-): readonly MentionPart[] {
-  const titles = [...new Set(materials.map((material) => material.title.trim()).filter(Boolean))]
-    .sort((left, right) => right.length - left.length);
-  const parts: MentionPart[] = [];
-  let textStart = 0;
-  let cursor = 0;
+export interface MentionRange {
+  readonly start: number;
+  readonly end: number;
+  readonly token: string;
+  readonly title: string;
+  readonly materialId?: string | undefined;
+}
 
-  const pushText = (end: number) => {
-    if (end > textStart) {
-      parts.push({ kind: "text", value: value.slice(textStart, end) });
-    }
-  };
+export function findMentionRanges(
+  value: string,
+  materials: readonly { readonly id?: string | undefined; readonly title: string }[]
+): readonly MentionRange[] {
+  const sortedMaterials = [...materials].sort(
+    (left, right) => right.title.trim().length - left.title.trim().length
+  );
+  const ranges: MentionRange[] = [];
+  let cursor = 0;
 
   while (cursor < value.length) {
     if (value[cursor] !== "@" || (cursor > 0 && !/\s/.test(value[cursor - 1] ?? ""))) {
@@ -83,29 +81,79 @@ function splitMentionParts(
       continue;
     }
 
-    const title = titles.find((candidate) => {
+    const matchedMaterial = sortedMaterials.find((candidate) => {
       const start = cursor + 1;
-      const end = start + candidate.length;
+      const end = start + candidate.title.length;
       const following = value[end];
       return (
-        value.slice(start, end).toLocaleLowerCase() === candidate.toLocaleLowerCase() &&
+        value.slice(start, end).toLocaleLowerCase() === candidate.title.toLocaleLowerCase() &&
         (following === undefined || /\s|[.,!?;:()[\]{}"«»]/.test(following))
       );
     });
 
-    const token = title ? `@${title}` : /^@[a-zA-Z0-9_.-]+/.exec(value.slice(cursor))?.[0];
+    let token = "";
+    let title = "";
+    let materialId: string | undefined = undefined;
+
+    if (matchedMaterial) {
+      token = `@${matchedMaterial.title}`;
+      title = matchedMaterial.title;
+      materialId = matchedMaterial.id;
+    } else {
+      const match = /^@[a-zA-Z0-9_.-]+/.exec(value.slice(cursor));
+      if (match) {
+        token = match[0];
+        title = token.slice(1);
+      }
+    }
+
     if (!token) {
       cursor += 1;
       continue;
     }
 
-    pushText(cursor);
-    parts.push({ kind: "mention", value: token });
+    ranges.push({
+      start: cursor,
+      end: cursor + token.length,
+      token,
+      title,
+      materialId
+    });
+
     cursor += token.length;
-    textStart = cursor;
   }
 
-  pushText(value.length);
+  return ranges;
+}
+
+/**
+ * Splits mentions using the real document titles instead of treating a title
+ * with spaces as several independent words ("@document 1" -> one mention).
+ */
+export function splitMentionParts(
+  value: string,
+  materials: readonly { readonly id?: string | undefined; readonly title: string }[]
+): readonly MentionPart[] {
+  const ranges = findMentionRanges(value, materials);
+  if (ranges.length === 0) {
+    return value ? [{ kind: "text", value }] : [];
+  }
+
+  const parts: MentionPart[] = [];
+  let textStart = 0;
+
+  for (const r of ranges) {
+    if (r.start > textStart) {
+      parts.push({ kind: "text", value: value.slice(textStart, r.start) });
+    }
+    parts.push({ kind: "mention", value: r.token });
+    textStart = r.end;
+  }
+
+  if (textStart < value.length) {
+    parts.push({ kind: "text", value: value.slice(textStart) });
+  }
+
   return parts;
 }
 
@@ -278,6 +326,25 @@ export function Chat({
         const endPos = textareaRef.current.value.length;
         textareaRef.current.setSelectionRange(endPos, endPos);
       }
+    });
+  };
+
+  const handleRemoveAttachedDoc = (docId: string, docTitle: string) => {
+    setAttachedDocs((prev) => prev.filter((d) => d.id !== docId));
+    setInput((prev) => {
+      const docsList = [...availableMaterials, ...attachedDocs];
+      const ranges = findMentionRanges(prev, docsList);
+      const matching = ranges.filter(
+        (r) => r.materialId === docId || r.title.toLowerCase() === docTitle.toLowerCase()
+      );
+      if (matching.length === 0) return prev;
+      let nextText = prev;
+      for (let i = matching.length - 1; i >= 0; i--) {
+        const r = matching[i]!;
+        const endWithSpace = nextText[r.end] === " " ? r.end + 1 : r.end;
+        nextText = nextText.slice(0, r.start) + nextText.slice(endWithSpace);
+      }
+      return nextText;
     });
   };
 
@@ -1048,7 +1115,7 @@ export function Chat({
                   )}
                   <button
                     type="button"
-                    onClick={() => setAttachedDocs((prev) => prev.filter((d) => d.id !== doc.id))}
+                    onClick={() => handleRemoveAttachedDoc(doc.id, doc.title)}
                     className="grid size-4 place-items-center rounded-full hover:bg-purple-500/30 text-purple-600 dark:text-purple-400 transition ml-0.5"
                     title="Quitar referencia"
                   >
@@ -1164,6 +1231,30 @@ export function Chat({
               onChange={(event) => {
                 const val = event.currentTarget.value;
                 setInput(val);
+
+                // Auto-sync attachedDocs if mention was removed
+                const docsList = [...availableMaterials, ...attachedDocs];
+                const prevRanges = findMentionRanges(input, docsList);
+                const nextRanges = findMentionRanges(val, docsList);
+
+                setAttachedDocs((prev) =>
+                  prev.filter((doc) => {
+                    const wasMentioned = prevRanges.some(
+                      (r) =>
+                        r.title.toLowerCase() === doc.title.toLowerCase() ||
+                        (doc.id && r.materialId === doc.id)
+                    );
+                    if (!wasMentioned) {
+                      return true; // Keep documents not added via text mention
+                    }
+                    return nextRanges.some(
+                      (r) =>
+                        r.title.toLowerCase() === doc.title.toLowerCase() ||
+                        (doc.id && r.materialId === doc.id)
+                    );
+                  })
+                );
+
                 const mentionMatch = /(?:^|\s)@([a-zA-Z0-9_-]*)$/.exec(val);
                 if (mentionMatch) {
                   setMentionQuery(mentionMatch[1] ?? "");
@@ -1199,6 +1290,147 @@ export function Chat({
                     e.preventDefault();
                     setMentionQuery(null);
                     return;
+                  }
+                }
+
+                const textarea = textareaRef.current;
+                if (textarea) {
+                  const { selectionStart, selectionEnd } = textarea;
+                  const docsList = [...availableMaterials, ...attachedDocs];
+                  const ranges = findMentionRanges(input, docsList);
+
+                  // Handle atomic mention deletion with Backspace
+                  if (e.key === "Backspace") {
+                    if (selectionStart === selectionEnd) {
+                      const pos = selectionStart;
+                      const targetRange = ranges.find((r) => {
+                        const hasTrailingSpace = input[r.end] === " ";
+                        const isRightAfterSpace = hasTrailingSpace && pos === r.end + 1;
+                        const isInsideOrEnd = pos > r.start && pos <= r.end;
+                        return isInsideOrEnd || isRightAfterSpace;
+                      });
+
+                      if (targetRange) {
+                        e.preventDefault();
+                        const hasTrailingSpace = input[targetRange.end] === " ";
+                        const deleteEnd = hasTrailingSpace ? targetRange.end + 1 : targetRange.end;
+                        const nextInput = input.slice(0, targetRange.start) + input.slice(deleteEnd);
+                        setInput(nextInput);
+
+                        const remainingRanges = findMentionRanges(nextInput, docsList);
+                        const stillReferenced = remainingRanges.some(
+                          (r) =>
+                            (targetRange.materialId && r.materialId === targetRange.materialId) ||
+                            r.title.toLowerCase() === targetRange.title.toLowerCase()
+                        );
+
+                        if (!stillReferenced) {
+                          setAttachedDocs((prev) =>
+                            prev.filter(
+                              (d) =>
+                                (targetRange.materialId ? d.id !== targetRange.materialId : true) &&
+                                d.title.toLowerCase() !== targetRange.title.toLowerCase()
+                            )
+                          );
+                        }
+
+                        const newPos = targetRange.start;
+                        requestAnimationFrame(() => {
+                          if (textareaRef.current) {
+                            textareaRef.current.setSelectionRange(newPos, newPos);
+                          }
+                        });
+                        return;
+                      }
+                    } else {
+                      const overlapping = ranges.filter(
+                        (r) => selectionStart < r.end && selectionEnd > r.start
+                      );
+                      if (overlapping.length > 0) {
+                        const nextInput = input.slice(0, selectionStart) + input.slice(selectionEnd);
+                        const remainingRanges = findMentionRanges(nextInput, docsList);
+                        for (const targetRange of overlapping) {
+                          const stillReferenced = remainingRanges.some(
+                            (r) =>
+                              (targetRange.materialId && r.materialId === targetRange.materialId) ||
+                              r.title.toLowerCase() === targetRange.title.toLowerCase()
+                          );
+                          if (!stillReferenced) {
+                            setAttachedDocs((prev) =>
+                              prev.filter(
+                                (d) =>
+                                  (targetRange.materialId ? d.id !== targetRange.materialId : true) &&
+                                  d.title.toLowerCase() !== targetRange.title.toLowerCase()
+                              )
+                            );
+                          }
+                        }
+                      }
+                    }
+                  }
+
+                  // Handle atomic mention deletion with Delete
+                  if (e.key === "Delete") {
+                    if (selectionStart === selectionEnd) {
+                      const pos = selectionStart;
+                      const targetRange = ranges.find((r) => pos >= r.start && pos < r.end);
+                      if (targetRange) {
+                        e.preventDefault();
+                        const hasTrailingSpace = input[targetRange.end] === " ";
+                        const deleteEnd = hasTrailingSpace ? targetRange.end + 1 : targetRange.end;
+                        const nextInput = input.slice(0, targetRange.start) + input.slice(deleteEnd);
+                        setInput(nextInput);
+
+                        const remainingRanges = findMentionRanges(nextInput, docsList);
+                        const stillReferenced = remainingRanges.some(
+                          (r) =>
+                            (targetRange.materialId && r.materialId === targetRange.materialId) ||
+                            r.title.toLowerCase() === targetRange.title.toLowerCase()
+                        );
+
+                        if (!stillReferenced) {
+                          setAttachedDocs((prev) =>
+                            prev.filter(
+                              (d) =>
+                                (targetRange.materialId ? d.id !== targetRange.materialId : true) &&
+                                d.title.toLowerCase() !== targetRange.title.toLowerCase()
+                            )
+                          );
+                        }
+
+                        const newPos = targetRange.start;
+                        requestAnimationFrame(() => {
+                          if (textareaRef.current) {
+                            textareaRef.current.setSelectionRange(newPos, newPos);
+                          }
+                        });
+                        return;
+                      }
+                    } else {
+                      const overlapping = ranges.filter(
+                        (r) => selectionStart < r.end && selectionEnd > r.start
+                      );
+                      if (overlapping.length > 0) {
+                        const nextInput = input.slice(0, selectionStart) + input.slice(selectionEnd);
+                        const remainingRanges = findMentionRanges(nextInput, docsList);
+                        for (const targetRange of overlapping) {
+                          const stillReferenced = remainingRanges.some(
+                            (r) =>
+                              (targetRange.materialId && r.materialId === targetRange.materialId) ||
+                              r.title.toLowerCase() === targetRange.title.toLowerCase()
+                          );
+                          if (!stillReferenced) {
+                            setAttachedDocs((prev) =>
+                              prev.filter(
+                                (d) =>
+                                  (targetRange.materialId ? d.id !== targetRange.materialId : true) &&
+                                  d.title.toLowerCase() !== targetRange.title.toLowerCase()
+                              )
+                            );
+                          }
+                        }
+                      }
+                    }
                   }
                 }
 
