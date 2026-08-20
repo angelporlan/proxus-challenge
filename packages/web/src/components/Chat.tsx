@@ -1,11 +1,11 @@
-import { useAtomRefresh, useAtomValue } from "@effect/atom-react";
+import { useAtomRefresh, useAtomSet, useAtomValue } from "@effect/atom-react";
 import type { AgentMessage } from "@proxus/shared";
 import * as AsyncResult from "effect/unstable/reactivity/AsyncResult";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Streamdown } from "streamdown";
 import "streamdown/styles.css";
 import { artifactsQuery } from "../domain/artifacts/atoms.ts";
-import { materialsQuery } from "../domain/materials/atoms.ts";
+import { materialsQuery, uploadMaterialAction } from "../domain/materials/atoms.ts";
 import { applyInvalidations, invalidationsForToolCall } from "../domain/tutor/invalidation.ts";
 import { streamTutorMessage } from "../domain/tutor/stream.ts";
 
@@ -39,6 +39,69 @@ type ChatItem =
   | { readonly kind: "tools"; readonly items: readonly AgentMessage[] }
   | { readonly kind: "assistant"; readonly message: AgentMessage & { readonly role: "assistant" } };
 
+interface ParsedUserDoc {
+  readonly id?: string | undefined;
+  readonly title: string;
+  readonly pageCount?: number | undefined;
+}
+
+function parseUserContent(
+  rawContent: string,
+  materials: readonly { readonly id: string; readonly title: string; readonly pageCount?: number }[]
+): { readonly docs: readonly ParsedUserDoc[]; readonly text: string } {
+  const mentionPattern = /@\["([^"]+)"\]/g;
+  const refPattern = /\[Documentos de referencia:\s*([^\]]+)\]/g;
+  const socraticPattern = /\[Enfoque pedagógico:\s*[^\]]+\]/g;
+
+  const foundDocs: ParsedUserDoc[] = [];
+  let cleanText = rawContent.replace(socraticPattern, "").trim();
+
+  let match: RegExpExecArray | null;
+  while ((match = mentionPattern.exec(rawContent)) !== null) {
+    const term = match[1]!;
+    const matchedMat = materials.find(
+      (m) =>
+        m.id === term ||
+        m.title.toLowerCase() === term.toLowerCase() ||
+        m.title.toLowerCase().includes(term.toLowerCase())
+    );
+    if (matchedMat) {
+      if (!foundDocs.some((d) => d.id === matchedMat.id)) {
+        foundDocs.push({ id: matchedMat.id, title: matchedMat.title, pageCount: matchedMat.pageCount });
+      }
+    } else {
+      foundDocs.push({ title: term.replace(/[-_]/g, " ") });
+    }
+  }
+  cleanText = cleanText.replace(mentionPattern, "").trim();
+
+  while ((match = refPattern.exec(rawContent)) !== null) {
+    const listStr = match[1]!;
+    const items = listStr.split(",").map((s) => s.trim());
+    for (const itm of items) {
+      const matchedMat = materials.find(
+        (m) =>
+          m.id === itm ||
+          m.title.toLowerCase() === itm.toLowerCase() ||
+          m.title.toLowerCase().includes(itm.toLowerCase())
+      );
+      if (matchedMat) {
+        if (!foundDocs.some((d) => d.id === matchedMat.id)) {
+          foundDocs.push({ id: matchedMat.id, title: matchedMat.title, pageCount: matchedMat.pageCount });
+        }
+      } else if (!foundDocs.some((d) => d.title === itm)) {
+        foundDocs.push({ title: itm });
+      }
+    }
+  }
+  cleanText = cleanText.replace(refPattern, "").trim();
+
+  return {
+    docs: foundDocs,
+    text: cleanText
+  };
+}
+
 export function Chat({
   prefillPrompt,
   onClearPrefill,
@@ -55,9 +118,15 @@ export function Chat({
   const [error, setError] = useState<string | undefined>();
   const [tutorMode, setTutorMode] = useState<TutorMode>("explanatory");
 
+  // Attached & Mentioned documents state
+  const [attachedDocs, setAttachedDocs] = useState<Array<{ id: string; title: string; pageCount?: number }>>([]);
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const refreshArtifacts = useAtomRefresh(artifactsQuery);
   const refreshMaterials = useAtomRefresh(materialsQuery);
+  const uploadMaterial = useAtomSet(uploadMaterialAction, { mode: "promise" });
   const pendingInvalidations = useRef<Array<ReturnType<typeof invalidationsForToolCall>>>([]);
 
   // Speech Recognition & Web Audio Waveform state
@@ -233,6 +302,51 @@ export function Chat({
     }, 75);
   };
 
+  const handleDirectFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (file.type === "application/pdf" || file.name.endsWith(".pdf")) {
+      setIsUploading(true);
+      try {
+        const reader = new FileReader();
+        reader.onload = async () => {
+          try {
+            const base64 = (reader.result as string).split(",")[1];
+            if (!base64) return;
+            const cleanTitle = file.name.replace(/\.pdf$/i, "").replace(/[-_]/g, " ");
+            const res = await uploadMaterial({
+              title: cleanTitle,
+              fileName: file.name,
+              contentBase64: base64
+            });
+            refreshMaterials();
+            if (res && res.id) {
+              setAttachedDocs((prev) => [
+                ...prev.filter((d) => d.id !== res.id),
+                { id: res.id, title: res.title, pageCount: res.pageCount }
+              ]);
+            }
+          } catch (e) {
+            console.error("Direct upload failed", e);
+          } finally {
+            setIsUploading(false);
+          }
+        };
+        reader.readAsDataURL(file);
+      } catch (err) {
+        console.error("Reader error", err);
+        setIsUploading(false);
+      }
+    } else {
+      setAttachedDocs((prev) => [
+        ...prev,
+        { id: `file-${Date.now()}`, title: file.name }
+      ]);
+    }
+    event.target.value = "";
+  };
+
   useEffect(() => {
     if (prefillPrompt && !isSending) {
       setInput(prefillPrompt);
@@ -250,15 +364,21 @@ export function Chat({
 
   const submit = async (nextInput: string) => {
     const trimmed = nextInput.trim();
-    if (trimmed.length === 0 || isSending) {
+    if ((trimmed.length === 0 && attachedDocs.length === 0) || isSending) {
       return;
     }
 
-    let finalPrompt = trimmed;
-    if (tutorMode === "socratic" && !trimmed.toLowerCase().includes("socrátic")) {
-      finalPrompt = `[Enfoque pedagógico: Tutor Socrático. Guíame con preguntas paso a paso para que razone por mí mismo sin darme la respuesta de inmediato]\n\n${trimmed}`;
+    let finalPrompt = trimmed || "Explícame los conceptos clave de este documento.";
+    if (attachedDocs.length > 0) {
+      const docHeader = `[Documentos de referencia: ${attachedDocs.map((d) => d.title).join(", ")}]`;
+      finalPrompt = `${docHeader}\n\n${finalPrompt}`;
     }
 
+    if (tutorMode === "socratic" && !trimmed.toLowerCase().includes("socrátic")) {
+      finalPrompt = `[Enfoque pedagógico: Tutor Socrático. Guíame con preguntas paso a paso para que razone por mí mismo sin darme la respuesta de inmediato]\n\n${finalPrompt}`;
+    }
+
+    setAttachedDocs([]);
     setIsSending(true);
     setError(undefined);
     pendingInvalidations.current = [];
@@ -530,13 +650,36 @@ export function Chat({
         ) : (
           groupedItems.map((item, index) => {
             if (item.kind === "user") {
+              const { docs, text } = parseUserContent(item.message.content, availableMaterials);
               return (
                 <article key={index} className="ui-enter flex flex-col gap-1 max-w-2xl self-end items-end">
                   <span className="text-[11px] font-mono font-semibold uppercase tracking-wider text-indigo-500 px-1">
                     Tú
                   </span>
-                  <div className="rounded-xl rounded-br-sm bg-indigo-600 p-4 text-sm leading-relaxed text-white sm:p-5 whitespace-pre-wrap">
-                    {item.message.content}
+                  <div className="rounded-2xl rounded-br-sm bg-indigo-600 p-3.5 sm:p-4 text-sm leading-relaxed text-white shadow-md shadow-indigo-600/20">
+                    {docs.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 mb-2.5">
+                        {docs.map((doc, dIdx) => (
+                          <div
+                            key={dIdx}
+                            className="inline-flex items-center gap-2 rounded-xl bg-white/20 hover:bg-white/25 backdrop-blur-md px-2.5 py-1.5 text-xs text-white border border-white/30 shadow-sm transition"
+                          >
+                            <span className="material-symbols-outlined text-[16px] text-red-300">picture_as_pdf</span>
+                            <span className="font-semibold truncate max-w-[200px] sm:max-w-[280px]">{doc.title}</span>
+                            {doc.pageCount && (
+                              <span className="rounded-full bg-white/20 px-1.5 py-0.5 text-[10px] font-semibold text-white/90">
+                                {doc.pageCount} pág{doc.pageCount > 1 ? "s" : ""}
+                              </span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {text ? (
+                      <div className="whitespace-pre-wrap">{text}</div>
+                    ) : (
+                      <div className="text-xs text-white/80 italic">Consultando documento adjunto…</div>
+                    )}
                   </div>
                 </article>
               );
@@ -660,6 +803,52 @@ export function Chat({
             isLight ? "bg-white text-slate-900" : "bg-[#0b101b] text-slate-100"
           }`}
         >
+          {/* Hidden File Input for Paperclip Attach Button */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="application/pdf,image/*"
+            onChange={handleDirectFileUpload}
+            className="hidden"
+            aria-hidden="true"
+          />
+
+          {/* Attached / Mentioned Documents Bar */}
+          {(attachedDocs.length > 0 || isUploading) && (
+            <div className="flex flex-wrap items-center gap-1.5 pb-2.5 mb-2 border-b border-purple-500/20">
+              <span className="text-[11px] font-semibold text-purple-600 dark:text-purple-400 flex items-center gap-1">
+                <span className="material-symbols-outlined text-[14px]">attachment</span>
+                <span>Referencia:</span>
+              </span>
+              {attachedDocs.map((doc) => (
+                <div
+                  key={doc.id}
+                  className="inline-flex items-center gap-1.5 bg-purple-500/15 dark:bg-purple-500/25 border border-purple-500/30 rounded-xl px-2.5 py-1 text-xs text-purple-800 dark:text-purple-200 font-medium animate-in fade-in zoom-in-95 duration-100"
+                >
+                  <span className="material-symbols-outlined text-[15px] text-red-500">picture_as_pdf</span>
+                  <span className="truncate max-w-[180px] sm:max-w-[240px] font-semibold">{doc.title}</span>
+                  {doc.pageCount && (
+                    <span className="text-[10px] text-purple-600 dark:text-purple-400">({doc.pageCount} pág{doc.pageCount > 1 ? "s" : ""})</span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setAttachedDocs((prev) => prev.filter((d) => d.id !== doc.id))}
+                    className="grid size-4 place-items-center rounded-full hover:bg-purple-500/30 text-purple-600 dark:text-purple-400 transition ml-0.5"
+                    title="Quitar referencia"
+                  >
+                    <span className="material-symbols-outlined text-[13px]">close</span>
+                  </button>
+                </div>
+              ))}
+              {isUploading && (
+                <div className="inline-flex items-center gap-1.5 bg-indigo-500/15 border border-indigo-500/30 rounded-xl px-2.5 py-1 text-xs text-indigo-400 font-medium animate-pulse">
+                  <span className="size-2 rounded-full bg-indigo-500 animate-ping" />
+                  <span>Subiendo documento…</span>
+                </div>
+              )}
+            </div>
+          )}
+
           <textarea
             className={`w-full resize-none bg-transparent px-2 py-1 text-sm outline-none placeholder:text-slate-400 dark:placeholder:text-slate-400 font-normal leading-relaxed ${
               isLight ? "text-slate-900" : "text-slate-100"
@@ -779,7 +968,7 @@ export function Chat({
               )}
             </div>
 
-            {/* Right: Attach doc, Voice Mic with Waveform & Send button */}
+            {/* Right: Attach File/Img (📎), Mention Docs (@), Voice Mic with Waveform & Send button */}
             <div className="flex items-center gap-1.5">
               {/* Dynamic Live Audio Waveform when listening */}
               {isListening && (
@@ -798,7 +987,22 @@ export function Chat({
                 </div>
               )}
 
-              {/* Mention / Attach Documents (@) */}
+              {/* Attach File or Image Button (📎) */}
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className={`grid size-8 place-items-center rounded-xl transition ${
+                  isLight
+                    ? "text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+                    : "text-slate-400 hover:bg-slate-800 hover:text-slate-200"
+                }`}
+                title="Adjuntar archivo o imagen (PDF, JPG, PNG)"
+                aria-label="Adjuntar archivo o imagen"
+              >
+                <span className="material-symbols-outlined text-[19px]">attach_file</span>
+              </button>
+
+              {/* Mention Documents Button (@) */}
               <div className="relative" ref={mentionRef}>
                 <button
                   type="button"
@@ -813,10 +1017,10 @@ export function Chat({
                       ? "text-slate-500 hover:bg-slate-100 hover:text-slate-800"
                       : "text-slate-400 hover:bg-slate-800 hover:text-slate-200"
                   }`}
-                  title="Mencionar documentos (@)"
-                  aria-label="Mencionar documentos"
+                  title="Mencionar documentos de la biblioteca (@)"
+                  aria-label="Mencionar documento"
                 >
-                  <span className="material-symbols-outlined text-[19px]">attach_file</span>
+                  <span className="material-symbols-outlined text-[19px]">alternate_email</span>
                 </button>
 
                 {/* Mention Picker Dropdown */}
@@ -826,9 +1030,9 @@ export function Chat({
                       isLight ? "bg-white border-slate-200 text-slate-800" : "bg-slate-900 border-slate-800 text-slate-100"
                     }`}
                   >
-                    <div className="px-2 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-1">
-                      <span className="material-symbols-outlined text-[14px]">description</span>
-                      <span>Mencionar documento (@)</span>
+                    <div className="px-2 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-purple-600 dark:text-purple-400 flex items-center gap-1">
+                      <span className="material-symbols-outlined text-[14px]">alternate_email</span>
+                      <span>Mencionar documento</span>
                     </div>
                     <div className="max-h-48 overflow-y-auto flex flex-col gap-1 mt-1">
                       {availableMaterials.length === 0 ? (
@@ -839,15 +1043,22 @@ export function Chat({
                             key={mat.id}
                             type="button"
                             onClick={() => {
-                              setInput((prev) => (prev ? prev.trim() + " " : "") + `@["${mat.title}"] `);
+                              setAttachedDocs((prev) =>
+                                prev.some((d) => d.id === mat.id)
+                                  ? prev
+                                  : [...prev, { id: mat.id, title: mat.title, pageCount: mat.pageCount }]
+                              );
                               setIsMentionOpen(false);
                             }}
                             className={`flex items-center gap-2 rounded-xl px-2.5 py-1.5 text-xs text-left transition ${
-                              isLight ? "hover:bg-slate-100 text-slate-700" : "hover:bg-slate-800 text-slate-200"
+                              isLight ? "hover:bg-purple-50 text-slate-700" : "hover:bg-purple-950/40 text-slate-200"
                             }`}
                           >
                             <span className="material-symbols-outlined text-red-500 text-base">picture_as_pdf</span>
                             <span className="truncate flex-1 font-medium">{mat.title}</span>
+                            {mat.pageCount && (
+                              <span className="text-[10px] text-slate-400">{mat.pageCount} pág</span>
+                            )}
                           </button>
                         ))
                       )}
@@ -878,9 +1089,9 @@ export function Chat({
               {/* Send Button */}
               <button
                 type="submit"
-                disabled={isSending || input.trim().length === 0}
+                disabled={isSending || (input.trim().length === 0 && attachedDocs.length === 0)}
                 className={`grid size-8 place-items-center rounded-xl transition ${
-                  input.trim().length > 0 && !isSending
+                  (input.trim().length > 0 || attachedDocs.length > 0) && !isSending
                     ? "bg-indigo-600 text-white hover:bg-indigo-500 shadow-md shadow-indigo-600/30"
                     : isLight
                     ? "bg-slate-100 text-slate-400 hover:bg-slate-200"
