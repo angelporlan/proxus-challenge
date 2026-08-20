@@ -1,6 +1,7 @@
-import { useAtomRefresh } from "@effect/atom-react";
+import { useAtomRefresh, useAtomValue } from "@effect/atom-react";
 import type { AgentMessage } from "@proxus/shared";
-import { useEffect, useMemo, useRef, useState } from "react";
+import * as AsyncResult from "effect/unstable/reactivity/AsyncResult";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Streamdown } from "streamdown";
 import "streamdown/styles.css";
 import { artifactsQuery } from "../domain/artifacts/atoms.ts";
@@ -58,6 +59,179 @@ export function Chat({
   const refreshArtifacts = useAtomRefresh(artifactsQuery);
   const refreshMaterials = useAtomRefresh(materialsQuery);
   const pendingInvalidations = useRef<Array<ReturnType<typeof invalidationsForToolCall>>>([]);
+
+  // Speech Recognition & Web Audio Waveform state
+  const [isListening, setIsListening] = useState(false);
+  const [audioLevels, setAudioLevels] = useState<number[]>([20, 35, 60, 80, 60, 35, 20, 28]);
+  const [isMagIaOpen, setIsMagIaOpen] = useState(false);
+  const [isMentionOpen, setIsMentionOpen] = useState(false);
+
+  const materialsResult = useAtomValue(materialsQuery);
+  const availableMaterials = AsyncResult.match(materialsResult, {
+    onInitial: () => [],
+    onFailure: () => [],
+    onSuccess: ({ value }) => value.materials
+  });
+
+  const recognitionRef = useRef<any>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const animationFrameRef = useRef<number | null>(null);
+  const baseInputRef = useRef<string>("");
+  const simIntervalRef = useRef<any>(null);
+  const magIaRef = useRef<HTMLDivElement>(null);
+  const mentionRef = useRef<HTMLDivElement>(null);
+
+  // Close menus on click outside
+  useEffect(() => {
+    const handleOutsideClick = (e: MouseEvent) => {
+      if (magIaRef.current && !magIaRef.current.contains(e.target as Node)) {
+        setIsMagIaOpen(false);
+      }
+      if (mentionRef.current && !mentionRef.current.contains(e.target as Node)) {
+        setIsMentionOpen(false);
+      }
+    };
+    window.addEventListener("mousedown", handleOutsideClick);
+    return () => window.removeEventListener("mousedown", handleOutsideClick);
+  }, []);
+
+  const stopListening = useCallback(() => {
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch {}
+      recognitionRef.current = null;
+    }
+    if (mediaStreamRef.current) {
+      mediaStreamRef.current.getTracks().forEach((track) => track.stop());
+      mediaStreamRef.current = null;
+    }
+    if (audioContextRef.current) {
+      try {
+        audioContextRef.current.close();
+      } catch {}
+      audioContextRef.current = null;
+    }
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
+    }
+    if (simIntervalRef.current) {
+      clearInterval(simIntervalRef.current);
+      simIntervalRef.current = null;
+    }
+    setIsListening(false);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      stopListening();
+    };
+  }, [stopListening]);
+
+  const toggleListening = async () => {
+    if (isListening) {
+      stopListening();
+      return;
+    }
+
+    baseInputRef.current = input;
+
+    // Start Web Speech Recognition
+    const SpeechRecognition =
+      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+
+    if (SpeechRecognition) {
+      try {
+        const recognition = new SpeechRecognition();
+        recognition.continuous = true;
+        recognition.interimResults = true;
+        recognition.lang = "es-ES";
+
+        recognition.onresult = (event: any) => {
+          let interimTranscript = "";
+          let finalTranscript = "";
+
+          for (let i = 0; i < event.results.length; ++i) {
+            if (event.results[i].isFinal) {
+              finalTranscript += event.results[i][0].transcript + " ";
+            } else {
+              interimTranscript += event.results[i][0].transcript;
+            }
+          }
+
+          const base = baseInputRef.current ? baseInputRef.current.trim() + " " : "";
+          const newText = base + finalTranscript + interimTranscript;
+          setInput(newText);
+        };
+
+        recognition.onerror = (err: any) => {
+          console.warn("Speech recognition error:", err);
+        };
+
+        recognition.onend = () => {
+          // Keep alive or clean
+        };
+
+        recognition.start();
+        recognitionRef.current = recognition;
+      } catch (e) {
+        console.warn("Speech recognition start failed:", e);
+      }
+    }
+
+    // Start Web Audio API Analyser for real-time waveform sync
+    try {
+      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaStreamRef.current = stream;
+
+        const AudioContextClass =
+          window.AudioContext || (window as any).webkitAudioContext;
+        const audioCtx = new AudioContextClass();
+        audioContextRef.current = audioCtx;
+
+        const source = audioCtx.createMediaStreamSource(stream);
+        const analyser = audioCtx.createAnalyser();
+        analyser.fftSize = 64;
+        source.connect(analyser);
+        analyserRef.current = analyser;
+
+        const bufferLength = analyser.frequencyBinCount;
+        const dataArray = new Uint8Array(bufferLength);
+
+        const updateWaveform = () => {
+          if (!analyserRef.current) return;
+          analyserRef.current.getByteFrequencyData(dataArray);
+
+          const bars: number[] = [];
+          const numBars = 8;
+          const step = Math.max(1, Math.floor(bufferLength / numBars));
+          for (let i = 0; i < numBars; i++) {
+            const val = dataArray[i * step] || 0;
+            const percent = Math.max(16, Math.min(100, Math.round((val / 255) * 100 * 1.5)));
+            bars.push(percent);
+          }
+          setAudioLevels(bars);
+          animationFrameRef.current = requestAnimationFrame(updateWaveform);
+        };
+
+        updateWaveform();
+        setIsListening(true);
+        return;
+      }
+    } catch (err) {
+      console.warn("Audio Context setup fallback:", err);
+    }
+
+    // Fallback animated waveform if browser restricts getUserMedia in some contexts
+    setIsListening(true);
+    simIntervalRef.current = setInterval(() => {
+      setAudioLevels(Array.from({ length: 8 }, () => Math.floor(Math.random() * 65) + 25));
+    }, 75);
+  };
 
   useEffect(() => {
     if (prefillPrompt && !isSending) {
@@ -470,55 +644,254 @@ export function Chat({
         </div>
       )}
 
-      {/* Input Prompt Form */}
+      {/* Input Prompt Form matching image design with MagIA & Voice Waveform */}
       <footer
-        className={`border-t p-4 backdrop-blur transition-colors ${
-          isLight ? "border-slate-200 bg-white/90" : "border-slate-800 bg-slate-950/90"
+        className={`border-t p-3 sm:p-4 backdrop-blur transition-colors ${
+          isLight ? "border-slate-200 bg-white/80" : "border-slate-800/80 bg-slate-950/80"
         }`}
       >
         <form
-          className={`flex flex-col gap-2 rounded-xl border p-2 transition focus-within:border-indigo-500/60 focus-within:ring-1 focus-within:ring-indigo-500/30 ${
-            isLight
-              ? "border-slate-300 bg-slate-50 text-slate-900"
-              : "border-slate-800 bg-slate-900 text-slate-100"
-          }`}
           onSubmit={(event) => {
             event.preventDefault();
+            if (isListening) stopListening();
             void submit(input);
           }}
+          className={`relative rounded-[26px] border-2 border-[#8b5cf6] p-3 shadow-[0_0_20px_rgba(139,92,246,0.18)] focus-within:shadow-[0_0_28px_rgba(139,92,246,0.35)] transition-all ${
+            isLight ? "bg-white text-slate-900" : "bg-[#0b101b] text-slate-100"
+          }`}
         >
           <textarea
-            className={`w-full resize-none bg-transparent px-3 py-2 text-sm outline-none ${
-              isLight ? "text-slate-900 placeholder:text-slate-400" : "text-slate-100 placeholder:text-slate-500"
+            className={`w-full resize-none bg-transparent px-2 py-1 text-sm outline-none placeholder:text-slate-400 dark:placeholder:text-slate-400 font-normal leading-relaxed ${
+              isLight ? "text-slate-900" : "text-slate-100"
             }`}
             value={input}
             onChange={(event) => setInput(event.currentTarget.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
+                if (isListening) stopListening();
                 void submit(input);
               }
             }}
-            placeholder={
-              tutorMode === "socratic"
-                ? "Pregunta algo al tutor (Modo Socrático activo)…"
-                : "Haz una pregunta sobre tus materiales o pide un quiz…"
-            }
+            placeholder="Pregunta lo que quieras · @ para mencionar docs"
             rows={2}
           />
-          <div
-            className={`flex items-center justify-end pt-1 px-2 border-t ${
-              isLight ? "border-slate-200" : "border-slate-800/50"
-            }`}
-          >
-            <button
-              className="flex min-h-9 items-center gap-1.5 rounded-lg bg-indigo-600 px-4 py-1.5 text-xs font-semibold text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-40"
-              type="submit"
-              disabled={isSending || input.trim().length === 0}
-            >
-              <span>{isSending ? "Pensando…" : "Enviar"}</span>
-              <span className="material-symbols-outlined text-xs">arrow_upward</span>
-            </button>
+
+          <div className="mt-2 flex items-center justify-between gap-2 pt-1 border-t border-slate-100 dark:border-slate-800/50">
+            {/* Left: MagIA Dropdown */}
+            <div className="relative" ref={magIaRef}>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsMagIaOpen(!isMagIaOpen);
+                  setIsMentionOpen(false);
+                }}
+                className="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-bold text-[#8b5cf6] hover:bg-[#8b5cf6]/10 transition active:scale-95"
+              >
+                <span className="material-symbols-outlined text-[17px] text-[#8b5cf6]" aria-hidden="true">
+                  auto_awesome
+                </span>
+                <span className="font-semibold text-sm tracking-tight">MagIA</span>
+                <span className="material-symbols-outlined text-xs text-[#8b5cf6]" aria-hidden="true">
+                  expand_more
+                </span>
+              </button>
+
+              {/* MagIA Quick Presets Menu */}
+              {isMagIaOpen && (
+                <div
+                  className={`absolute bottom-full left-0 mb-2 w-72 rounded-2xl border p-2 shadow-2xl z-30 ui-scale-in ${
+                    isLight ? "bg-white border-slate-200 text-slate-800" : "bg-slate-900 border-slate-800 text-slate-100"
+                  }`}
+                >
+                  <div className="px-2 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-purple-600 dark:text-purple-400 flex items-center gap-1">
+                    <span className="material-symbols-outlined text-[14px]">auto_awesome</span>
+                    <span>Acciones Rápidas MagIA</span>
+                  </div>
+                  <div className="flex flex-col gap-1 mt-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setInput("Explícame los conceptos más difíciles de mis apuntes de forma clara y con ejemplos prácticos.");
+                        setIsMagIaOpen(false);
+                      }}
+                      className={`flex items-center gap-2.5 rounded-xl px-2.5 py-2 text-xs text-left transition ${
+                        isLight ? "hover:bg-purple-50 text-slate-700" : "hover:bg-purple-950/40 text-slate-300"
+                      }`}
+                    >
+                      <span className="material-symbols-outlined text-purple-500 text-base">psychology</span>
+                      <div>
+                        <p className="font-semibold">Explicación con ejemplos</p>
+                        <p className="text-[10px] text-slate-500">Desglosa los puntos difíciles</p>
+                      </div>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setTutorMode("socratic");
+                        setInput("Guíame con preguntas socráticas paso a paso para que razone por mí mismo.");
+                        setIsMagIaOpen(false);
+                      }}
+                      className={`flex items-center gap-2.5 rounded-xl px-2.5 py-2 text-xs text-left transition ${
+                        isLight ? "hover:bg-purple-50 text-slate-700" : "hover:bg-purple-950/40 text-slate-300"
+                      }`}
+                    >
+                      <span className="material-symbols-outlined text-purple-500 text-base">school</span>
+                      <div>
+                        <p className="font-semibold">Tutor Socrático</p>
+                        <p className="text-[10px] text-slate-500">Aprende deduciendo conceptos</p>
+                      </div>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setInput("Crea un quiz de 3 preguntas tipo test de mis materiales subidos con retroalimentación.");
+                        setIsMagIaOpen(false);
+                      }}
+                      className={`flex items-center gap-2.5 rounded-xl px-2.5 py-2 text-xs text-left transition ${
+                        isLight ? "hover:bg-purple-50 text-slate-700" : "hover:bg-purple-950/40 text-slate-300"
+                      }`}
+                    >
+                      <span className="material-symbols-outlined text-purple-500 text-base">quiz</span>
+                      <div>
+                        <p className="font-semibold">Crear quiz de 3 preguntas</p>
+                        <p className="text-[10px] text-slate-500">Ponte a prueba de inmediato</p>
+                      </div>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setInput("Genera un esquema estructurado con las ideas principales y secundarias de este tema.");
+                        setIsMagIaOpen(false);
+                      }}
+                      className={`flex items-center gap-2.5 rounded-xl px-2.5 py-2 text-xs text-left transition ${
+                        isLight ? "hover:bg-purple-50 text-slate-700" : "hover:bg-purple-950/40 text-slate-300"
+                      }`}
+                    >
+                      <span className="material-symbols-outlined text-purple-500 text-base">schema</span>
+                      <div>
+                        <p className="font-semibold">Esquema conceptual</p>
+                        <p className="text-[10px] text-slate-500">Estructura jerárquica clave</p>
+                      </div>
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Right: Attach doc, Voice Mic with Waveform & Send button */}
+            <div className="flex items-center gap-1.5">
+              {/* Dynamic Live Audio Waveform when listening */}
+              {isListening && (
+                <div className="flex items-center gap-1 bg-purple-500/15 border border-purple-500/30 rounded-full px-2.5 py-1">
+                  <span className="size-2 rounded-full bg-red-500 animate-ping" />
+                  <div className="flex items-center gap-0.5 h-4 w-14 justify-center" aria-hidden="true">
+                    {audioLevels.map((lvl, idx) => (
+                      <span
+                        key={idx}
+                        className="w-1 bg-gradient-to-t from-indigo-500 to-purple-400 rounded-full transition-all duration-75"
+                        style={{ height: `${lvl}%` }}
+                      />
+                    ))}
+                  </div>
+                  <span className="text-[11px] font-medium text-purple-400 hidden sm:inline">Dictando…</span>
+                </div>
+              )}
+
+              {/* Mention / Attach Documents (@) */}
+              <div className="relative" ref={mentionRef}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsMentionOpen(!isMentionOpen);
+                    setIsMagIaOpen(false);
+                  }}
+                  className={`grid size-8 place-items-center rounded-xl transition ${
+                    isMentionOpen
+                      ? "bg-purple-600/20 text-[#8b5cf6]"
+                      : isLight
+                      ? "text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+                      : "text-slate-400 hover:bg-slate-800 hover:text-slate-200"
+                  }`}
+                  title="Mencionar documentos (@)"
+                  aria-label="Mencionar documentos"
+                >
+                  <span className="material-symbols-outlined text-[19px]">attach_file</span>
+                </button>
+
+                {/* Mention Picker Dropdown */}
+                {isMentionOpen && (
+                  <div
+                    className={`absolute bottom-full right-0 mb-2 w-72 rounded-2xl border p-2 shadow-2xl z-30 ui-scale-in ${
+                      isLight ? "bg-white border-slate-200 text-slate-800" : "bg-slate-900 border-slate-800 text-slate-100"
+                    }`}
+                  >
+                    <div className="px-2 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-1">
+                      <span className="material-symbols-outlined text-[14px]">description</span>
+                      <span>Mencionar documento (@)</span>
+                    </div>
+                    <div className="max-h-48 overflow-y-auto flex flex-col gap-1 mt-1">
+                      {availableMaterials.length === 0 ? (
+                        <p className="p-3 text-xs text-slate-500 text-center">No hay documentos subidos aún.</p>
+                      ) : (
+                        availableMaterials.map((mat) => (
+                          <button
+                            key={mat.id}
+                            type="button"
+                            onClick={() => {
+                              setInput((prev) => (prev ? prev.trim() + " " : "") + `@["${mat.title}"] `);
+                              setIsMentionOpen(false);
+                            }}
+                            className={`flex items-center gap-2 rounded-xl px-2.5 py-1.5 text-xs text-left transition ${
+                              isLight ? "hover:bg-slate-100 text-slate-700" : "hover:bg-slate-800 text-slate-200"
+                            }`}
+                          >
+                            <span className="material-symbols-outlined text-red-500 text-base">picture_as_pdf</span>
+                            <span className="truncate flex-1 font-medium">{mat.title}</span>
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Microphone Button with Real-time Speech Transcription */}
+              <button
+                type="button"
+                onClick={toggleListening}
+                className={`grid size-8 place-items-center rounded-xl transition ${
+                  isListening
+                    ? "bg-red-500 text-white shadow-lg shadow-red-500/40 animate-pulse"
+                    : isLight
+                    ? "text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+                    : "text-slate-400 hover:bg-slate-800 hover:text-slate-200"
+                }`}
+                title={isListening ? "Detener grabación de voz" : "Dictar por voz con transcripción a tiempo real"}
+                aria-label="Dictado por voz"
+              >
+                <span className="material-symbols-outlined text-[19px]">
+                  {isListening ? "mic" : "mic"}
+                </span>
+              </button>
+
+              {/* Send Button */}
+              <button
+                type="submit"
+                disabled={isSending || input.trim().length === 0}
+                className={`grid size-8 place-items-center rounded-xl transition ${
+                  input.trim().length > 0 && !isSending
+                    ? "bg-indigo-600 text-white hover:bg-indigo-500 shadow-md shadow-indigo-600/30"
+                    : isLight
+                    ? "bg-slate-100 text-slate-400 hover:bg-slate-200"
+                    : "bg-slate-800 text-slate-500 hover:bg-slate-700"
+                } disabled:opacity-40 disabled:cursor-not-allowed`}
+                title="Enviar mensaje (Enter)"
+                aria-label="Enviar mensaje"
+              >
+                <span className="material-symbols-outlined text-[17px]">send</span>
+              </button>
+            </div>
           </div>
         </form>
       </footer>
