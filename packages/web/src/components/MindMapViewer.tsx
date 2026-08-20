@@ -945,12 +945,6 @@ const mindMapsByMaterialId: Record<string, MindMapNode> = {
   }
 };
 
-const EMPTY_MIND_MAP: MindMapNode = {
-  id: "empty-map",
-  label: "Esquema",
-  children: []
-};
-
 // Dynamic Markdown to MindMap Tree Parser
 export function parseMarkdownToMindMap(title: string, markdown: string, rootId = "root"): MindMapNode {
   const lines = markdown.split("\n");
@@ -1063,341 +1057,21 @@ export function parseMarkdownToMindMap(title: string, markdown: string, rootId =
   const result = convert(root, "0", 0, 0);
 
   if (!result.children || result.children.length === 0) {
-    return buildFallbackMindMap(rootId, title || root.label);
+    return {
+      id: rootId,
+      label: title || root.label,
+      children: []
+    };
   }
 
   return result;
-}
-
-// Context-Aware Fallback generator for custom uploaded PDFs (CV vs Tech vs Law vs General)
-function buildFallbackMindMap(materialId: string, title: string, pageCount = 1): MindMapNode {
-  const cleanTitle = title.replace(/\.pdf$/i, "").replace(/[-_]/g, " ").trim();
-  const lower = cleanTitle.toLowerCase();
-
-  // 1. If it's a CV / Resume / Professional Profile
-  if (
-    lower.includes("cv") ||
-    lower.includes("curriculum") ||
-    lower.includes("resume") ||
-    lower.includes("porlan") ||
-    lower.includes("perfil") ||
-    lower.includes("candidat")
-  ) {
-    return {
-      id: `root-${materialId}`,
-      label: cleanTitle || "Perfil Profesional",
-      icon: "badge",
-      notes: `Esquema estructurado del perfil profesional "${cleanTitle}". Incluye experiencia, stack técnico, proyectos destacados y formación.`,
-      references: [`Documento: ${title}`, `${pageCount} pág${pageCount > 1 ? "s" : ""}`],
-      color: "#6366f1",
-      children: [
-        {
-          id: `${materialId}-b1`,
-          label: "1. Perfil Profesional & Resumen",
-          color: "#f59e0b",
-          page: 1,
-          notes: "Especialización, años de experiencia y propuesta de valor profesional.",
-          references: ["Pág. 1"],
-          children: [
-            {
-              id: `${materialId}-b1-s1`,
-              label: "Rol Principal & Experiencia",
-              notes: "Desarrollador Full Stack con proyectos y SaaS en producción.",
-              references: ["Pág. 1"]
-            },
-            {
-              id: `${materialId}-b1-s2`,
-              label: "Especializaciones Clave",
-              notes: "Desarrollo Backend (Laravel, Node.js) y Frontend SPA (Angular, React).",
-              references: ["Pág. 1"]
-            }
-          ]
-        },
-        {
-          id: `${materialId}-b2`,
-          label: "2. Casos Prácticos & Experiencia",
-          color: "#06b6d4",
-          page: 1,
-          notes: "Trayectoria laboral, SaaS propio e integraciones en entornos empresariales.",
-          references: ["Pág. 1"],
-          children: [
-            {
-              id: `${materialId}-b2-s1`,
-              label: "ENAE Business School & Backend",
-              notes: "APIs RESTful, arquitectura limpia, integraciones Dynamics 365 y automatizaciones IA.",
-              references: ["Pág. 1"]
-            },
-            {
-              id: `${materialId}-b2-s2`,
-              label: "Matchply SaaS & Sevensystem",
-              notes: "Plataforma propia con Docker/CI/CD, pasarelas de pago y procesamiento masivo de datos.",
-              references: ["Pág. 1"]
-            }
-          ]
-        },
-        {
-          id: `${materialId}-b3`,
-          label: "3. Stack Tecnológico & Habilidades",
-          color: "#ec4899",
-          page: 1,
-          notes: "Lenguajes, frameworks, bases de datos y herramientas de desarrollo.",
-          references: ["Pág. 1"],
-          children: [
-            {
-              id: `${materialId}-b3-s1`,
-              label: "Backend, Frontend & SQL",
-              notes: "PHP, Laravel, Node.js, Express, TypeScript, Angular, React, MySQL, PostgreSQL.",
-              references: ["Pág. 1"]
-            },
-            {
-              id: `${materialId}-b3-s2`,
-              label: "DevOps, Testing & Cloud",
-              notes: "Docker, Docker Compose, CI/CD, Jest, PHPUnit, Linux VPS, Webhooks.",
-              references: ["Pág. 1"]
-            }
-          ]
-        },
-        {
-          id: `${materialId}-b4`,
-          label: "4. Educación & Formación",
-          color: "#8b5cf6",
-          page: 1,
-          notes: "Titulaciones académicas, méritos destacados y proyectos formativos.",
-          references: ["Pág. 1"],
-          children: [
-            {
-              id: `${materialId}-b4-s1`,
-              label: "Técnico Superior DAW",
-              notes: "Desarrollo de Aplicaciones Web (IES Ramón Arcas Meca, 2022-2024).",
-              references: ["Pág. 1"]
-            },
-            {
-              id: `${materialId}-b4-s2`,
-              label: "Mención de Honor TFG",
-              notes: "Distinción académica obtenida en el Trabajo de Fin de Grado.",
-              references: ["Pág. 1"]
-            }
-          ]
-        }
-      ]
-    };
-  }
-
-  // 2. If it's Law / Oposiciones / Normativa
-  if (
-    lower.includes("ley") ||
-    lower.includes("lecrim") ||
-    lower.includes("constitucion") ||
-    lower.includes("guardia") ||
-    lower.includes("policia") ||
-    lower.includes("derecho")
-  ) {
-    return {
-      id: `root-${materialId}`,
-      label: cleanTitle || "Normativa y Marco Jurídico",
-      icon: "gavel",
-      notes: `Esquema normativo y procedimental del documento "${cleanTitle}".`,
-      references: [`Documento: ${title}`, `${pageCount} páginas`],
-      color: "#6366f1",
-      children: [
-        {
-          id: `${materialId}-b1`,
-          label: "1. Principios y Fundamentos",
-          color: "#f59e0b",
-          page: 1,
-          notes: "Bases normativas, ámbito de aplicación y principios rectores.",
-          references: ["Pág. 1"],
-          children: [
-            {
-              id: `${materialId}-b1-s1`,
-              label: "Ámbito y Conceptos Clave",
-              notes: "Definiciones legales y objeto de regulación.",
-              references: ["Pág. 1"]
-            },
-            {
-              id: `${materialId}-b1-s2`,
-              label: "Principios Informadores",
-              notes: "Criterios de interpretación y jerarquía legal.",
-              references: ["Pág. 1"]
-            }
-          ]
-        },
-        {
-          id: `${materialId}-b2`,
-          label: "2. Estructura Orgánica y Competencias",
-          color: "#06b6d4",
-          page: 1,
-          notes: "Órganos competentes y distribución funcional.",
-          references: ["Pág. 1"],
-          children: [
-            {
-              id: `${materialId}-b2-s1`,
-              label: "Órganos y Autoridades",
-              notes: "Instituciones facultadas y responsabilidades asignadas.",
-              references: ["Pág. 1"]
-            },
-            {
-              id: `${materialId}-b2-s2`,
-              label: "Atribuciones Operativas",
-              notes: "Límites legales y facultades conferidas.",
-              references: ["Pág. 1"]
-            }
-          ]
-        },
-        {
-          id: `${materialId}-b3`,
-          label: "3. Procedimiento y Tramitación",
-          color: "#ec4899",
-          page: pageCount > 1 ? 2 : 1,
-          notes: "Fases, trámites formales y garantías de los interesados.",
-          references: [pageCount > 1 ? "Pág. 2" : "Pág. 1"],
-          children: [
-            {
-              id: `${materialId}-b3-s1`,
-              label: "Fases del Procedimiento",
-              notes: "Iniciación, instrucción, resolución y ejecución.",
-              references: [pageCount > 1 ? "Pág. 2" : "Pág. 1"]
-            },
-            {
-              id: `${materialId}-b3-s2`,
-              label: "Garantías y Plazos",
-              notes: "Derechos de defensa, recursos y plazos de resolución.",
-              references: [pageCount > 1 ? "Pág. 2" : "Pág. 1"]
-            }
-          ]
-        },
-        {
-          id: `${materialId}-b4`,
-          label: "4. Régimen Jurídico y Sancionador",
-          color: "#8b5cf6",
-          page: pageCount,
-          notes: "Medidas aplicables, responsabilidades e infracciones.",
-          references: [`Pág. ${pageCount}`],
-          children: [
-            {
-              id: `${materialId}-b4-s1`,
-              label: "Medidas y Consecuencias",
-              notes: "Efectos jurídicos derivados del incumplimiento.",
-              references: [`Pág. ${pageCount}`]
-            },
-            {
-              id: `${materialId}-b4-s2`,
-              label: "Resolución e Impugnación",
-              notes: "Vías de recurso y ejecución final.",
-              references: [`Pág. ${pageCount}`]
-            }
-          ]
-        }
-      ]
-    };
-  }
-
-  // 3. General Study Notes Fallback
-  return {
-    id: `root-${materialId}`,
-    label: cleanTitle || "Esquema Conceptual",
-    icon: "auto_stories",
-    notes: `Estructura conceptual jerárquica del documento "${cleanTitle}". Explora sus ramas o solicita una profundización con IA.`,
-    references: [`Documento: ${title}`, `${pageCount} página${pageCount > 1 ? "s" : ""}`],
-    color: "#6366f1",
-    children: [
-      {
-        id: `${materialId}-b1`,
-        label: "1. Conceptos Fundamentales",
-        color: "#f59e0b",
-        page: 1,
-        notes: "Definición general y pilares esenciales del documento.",
-        references: ["Pág. 1"],
-        children: [
-          {
-            id: `${materialId}-b1-s1`,
-            label: "Definiciones y Alcance",
-            notes: "Marco de aplicación y objetivos principales.",
-            references: ["Pág. 1"]
-          },
-          {
-            id: `${materialId}-b1-s2`,
-            label: "Pilares Clave",
-            notes: "Criterios e ideas estructurales básicas.",
-            references: ["Pág. 1"]
-          }
-        ]
-      },
-      {
-        id: `${materialId}-b2`,
-        label: "2. Estructura y Desarrollo",
-        color: "#06b6d4",
-        page: 1,
-        notes: "Bloques temáticos y desarrollo de las ideas centrales.",
-        references: ["Pág. 1"],
-        children: [
-          {
-            id: `${materialId}-b2-s1`,
-            label: "Componentes Principales",
-            notes: "Elementos centrales que componen el temario.",
-            references: ["Pág. 1"]
-          },
-          {
-            id: `${materialId}-b2-s2`,
-            label: "Relaciones y Procesos",
-            notes: "Interacción entre conceptos y flujo de información.",
-            references: ["Pág. 1"]
-          }
-        ]
-      },
-      {
-        id: `${materialId}-b3`,
-        label: "3. Casos Prácticos y Aplicación",
-        color: "#ec4899",
-        page: pageCount > 1 ? 2 : 1,
-        notes: "Ejemplos prácticos, metodología y casos de uso real.",
-        references: [pageCount > 1 ? "Pág. 2" : "Pág. 1"],
-        children: [
-          {
-            id: `${materialId}-b3-s1`,
-            label: "Ejemplos y Casuística",
-            notes: "Casos de estudio y situaciones representativas.",
-            references: [pageCount > 1 ? "Pág. 2" : "Pág. 1"]
-          },
-          {
-            id: `${materialId}-b3-s2`,
-            label: "Metodología Operativa",
-            notes: "Pautas de aplicación práctica y resolución.",
-            references: [pageCount > 1 ? "Pág. 2" : "Pág. 1"]
-          }
-        ]
-      },
-      {
-        id: `${materialId}-b4`,
-        label: "4. Síntesis y Puntos Clave",
-        color: "#8b5cf6",
-        page: pageCount,
-        notes: "Conclusiones críticas y preguntas de repaso rápido.",
-        references: [`Pág. ${pageCount}`],
-        children: [
-          {
-            id: `${materialId}-b4-s1`,
-            label: "Puntos Críticos de Repaso",
-            notes: "Aspectos esenciales con alta probabilidad en evaluación.",
-            references: [`Pág. ${pageCount}`]
-          },
-          {
-            id: `${materialId}-b4-s2`,
-            label: "Preguntas de Autoevaluación",
-            notes: "Cuestiones clave para verificar la comprensión del contenido.",
-            references: [`Pág. ${pageCount}`]
-          }
-        ]
-      }
-    ]
-  };
 }
 
 function resolveMindMap(
   selectedId: string | null | undefined,
   materials: readonly { readonly id: string; readonly title: string; readonly pageCount: number }[],
   noteArtifactDetail?: NoteArtifact | null
-): MindMapNode {
+): MindMapNode | null {
   if (noteArtifactDetail && noteArtifactDetail.markdown) {
     return parseMarkdownToMindMap(noteArtifactDetail.title, noteArtifactDetail.markdown, noteArtifactDetail.id);
   }
@@ -1406,19 +1080,7 @@ function resolveMindMap(
     return mindMapsByMaterialId[selectedId]!;
   }
 
-  if (selectedId) {
-    const mat = materials.find((m) => m.id === selectedId);
-    if (mat) {
-      return buildFallbackMindMap(mat.id, mat.title, mat.pageCount);
-    }
-  }
-
-  const firstMat = materials[0];
-  if (firstMat && mindMapsByMaterialId[firstMat.id]) {
-    return mindMapsByMaterialId[firstMat.id]!;
-  }
-
-  return EMPTY_MIND_MAP;
+  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -1673,10 +1335,6 @@ export function MindMapViewer({
 
     if (matched) return matched;
 
-    if (activeMaterialId && !mindMapsByMaterialId[activeMaterialId] && noteArtifacts.length > 0) {
-      return noteArtifacts[noteArtifacts.length - 1] ?? null;
-    }
-
     return null;
   }, [activeMaterialId, activeMaterial, allArtifacts]);
 
@@ -1697,7 +1355,7 @@ export function MindMapViewer({
     return resolveMindMap(activeMaterialId, materialsList, activeNoteDetail);
   }, [activeMaterialId, initialData, materialsList, activeNoteDetail]);
 
-  const [selectedNode, setSelectedNode] = useState<MindMapNode>(currentMindMap);
+  const [selectedNode, setSelectedNode] = useState<MindMapNode | null>(currentMindMap);
   const [isDrawerOpen, setIsDrawerOpen] = useState<boolean>(true);
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set());
 
@@ -1783,6 +1441,9 @@ export function MindMapViewer({
   // ---------------------------------------------------------------------------
 
   const { allNodes, allConnectors } = useMemo(() => {
+    if (!currentMindMap) {
+      return { allNodes: [], allConnectors: [] };
+    }
     const branches = currentMindMap.children ?? [];
     const rightRawBranches = branches.filter((_, i) => i % 2 === 0);
     const leftRawBranches = branches.filter((_, i) => i % 2 === 1);
@@ -1940,7 +1601,7 @@ export function MindMapViewer({
       fitView();
     }, 60);
     return () => clearTimeout(timer);
-  }, [fitView, currentMindMap.id]);
+  }, [fitView, currentMindMap?.id]);
 
   if (!initialData && materialsStatus !== "ready") {
     return (
@@ -2021,7 +1682,7 @@ export function MindMapViewer({
               {onGenerateAiMap && (
                 <button
                   type="button"
-                  onClick={() => onGenerateAiMap(currentMindMap.label)}
+                  onClick={() => onGenerateAiMap(currentMindMap?.label ?? activeMaterial?.title ?? "este documento")}
                   className="ui-primary-action"
                   title="Pedir al tutor que profundice en el esquema"
                 >
@@ -2148,51 +1809,96 @@ export function MindMapViewer({
           </div>
         </header>
 
-        {/* 2. Interactive Infinite Canvas with Dendritic Tree & SVG Bezier Lines */}
-        <div
-          ref={canvasRef}
-          onMouseDown={handleMouseDown}
-          onMouseMove={handleMouseMove}
-          onMouseUp={handleMouseUp}
-          onMouseLeave={handleMouseUp}
-          onWheel={handleWheel}
-          className="flex-1 w-full h-full relative overflow-hidden flex items-center justify-center cursor-grab active:cursor-grabbing"
-          style={{
-            backgroundImage: isLight
-              ? "radial-gradient(#cbd5e1 1px, transparent 1px)"
-              : "radial-gradient(rgba(148, 163, 184, 0.15) 1px, transparent 1px)",
-            backgroundSize: `${24 * zoom}px ${24 * zoom}px`,
-            backgroundPosition: `${pan.x}px ${pan.y}px`
-          }}
-        >
-          {/* Floating Reopen Button if Drawer is Closed */}
-          {!isDrawerOpen && (
-            <button
-              type="button"
-              onClick={() => setIsDrawerOpen(true)}
-              className={`ui-float-enter absolute top-4 right-4 z-20 flex items-center gap-2 px-3.5 py-2 rounded-xl border shadow-lg backdrop-blur transition-colors ${
-                isLight
-                  ? "bg-white/95 border-indigo-200 text-indigo-700 hover:border-indigo-400 shadow-indigo-100"
-                  : "bg-slate-900/95 border-indigo-800/80 text-indigo-300 hover:border-indigo-500 shadow-black/80"
-              }`}
-              title="Abrir ficha del concepto"
-            >
-              <span className="material-symbols-outlined text-base text-indigo-500">
-                dock_to_left
-              </span>
-              <div className="text-left max-w-[150px]">
-                <span className="block text-[9px] font-mono font-bold uppercase text-indigo-500 tracking-wider">
-                  Ficha de Concepto
-                </span>
-                <span className="block text-xs font-semibold truncate">
-                  {selectedNode.label}
-                </span>
+        {/* 2. Interactive Infinite Canvas OR Specific Document Empty State */}
+        {!currentMindMap ? (
+          <div
+            className="flex-1 w-full h-full relative overflow-hidden flex items-center justify-center p-6"
+            style={{
+              backgroundImage: isLight
+                ? "radial-gradient(#cbd5e1 1px, transparent 1px)"
+                : "radial-gradient(rgba(148, 163, 184, 0.15) 1px, transparent 1px)",
+              backgroundSize: "24px 24px"
+            }}
+          >
+            <div className="flex max-w-md flex-col items-center text-center p-8 rounded-2xl border bg-white/90 dark:bg-slate-900/90 backdrop-blur shadow-lg">
+              <div className="size-16 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-500 flex items-center justify-center mb-4">
+                <span className="material-symbols-outlined text-3xl">account_tree</span>
               </div>
-              <span className="material-symbols-outlined text-sm text-indigo-400">
-                chevron_left
-              </span>
-            </button>
-          )}
+              <h3 className="text-base font-bold text-slate-900 dark:text-slate-100 mb-1">
+                {activeMaterial ? activeMaterial.title : "Documento sin esquema"}
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mb-6 leading-relaxed">
+                Este archivo aún no tiene un esquema conceptual generado. Pídele al tutor inteligente que analice el documento y genere su mapa mental interactivo.
+              </p>
+              <div className="flex flex-wrap gap-2.5 justify-center">
+                {onGenerateAiMap && activeMaterial && (
+                  <button
+                    type="button"
+                    onClick={() => onGenerateAiMap(activeMaterial.title)}
+                    className="ui-primary-action"
+                  >
+                    <span className="material-symbols-outlined text-[17px]">auto_awesome</span>
+                    <span>Generar Esquema con IA</span>
+                  </button>
+                )}
+                {onOpenPdfPage && activeMaterial && (
+                  <button
+                    type="button"
+                    onClick={() => onOpenPdfPage(activeMaterial.id, 1)}
+                    className="ui-secondary-action"
+                  >
+                    <span className="material-symbols-outlined text-[17px]">picture_as_pdf</span>
+                    <span>Ver PDF</span>
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div
+            ref={canvasRef}
+            onMouseDown={handleMouseDown}
+            onMouseMove={handleMouseMove}
+            onMouseUp={handleMouseUp}
+            onMouseLeave={handleMouseUp}
+            onWheel={handleWheel}
+            className="flex-1 w-full h-full relative overflow-hidden flex items-center justify-center cursor-grab active:cursor-grabbing"
+            style={{
+              backgroundImage: isLight
+                ? "radial-gradient(#cbd5e1 1px, transparent 1px)"
+                : "radial-gradient(rgba(148, 163, 184, 0.15) 1px, transparent 1px)",
+              backgroundSize: `${24 * zoom}px ${24 * zoom}px`,
+              backgroundPosition: `${pan.x}px ${pan.y}px`
+            }}
+          >
+            {/* Floating Reopen Button if Drawer is Closed */}
+            {!isDrawerOpen && selectedNode && (
+              <button
+                type="button"
+                onClick={() => setIsDrawerOpen(true)}
+                className={`ui-float-enter absolute top-4 right-4 z-20 flex items-center gap-2 px-3.5 py-2 rounded-xl border shadow-lg backdrop-blur transition-colors ${
+                  isLight
+                    ? "bg-white/95 border-indigo-200 text-indigo-700 hover:border-indigo-400 shadow-indigo-100"
+                    : "bg-slate-900/95 border-indigo-800/80 text-indigo-300 hover:border-indigo-500 shadow-black/80"
+                }`}
+                title="Abrir ficha del concepto"
+              >
+                <span className="material-symbols-outlined text-base text-indigo-500">
+                  dock_to_left
+                </span>
+                <div className="text-left max-w-[150px]">
+                  <span className="block text-[9px] font-mono font-bold uppercase text-indigo-500 tracking-wider">
+                    Ficha de Concepto
+                  </span>
+                  <span className="block text-xs font-semibold truncate">
+                    {selectedNode?.label}
+                  </span>
+                </div>
+                <span className="material-symbols-outlined text-sm text-indigo-400">
+                  chevron_left
+                </span>
+              </button>
+            )}
 
           {/* Pan Hint Overlay */}
           <div className="pointer-events-none absolute bottom-4 left-4 z-10 flex items-center gap-2 opacity-70">
@@ -2243,7 +1949,7 @@ export function MindMapViewer({
             {/* Positioned Node Cards Layer */}
             <div className="absolute top-0 left-0 overflow-visible" style={{ zIndex: 10 }}>
               {allNodes.map((pNode) => {
-                const isSelected = selectedNode.id === pNode.id;
+                const isSelected = selectedNode?.id === pNode.id;
                 const isRoot = pNode.level === 0;
                 const isLevel1 = pNode.level === 1;
 
@@ -2385,9 +2091,10 @@ export function MindMapViewer({
             </div>
           </div>
         </div>
+      )}
 
         {/* 3. Floating Radar / Minimap Overlay */}
-        {showMinimap && !isDrawerOpen && (
+        {showMinimap && !isDrawerOpen && currentMindMap && (
           <div
             className={`ui-float-enter absolute bottom-4 right-4 z-20 flex h-36 w-48 flex-col justify-between rounded-2xl border p-2.5 shadow-2xl backdrop-blur ${
               isLight
@@ -2435,7 +2142,7 @@ export function MindMapViewer({
       </div>
 
       {/* 4. Right Detail Drawer (Concept & Article Details) */}
-      {isDrawerOpen && (
+      {isDrawerOpen && selectedNode && currentMindMap && (
         <aside
           className={`ui-panel-enter absolute inset-y-0 right-0 z-30 flex h-full w-[min(23rem,calc(100%-3rem))] max-w-full flex-col overflow-y-auto border-l p-5 backdrop-blur ${
             isLight
