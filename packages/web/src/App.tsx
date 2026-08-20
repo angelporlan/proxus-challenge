@@ -29,6 +29,7 @@ import {
   materialsQuery
 } from "./domain/materials/atoms.ts";
 import { deleteArtifactAction } from "./domain/artifacts/atoms.ts";
+import { setArtifactSaved } from "./domain/artifacts/saved-artifacts.ts";
 
 type ActiveTab = "workspace" | "mindmap" | "pdf";
 type Theme = "dark" | "light";
@@ -327,6 +328,7 @@ export function App() {
 
     try {
       await deleteArtifact(artifact.id);
+      setArtifactSaved(artifact.id, false);
       if (selectedArtifactId === artifact.id) {
         setSelectedArtifactId(null);
         setActiveTab("workspace");

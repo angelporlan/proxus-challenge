@@ -3,6 +3,7 @@ import type { Artifact, NoteArtifact, QuizArtifact, TestArtifact } from "@proxus
 import * as AsyncResult from "effect/unstable/reactivity/AsyncResult";
 import React, { useState } from "react";
 import { artifactQuery } from "../domain/artifacts/atoms.ts";
+import { toggleArtifactSaved, useSavedArtifactIds } from "../domain/artifacts/saved-artifacts.ts";
 
 interface ArtifactChatCardProps {
   readonly artifactId: string;
@@ -19,27 +20,12 @@ export function ArtifactChatCard({
 }: ArtifactChatCardProps) {
   const query = artifactQuery(artifactId);
   const result = useAtomValue(query);
-
-  const [isSaved, setIsSaved] = useState<boolean>(() => {
-    try {
-      const saved = localStorage.getItem(`proxus_saved_artifact_${artifactId}`);
-      return saved === "true";
-    } catch {
-      return false;
-    }
-  });
+  const savedIds = useSavedArtifactIds();
+  const isSaved = savedIds.has(artifactId);
 
   const toggleSave = (e: React.MouseEvent) => {
     e.stopPropagation();
-    setIsSaved((prev) => {
-      const next = !prev;
-      try {
-        localStorage.setItem(`proxus_saved_artifact_${artifactId}`, String(next));
-      } catch {
-        // ignore
-      }
-      return next;
-    });
+    toggleArtifactSaved(artifactId);
   };
 
   return (

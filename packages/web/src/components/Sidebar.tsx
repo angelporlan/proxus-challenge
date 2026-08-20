@@ -5,6 +5,7 @@ import { useState } from "react";
 import { createPortal } from "react-dom";
 import { artifactsQuery } from "../domain/artifacts/atoms.ts";
 import { materialsQuery } from "../domain/materials/atoms.ts";
+import { useSavedArtifactIds } from "../domain/artifacts/saved-artifacts.ts";
 
 interface SidebarProps {
   readonly selectedArtifactId: string | null;
@@ -39,6 +40,7 @@ export function Sidebar({
   const artifacts = useAtomValue(artifactsQuery);
   const refreshMaterials = useAtomRefresh(materialsQuery);
   const refreshArtifacts = useAtomRefresh(artifactsQuery);
+  const savedArtifactIds = useSavedArtifactIds();
   const isLight = theme === "light";
   const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>({});
   const [hoveredTooltip, setHoveredTooltip] = useState<{
@@ -356,7 +358,9 @@ export function Sidebar({
             return (
               <div className="flex flex-col gap-2.5">
                 {categoriesConfig.map((category) => {
-                  const items = value.artifacts.filter((a) => a.kind === category.kind);
+                  const items = value.artifacts.filter(
+                    (a) => savedArtifactIds.has(a.id) && a.kind === category.kind
+                  );
                   const isCollapsed = collapsedCategories[category.kind] ?? false;
 
                   return (
