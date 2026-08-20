@@ -187,10 +187,10 @@ export function Sidebar({
                         </span>
                       </button>
 
-                      {/* Absolute Floating Tooltip on Hover */}
+                      {/* Absolute Floating Tooltip on Hover (Top-Right) */}
                       <div
                         role="tooltip"
-                        className={`absolute left-2 top-full z-40 mt-1 max-w-[280px] rounded-xl border px-3 py-2 text-xs font-medium shadow-xl backdrop-blur-md transition-all duration-150 pointer-events-none opacity-0 translate-y-1 group-hover:opacity-100 group-hover:translate-y-0 ${
+                        className={`absolute right-1 bottom-full z-40 mb-1.5 max-w-[280px] rounded-xl border px-3 py-2 text-xs font-medium shadow-xl backdrop-blur-md transition-all duration-150 pointer-events-none opacity-0 translate-y-1 group-hover:opacity-100 group-hover:translate-y-0 ${
                           isLight
                             ? "bg-slate-900 text-white border-slate-700 shadow-slate-900/30"
                             : "bg-slate-950 text-slate-100 border-slate-700 shadow-black/80"
@@ -423,10 +423,10 @@ export function Sidebar({
                                     </span>
                                   </button>
 
-                                  {/* Absolute Floating Tooltip on Hover */}
+                                  {/* Absolute Floating Tooltip on Hover (Top-Right) */}
                                   <div
                                     role="tooltip"
-                                    className={`absolute left-2 top-full z-40 mt-1 max-w-[260px] rounded-xl border px-3 py-1.5 text-xs font-medium shadow-xl backdrop-blur-md transition-all duration-150 pointer-events-none opacity-0 translate-y-1 group-hover:opacity-100 group-hover:translate-y-0 ${
+                                    className={`absolute right-1 bottom-full z-40 mb-1.5 max-w-[260px] rounded-xl border px-3 py-1.5 text-xs font-medium shadow-xl backdrop-blur-md transition-all duration-150 pointer-events-none opacity-0 translate-y-1 group-hover:opacity-100 group-hover:translate-y-0 ${
                                       isLight
                                         ? "bg-slate-900 text-white border-slate-700 shadow-slate-900/30"
                                         : "bg-slate-950 text-slate-100 border-slate-700 shadow-black/80"
