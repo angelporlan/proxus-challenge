@@ -384,7 +384,7 @@ export function Sidebar({
                                   <button
                                     type="button"
                                     onClick={() => onSelectArtifact(artifact.id)}
-                                    className={`flex flex-1 items-center gap-2 rounded-lg px-2.5 py-2 text-left transition pr-7 ${
+                                    className={`flex min-w-0 flex-1 items-start gap-2 rounded-lg px-2.5 py-2 text-left transition pr-7 ${
                                       isSelected
                                         ? isLight
                                           ? "bg-indigo-50 border border-indigo-300/80 text-indigo-950 font-semibold shadow-xs"
@@ -397,7 +397,7 @@ export function Sidebar({
                                     title={artifact.title}
                                   >
                                     <span
-                                      className={`size-1.5 rounded-full shrink-0 ${
+                                      className={`size-1.5 rounded-full shrink-0 mt-1.5 ${
                                         isSelected
                                           ? "bg-indigo-600 dark:bg-indigo-400"
                                           : isLight
@@ -405,7 +405,7 @@ export function Sidebar({
                                           : "bg-slate-600 group-hover:bg-indigo-400"
                                       }`}
                                     />
-                                    <span className="truncate text-xs flex-1 leading-snug">
+                                    <span className="block min-w-0 flex-1 text-xs leading-snug break-words line-clamp-2 font-medium">
                                       {artifact.title}
                                     </span>
                                   </button>
