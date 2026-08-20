@@ -19,7 +19,6 @@ import {
 import {
   MaterialNotFound,
   MaterialRepository,
-  type MaterialPageImages,
   type PdfMaterial
 } from "../../../materials/material.ts";
 
@@ -284,12 +283,13 @@ const makeMaterialRepository = (materials: readonly MaterialFixture[]) => Materi
       };
     });
 
-    return Effect.succeed<MaterialPageImages>({
+    return Effect.succeed({
       type: "material-page-images",
       material: toPdfMaterial(material),
       pages: renderedPages
     });
-  }
+  },
+  getFilePath: (id) => Effect.succeed(`/mock/path/${id}.pdf`)
 });
 
 const toPdfMaterial = (material: MaterialFixture): PdfMaterial => ({

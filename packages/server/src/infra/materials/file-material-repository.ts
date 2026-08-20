@@ -161,7 +161,10 @@ export const FileMaterialRepository = {
       };
     });
 
-    return { list, get, upload, delete: remove, renderPages };
+    const getFilePath = (id: string): Effect.Effect<string, MaterialNotFound | MaterialRepositoryError> =>
+      getFile(id).pipe(Effect.map((file) => file.path));
+
+    return { list, get, upload, delete: remove, renderPages, getFilePath };
   }),
   layer: (directory: string) => Layer.effect(MaterialRepository)(FileMaterialRepository.make(directory))
 };

@@ -56,6 +56,9 @@ export interface MaterialRepository {
     id: string,
     pages: readonly number[]
   ) => Effect.Effect<MaterialPageImages, MaterialNotFound | MaterialRepositoryError>;
+  readonly getFilePath: (
+    id: string
+  ) => Effect.Effect<string, MaterialNotFound | MaterialRepositoryError>;
 }
 
 export const MaterialRepository = Context.Service<MaterialRepository>(
