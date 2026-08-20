@@ -194,15 +194,26 @@ export function Chat({
         ? prev
         : [...prev, { id: mat.id, title: mat.title, pageCount: mat.pageCount }]
     );
+    let nextText = "";
     setInput((prev) => {
       const mentionPattern = /(?:^|\s)@[a-zA-Z0-9_\-.]*$/;
       if (mentionPattern.test(prev)) {
-        return prev.replace(/(^|\s)@[a-zA-Z0-9_\-.]*$/, `$1@${mat.title} `);
+        nextText = prev.replace(/(^|\s)@[a-zA-Z0-9_\-.]*$/, `$1@${mat.title} `);
+      } else {
+        nextText = `${prev ? prev.trim() + " " : ""}@${mat.title} `;
       }
-      return `${prev ? prev.trim() + " " : ""}@${mat.title} `;
+      return nextText;
     });
     setMentionQuery(null);
     setIsMentionOpen(false);
+
+    requestAnimationFrame(() => {
+      if (textareaRef.current) {
+        textareaRef.current.focus();
+        const endPos = textareaRef.current.value.length;
+        textareaRef.current.setSelectionRange(endPos, endPos);
+      }
+    });
   };
 
   const recognitionRef = useRef<any>(null);
@@ -215,6 +226,7 @@ export function Chat({
   const magIaRef = useRef<HTMLDivElement>(null);
   const mentionRef = useRef<HTMLDivElement>(null);
   const backdropRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Close menus on click outside
   useEffect(() => {
@@ -1022,9 +1034,9 @@ export function Chat({
                           return (
                             <strong
                               key={idx}
-                              className={`font-bold px-0.5 rounded ${
+                              className={`font-bold rounded ${
                                 isLight
-                                  ? "text-purple-700 bg-purple-100"
+                                  ? "text-purple-700 bg-purple-100/90"
                                   : "text-purple-300 bg-purple-900/60"
                               }`}
                             >
@@ -1053,6 +1065,7 @@ export function Chat({
             </div>
 
             <textarea
+              ref={textareaRef}
               className="relative z-10 w-full resize-none bg-transparent px-2 py-1 text-sm outline-none text-transparent caret-purple-600 dark:caret-purple-400 selection:bg-purple-500/25 font-sans leading-relaxed font-normal"
               value={input}
               onScroll={(e) => {
