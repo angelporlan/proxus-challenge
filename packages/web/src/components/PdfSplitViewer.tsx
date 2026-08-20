@@ -25,6 +25,7 @@ export function PdfSplitViewer({
   onAskAboutPage
 }: PdfSplitViewerProps) {
   const [currentPage, setCurrentPage] = useState(initialPage);
+  const [fitMode, setFitMode] = useState<"fit-page" | "fit-width" | "custom">("fit-page");
   const [zoom, setZoom] = useState(100);
   const [loadedPages, setLoadedPages] = useState<Record<number, string>>(() => {
     const initial: Record<number, string> = {};
@@ -41,6 +42,7 @@ export function PdfSplitViewer({
 
   const renderPagesAction = useAtomSet(renderMaterialPagesAction, { mode: "promise" });
   const isMountedRef = useRef(true);
+  const mainScrollRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -55,6 +57,13 @@ export function PdfSplitViewer({
       setCurrentPage(initialPage);
     }
   }, [initialPage, material.pageCount]);
+
+  // Reset scroll to top on page change
+  useEffect(() => {
+    if (mainScrollRef.current) {
+      mainScrollRef.current.scrollTop = 0;
+    }
+  }, [currentPage]);
 
   // Load missing cached pages on material change
   useEffect(() => {
@@ -213,11 +222,11 @@ export function PdfSplitViewer({
   }, [currentPage, loadedPages, material.id]);
 
   return (
-    <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 overflow-hidden">
+    <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 overflow-hidden relative">
       {/* Top Header Bar */}
-      <header className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-900/90 backdrop-blur z-10 shrink-0">
+      <header className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5 border-b border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-900/90 backdrop-blur z-10 shrink-0">
         <div className="flex items-center gap-3 min-w-0">
-          <div className="grid size-8 place-items-center rounded-lg bg-indigo-50 dark:bg-indigo-600/20 text-indigo-600 dark:text-indigo-400">
+          <div className="grid size-8 place-items-center rounded-lg bg-indigo-50 dark:bg-indigo-600/20 text-indigo-600 dark:text-indigo-400 shrink-0">
             <span className="material-symbols-outlined text-base">picture_as_pdf</span>
           </div>
           <div className="min-w-0">
@@ -229,23 +238,61 @@ export function PdfSplitViewer({
         </div>
 
         {/* Toolbar Controls */}
-        <div className="flex items-center gap-1.5 shrink-0">
-          {/* Zoom */}
-          <div className="flex items-center rounded-lg bg-slate-100 dark:bg-slate-800/80 p-0.5 border border-slate-200 dark:border-slate-700/60 mr-2">
+        <div className="flex items-center gap-2 shrink-0">
+          {/* Fit Mode Switcher */}
+          <div className="flex items-center rounded-xl bg-slate-100 dark:bg-slate-800/80 p-0.5 border border-slate-200 dark:border-slate-700/60 text-xs">
             <button
               type="button"
-              onClick={() => setZoom((z) => Math.max(50, z - 15))}
-              className="grid size-9 place-items-center rounded-lg text-slate-600 hover:bg-slate-200 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-700/60 dark:hover:text-white"
+              onClick={() => setFitMode("fit-page")}
+              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg font-medium transition ${
+                fitMode === "fit-page"
+                  ? "bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs"
+                  : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
+              }`}
+              title="Ajustar a pantalla completa (Página completa sin cortes)"
+            >
+              <span className="material-symbols-outlined text-[15px]">fit_screen</span>
+              <span className="hidden md:inline">Ajustar página</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setFitMode("fit-width")}
+              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg font-medium transition ${
+                fitMode === "fit-width"
+                  ? "bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs"
+                  : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
+              }`}
+              title="Ajustar al ancho de lectura"
+            >
+              <span className="material-symbols-outlined text-[15px]">width</span>
+              <span className="hidden md:inline">Ajustar ancho</span>
+            </button>
+          </div>
+
+          {/* Zoom Controls */}
+          <div className="flex items-center rounded-xl bg-slate-100 dark:bg-slate-800/80 p-0.5 border border-slate-200 dark:border-slate-700/60">
+            <button
+              type="button"
+              onClick={() => {
+                setFitMode("custom");
+                setZoom((z) => Math.max(50, z - 15));
+              }}
+              className="grid size-8 place-items-center rounded-lg text-slate-600 hover:bg-slate-200 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-700/60 dark:hover:text-white"
               title="Reducir zoom"
               aria-label="Reducir zoom"
             >
               <span className="material-symbols-outlined text-sm">remove</span>
             </button>
-            <span className="px-2 text-xs font-mono text-slate-700 dark:text-slate-300 min-w-[44px] text-center">{zoom}%</span>
+            <span className="px-1.5 text-xs font-mono text-slate-700 dark:text-slate-300 min-w-[40px] text-center">
+              {fitMode === "fit-page" ? "Auto" : fitMode === "fit-width" ? "Ancho" : `${zoom}%`}
+            </span>
             <button
               type="button"
-              onClick={() => setZoom((z) => Math.min(200, z + 15))}
-              className="grid size-9 place-items-center rounded-lg text-slate-600 hover:bg-slate-200 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-700/60 dark:hover:text-white"
+              onClick={() => {
+                setFitMode("custom");
+                setZoom((z) => Math.min(200, z + 15));
+              }}
+              className="grid size-8 place-items-center rounded-lg text-slate-600 hover:bg-slate-200 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-700/60 dark:hover:text-white"
               title="Aumentar zoom"
               aria-label="Aumentar zoom"
             >
@@ -257,11 +304,11 @@ export function PdfSplitViewer({
           <button
             type="button"
             onClick={() => onAskAboutPage && onAskAboutPage(material.title, currentPage)}
-            className="flex min-h-9 items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-medium text-indigo-700 transition hover:bg-indigo-100 dark:border-indigo-500/30 dark:bg-indigo-600/20 dark:text-indigo-300 dark:hover:bg-indigo-600/30"
+            className="flex min-h-8 items-center gap-1.5 rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700 transition hover:bg-indigo-100 dark:border-indigo-500/30 dark:bg-indigo-600/20 dark:text-indigo-300 dark:hover:bg-indigo-600/30"
             title="Preguntar al tutor sobre esta página"
             aria-label={`Consultar la página ${currentPage} con el tutor`}
           >
-            <span className="material-symbols-outlined text-sm">psychology</span>
+            <span className="material-symbols-outlined text-[15px]">psychology</span>
             <span className="hidden sm:inline">Consultar página</span>
           </button>
 
@@ -270,7 +317,7 @@ export function PdfSplitViewer({
             <button
               type="button"
               onClick={onClose}
-              className="grid size-9 place-items-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+              className="grid size-8 place-items-center rounded-xl text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
               title="Cerrar visor"
               aria-label="Cerrar visor PDF"
             >
@@ -281,9 +328,9 @@ export function PdfSplitViewer({
       </header>
 
       {/* Main Content: Thumbnails Sidebar + Rendered Page Canvas */}
-      <div className="flex flex-1 min-h-0 overflow-hidden">
+      <div className="flex flex-1 min-h-0 overflow-hidden relative">
         {/* Thumbnails Sidebar */}
-        <aside className="w-20 sm:w-28 shrink-0 border-r border-slate-200 dark:border-slate-800/80 bg-slate-100/60 dark:bg-slate-900/50 overflow-y-auto p-2 flex flex-col gap-2">
+        <aside className="w-20 sm:w-28 shrink-0 border-r border-slate-200 dark:border-slate-800/80 bg-slate-100/60 dark:bg-slate-900/50 overflow-y-auto p-2 flex flex-col gap-2 pb-24">
           {Array.from({ length: material.pageCount }, (_, i) => i + 1).map((pageNum) => {
             const thumbImage = loadedPages[pageNum] ?? pageCache.get(getCacheKey(material.id, pageNum));
             const isSelected = currentPage === pageNum;
@@ -324,9 +371,12 @@ export function PdfSplitViewer({
         </aside>
 
         {/* Center Page Canvas */}
-        <main className="flex-1 overflow-auto p-4 sm:p-6 flex flex-col items-center justify-start bg-slate-50 dark:bg-slate-950 relative">
+        <main
+          ref={mainScrollRef}
+          className="flex-1 overflow-auto p-4 sm:p-6 flex flex-col items-center justify-start bg-slate-100/70 dark:bg-slate-950 relative pb-28"
+        >
           {loadingPage && !currentImage && (
-            <div className="flex flex-col items-center justify-center h-80 gap-3 text-slate-500 dark:text-slate-400">
+            <div className="flex flex-col items-center justify-center h-80 gap-3 text-slate-500 dark:text-slate-400 m-auto">
               <div className="size-8 animate-spin rounded-full border-2 border-indigo-500 border-t-transparent"></div>
               <p className="text-sm font-medium">Preparando página {currentPage}…</p>
             </div>
@@ -351,42 +401,64 @@ export function PdfSplitViewer({
           )}
 
           {currentImage && (
-            <div
-              className="transition-[width] duration-150 shadow-lg rounded-lg overflow-hidden border border-slate-200 dark:border-slate-800 bg-white"
-              style={{
-                width: `${zoom}%`,
-                maxWidth: `${Math.max(100, zoom)}%`
-              }}
-            >
-              <img
-                key={`${material.id}-${currentPage}`}
-                src={currentImage}
-                alt={`Página ${currentPage} - ${material.title}`}
-                className="w-full h-auto block select-none"
-              />
-            </div>
+            <>
+              {fitMode === "fit-page" ? (
+                <div className="flex flex-1 w-full items-center justify-center min-h-0 my-auto py-2">
+                  <img
+                    key={`${material.id}-${currentPage}`}
+                    src={currentImage}
+                    alt={`Página ${currentPage} - ${material.title}`}
+                    className="max-h-[calc(100vh-165px)] max-w-full w-auto object-contain rounded-xl shadow-xl border border-slate-200 dark:border-slate-800 bg-white select-none transition-all duration-150"
+                  />
+                </div>
+              ) : fitMode === "fit-width" ? (
+                <div className="w-full max-w-3xl my-2 mx-auto rounded-xl shadow-xl overflow-hidden border border-slate-200 dark:border-slate-800 bg-white transition-all duration-150">
+                  <img
+                    key={`${material.id}-${currentPage}`}
+                    src={currentImage}
+                    alt={`Página ${currentPage} - ${material.title}`}
+                    className="w-full h-auto block select-none"
+                  />
+                </div>
+              ) : (
+                <div
+                  className="transition-[width] duration-150 shadow-xl rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800 bg-white my-2 mx-auto"
+                  style={{
+                    width: `${zoom}%`,
+                    maxWidth: `${Math.max(100, zoom)}%`
+                  }}
+                >
+                  <img
+                    key={`${material.id}-${currentPage}`}
+                    src={currentImage}
+                    alt={`Página ${currentPage} - ${material.title}`}
+                    className="w-full h-auto block select-none"
+                  />
+                </div>
+              )}
+            </>
           )}
 
           {/* Floating Navigation Controls */}
-          <div className="sticky bottom-4 mt-auto flex items-center gap-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 px-3 py-2 shadow-lg backdrop-blur z-20">
+          <div className="absolute bottom-5 left-1/2 -translate-x-1/2 flex items-center gap-2 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 px-4 py-2 shadow-2xl backdrop-blur-md z-30">
             <button
               type="button"
               disabled={currentPage <= 1}
               onClick={handlePrev}
-              className="grid size-9 place-items-center rounded-lg text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-30 dark:text-slate-200 dark:hover:bg-slate-800 transition active:scale-95"
+              className="grid size-9 place-items-center rounded-xl text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-30 dark:text-slate-200 dark:hover:bg-slate-800 transition active:scale-95"
               title="Página anterior (Flecha Izquierda)"
               aria-label="Página anterior"
             >
               <span className="material-symbols-outlined text-lg">chevron_left</span>
             </button>
-            <span className="text-xs font-mono px-2 text-slate-700 dark:text-slate-300 select-none">
+            <span className="text-xs font-mono px-2 text-slate-700 dark:text-slate-300 font-semibold select-none">
               {currentPage} / {material.pageCount}
             </span>
             <button
               type="button"
               disabled={currentPage >= material.pageCount}
               onClick={handleNext}
-              className="grid size-9 place-items-center rounded-lg text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-30 dark:text-slate-200 dark:hover:bg-slate-800 transition active:scale-95"
+              className="grid size-9 place-items-center rounded-xl text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-30 dark:text-slate-200 dark:hover:bg-slate-800 transition active:scale-95"
               title="Página siguiente (Flecha Derecha)"
               aria-label="Página siguiente"
             >
