@@ -455,6 +455,7 @@ export function Chat({
     }
 
     setAttachedDocs([]);
+    setInput("");
     setIsSending(true);
     setError(undefined);
     pendingInvalidations.current = [];
@@ -761,10 +762,9 @@ export function Chat({
                               return (
                                 <strong
                                   key={pIdx}
-                                  className="font-bold text-white bg-white/20 px-1.5 py-0.5 rounded-md inline-flex items-center gap-1 border border-white/30 shadow-2xs mx-0.5 align-baseline"
+                                  className="font-bold underline decoration-white/70 decoration-2 underline-offset-2"
                                 >
-                                  <span className="material-symbols-outlined text-[13px] text-red-200">picture_as_pdf</span>
-                                  <span>{part}</span>
+                                  {part}
                                 </strong>
                               );
                             }
