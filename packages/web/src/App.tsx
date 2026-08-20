@@ -57,6 +57,9 @@ export function App() {
   const [pdfPage, setPdfPage] = useState(1);
   const [activeTab, setActiveTab] = useState<ActiveTab>("workspace");
   const [chatPrompt, setChatPrompt] = useState<string | null>(null);
+  const [chatAttachments, setChatAttachments] = useState<
+    readonly { readonly id: string; readonly title: string; readonly pageCount?: number }[] | undefined
+  >(undefined);
   const [isChatMaximized, setIsChatMaximized] = useState(false);
   const [isChatClosing, setIsChatClosing] = useState(false);
 
@@ -198,11 +201,15 @@ export function App() {
     setIsLibraryOpen(true);
   };
 
-  const openTutor = (prompt?: string) => {
+  const openTutor = (
+    prompt?: string,
+    attachments?: readonly { readonly id: string; readonly title: string; readonly pageCount?: number }[]
+  ) => {
     tutorTriggerRef.current = document.activeElement instanceof HTMLElement
       ? document.activeElement
       : null;
     if (prompt) setChatPrompt(prompt);
+    if (attachments) setChatAttachments(attachments);
     setIsLibraryOpen(false);
     setIsTutorOpen(true);
     if (typeof window !== "undefined" && window.matchMedia("(min-width: 1440px)").matches) {
@@ -371,32 +378,27 @@ export function App() {
     openTutor(prompt);
   };
 
-  const cleanDocTitle = (raw: string) => raw.replace(/\.pdf$/i, "").replace(/[-_]/g, " ").trim();
-
   const handleAskAboutPage = (materialTitle: string, page: number) => {
-    const title = cleanDocTitle(materialTitle);
-    openTutor(
-      `Explica los conceptos clave de la página ${page} del material "${title}". ` +
-        "Si hay fórmulas o ejemplos, desglósalos paso a paso."
-    );
+    const list = AsyncResult.match(materialsResult, {
+      onInitial: () => [],
+      onFailure: () => [],
+      onSuccess: ({ value }) => value.materials
+    });
+    const mat = list.find((m) => m.title === materialTitle || m.id === selectedMaterialId);
+    const mention = `@${mat?.title ?? materialTitle}`;
+    const prompt = `${mention} Explica los conceptos clave de la página ${page} de «${mat?.title ?? materialTitle}». Si hay fórmulas o ejemplos, desglósalos paso a paso.`;
+    openTutor(prompt, mat ? [{ id: mat.id, title: mat.title, pageCount: mat.pageCount }] : undefined);
   };
 
   const handleAskAboutSelection = (
     text: string,
     page: number,
-    materialTitle: string,
-    actionType: "explain" | "quiz" = "explain"
+    material: PdfMaterial
   ) => {
-    const title = cleanDocTitle(materialTitle);
-    if (actionType === "quiz") {
-      openTutor(
-        `Genera una pregunta tipo test de 4 opciones basada en este fragmento de la página ${page} de «${title}»:\n\n«${text}»`
-      );
-    } else {
-      openTutor(
-        `Explícame el siguiente fragmento de la página ${page} de «${title}»:\n\n«${text}»\n\nAclara conceptos clave y pon un ejemplo práctico si aplica.`
-      );
-    }
+    const mention = `@${material.title}`;
+    const prompt = `${mention} Explícame el siguiente fragmento de la página ${page} de «${material.title}»:\n\n«${text}»\n\nAclara conceptos clave y pon un ejemplo práctico si aplica.`;
+
+    openTutor(prompt, [{ id: material.id, title: material.title, pageCount: material.pageCount }]);
   };
 
   const changeTab = (tab: ActiveTab) => {
@@ -647,7 +649,11 @@ export function App() {
       <ResponsivePanel side="right" label="Tutor de estudio" open={isTutorOpen} onClose={closeTutor} width={layoutWidths.chat} laptopWidth={480} isWide={isWideLayout} returnFocusRef={tutorTriggerRef} fallbackFocusRef={tutorFallbackRef}>
         <Chat
           prefillPrompt={chatPrompt}
-          onClearPrefill={() => setChatPrompt(null)}
+          prefillAttachments={chatAttachments}
+          onClearPrefill={() => {
+            setChatPrompt(null);
+            setChatAttachments(undefined);
+          }}
           onSelectArtifact={(id) => {
             handleSelectArtifact(id);
             if (!isWideLayout) setIsTutorOpen(false);
@@ -687,7 +693,11 @@ export function App() {
           >
             <Chat
               prefillPrompt={chatPrompt}
-              onClearPrefill={() => setChatPrompt(null)}
+              prefillAttachments={chatAttachments}
+              onClearPrefill={() => {
+                setChatPrompt(null);
+                setChatAttachments(undefined);
+              }}
               onSelectArtifact={(id) => {
                 handleSelectArtifact(id);
                 handleCloseFullscreenChat();
@@ -885,7 +895,7 @@ function SelectedMaterialPdfViewer({
   readonly initialPage?: number | undefined;
   readonly onClose?: (() => void) | undefined;
   readonly onAskAboutPage?: ((materialTitle: string, page: number) => void) | undefined;
-  readonly onAskAboutSelection?: ((text: string, page: number, materialTitle: string, actionType?: "explain" | "quiz") => void) | undefined;
+  readonly onAskAboutSelection?: ((text: string, page: number, material: PdfMaterial) => void) | undefined;
 }) {
   const query = materialQuery(materialId);
   const result = useAtomValue(query);

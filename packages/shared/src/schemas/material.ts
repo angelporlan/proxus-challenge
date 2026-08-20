@@ -18,6 +18,15 @@ export const PdfWord = Schema.Struct({
 });
 export type PdfWord = typeof PdfWord.Type;
 
+export const PdfLine = Schema.Struct({
+  xMin: Schema.Number,
+  yMin: Schema.Number,
+  xMax: Schema.Number,
+  yMax: Schema.Number,
+  text: Schema.String
+});
+export type PdfLine = typeof PdfLine.Type;
+
 export const PageDimensions = Schema.Struct({
   width: Schema.Number,
   height: Schema.Number
@@ -29,7 +38,8 @@ export const PageImage = Schema.Struct({
   mediaType: Schema.Literal("image/png"),
   data: Schema.String,
   dimensions: Schema.optional(PageDimensions),
-  words: Schema.optional(Schema.Array(PdfWord))
+  words: Schema.optional(Schema.Array(PdfWord)),
+  lines: Schema.optional(Schema.Array(PdfLine))
 });
 export type PageImage = typeof PageImage.Type;
 

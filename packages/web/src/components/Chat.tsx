@@ -27,6 +27,7 @@ type TutorMode = "socratic" | "explanatory";
 
 interface ChatProps {
   readonly prefillPrompt?: string | null | undefined;
+  readonly prefillAttachments?: readonly { readonly id: string; readonly title: string; readonly pageCount?: number | undefined }[] | undefined;
   readonly onClearPrefill?: (() => void) | undefined;
   readonly onSelectArtifact?: ((id: string) => void) | undefined;
   readonly onOpenMindMap?: (() => void) | undefined;
@@ -49,6 +50,63 @@ interface ParsedUserDoc {
   readonly id?: string | undefined;
   readonly title: string;
   readonly pageCount?: number | undefined;
+}
+
+interface MentionPart {
+  readonly kind: "text" | "mention";
+  readonly value: string;
+}
+
+/**
+ * Splits mentions using the real document titles instead of treating a title
+ * with spaces as several independent words ("@document 1" -> one mention).
+ */
+function splitMentionParts(
+  value: string,
+  materials: readonly { readonly title: string }[]
+): readonly MentionPart[] {
+  const titles = [...new Set(materials.map((material) => material.title.trim()).filter(Boolean))]
+    .sort((left, right) => right.length - left.length);
+  const parts: MentionPart[] = [];
+  let textStart = 0;
+  let cursor = 0;
+
+  const pushText = (end: number) => {
+    if (end > textStart) {
+      parts.push({ kind: "text", value: value.slice(textStart, end) });
+    }
+  };
+
+  while (cursor < value.length) {
+    if (value[cursor] !== "@" || (cursor > 0 && !/\s/.test(value[cursor - 1] ?? ""))) {
+      cursor += 1;
+      continue;
+    }
+
+    const title = titles.find((candidate) => {
+      const start = cursor + 1;
+      const end = start + candidate.length;
+      const following = value[end];
+      return (
+        value.slice(start, end).toLocaleLowerCase() === candidate.toLocaleLowerCase() &&
+        (following === undefined || /\s|[.,!?;:()[\]{}"«»]/.test(following))
+      );
+    });
+
+    const token = title ? `@${title}` : /^@[a-zA-Z0-9_.-]+/.exec(value.slice(cursor))?.[0];
+    if (!token) {
+      cursor += 1;
+      continue;
+    }
+
+    pushText(cursor);
+    parts.push({ kind: "mention", value: token });
+    cursor += token.length;
+    textStart = cursor;
+  }
+
+  pushText(value.length);
+  return parts;
 }
 
 function parseUserContent(
@@ -139,6 +197,7 @@ function parseUserContent(
 
 export function Chat({
   prefillPrompt,
+  prefillAttachments,
   onClearPrefill,
   onSelectArtifact,
   onOpenMindMap,
@@ -432,9 +491,20 @@ export function Chat({
   useEffect(() => {
     if (prefillPrompt && !isSending) {
       setInput(prefillPrompt);
+      if (prefillAttachments && prefillAttachments.length > 0) {
+        setAttachedDocs((prev) => {
+          const next = [...prev];
+          for (const att of prefillAttachments) {
+            if (!next.some((d) => d.id === att.id)) {
+              next.push(att);
+            }
+          }
+          return next;
+        });
+      }
       onClearPrefill?.();
     }
-  }, [prefillPrompt, isSending, onClearPrefill]);
+  }, [prefillPrompt, prefillAttachments, isSending, onClearPrefill]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "auto" });
@@ -780,23 +850,15 @@ export function Chat({
                     )}
                     {text ? (
                       <div className="whitespace-pre-wrap">
-                        {(() => {
-                          const mentionRegex = /(@[a-zA-Z0-9_\-.]+)/g;
-                          const parts = text.split(mentionRegex);
-                          return parts.map((part, pIdx) => {
-                            if (part.startsWith("@")) {
-                              return (
-                                <strong
-                                  key={pIdx}
-                                  className="font-bold underline decoration-white/70 decoration-2 underline-offset-2"
-                                >
-                                  {part}
-                                </strong>
-                              );
-                            }
-                            return <span key={pIdx}>{part}</span>;
-                          });
-                        })()}
+                        {splitMentionParts(text, [...availableMaterials, ...docs]).map((part, pIdx) =>
+                          part.kind === "mention" ? (
+                            <strong key={pIdx} className="font-bold text-white">
+                              {part.value}
+                            </strong>
+                          ) : (
+                            <span key={pIdx}>{part.value}</span>
+                          )
+                        )}
                       </div>
                     ) : (
                       <div className="text-xs text-white/80 italic">Consultando documento adjunto…</div>
@@ -980,7 +1042,7 @@ export function Chat({
                   className="inline-flex items-center gap-1.5 bg-purple-500/15 dark:bg-purple-500/25 border border-purple-500/30 rounded-xl px-2.5 py-1 text-xs text-purple-800 dark:text-purple-200 font-medium animate-in fade-in zoom-in-95 duration-100"
                 >
                   <span className="material-symbols-outlined text-[15px] text-red-500">picture_as_pdf</span>
-                  <span className="truncate max-w-[180px] sm:max-w-[240px] font-semibold">{doc.title}</span>
+                  <span className="truncate max-w-[180px] sm:max-w-[240px] font-bold">{doc.title}</span>
                   {doc.pageCount && (
                     <span className="text-[10px] text-purple-600 dark:text-purple-400">({doc.pageCount} pág{doc.pageCount > 1 ? "s" : ""})</span>
                   )}
@@ -1059,42 +1121,30 @@ export function Chat({
             <div
               ref={backdropRef}
               aria-hidden="true"
-              className="absolute inset-0 pointer-events-none whitespace-pre-wrap break-words px-2 py-1 text-sm font-sans font-semibold leading-relaxed overflow-hidden select-none"
+              className="absolute inset-0 pointer-events-none whitespace-pre-wrap break-words px-2 py-1 text-sm font-sans font-normal leading-relaxed overflow-hidden select-none"
             >
               {input ? (
-                (() => {
-                  const mentionRegex = /(@[a-zA-Z0-9_\-.]+)/g;
-                  const parts = input.split(mentionRegex);
-                  return (
-                    <>
-                      {parts.map((part, idx) => {
-                        if (part.startsWith("@")) {
-                          return (
-                            <span
-                              key={idx}
-                              className={`rounded ${
-                                isLight
-                                  ? "text-purple-700 bg-purple-100 underline decoration-purple-400 decoration-2 underline-offset-2"
-                                  : "text-purple-300 bg-purple-900/60 underline decoration-purple-500 decoration-2 underline-offset-2"
-                              }`}
-                            >
-                              {part}
-                            </span>
-                          );
-                        }
-                        return (
-                          <span
-                            key={idx}
-                            className={isLight ? "text-slate-900" : "text-slate-100"}
-                          >
-                            {part}
-                          </span>
-                        );
-                      })}
-                      {input.endsWith("\n") && "\n"}
-                    </>
-                  );
-                })()
+                <>
+                  {splitMentionParts(input, [...availableMaterials, ...attachedDocs]).map((part, idx) =>
+                    part.kind === "mention" ? (
+                      <strong
+                        key={idx}
+                        className={`rounded font-bold ${
+                          isLight
+                            ? "bg-purple-100/80 text-purple-700"
+                            : "bg-purple-900/60 text-purple-300"
+                        }`}
+                      >
+                        {part.value}
+                      </strong>
+                    ) : (
+                      <span key={idx} className={isLight ? "text-slate-900" : "text-slate-100"}>
+                        {part.value}
+                      </span>
+                    )
+                  )}
+                  {input.endsWith("\n") && "\n"}
+                </>
               ) : (
                 <span className="text-slate-400 font-normal">
                   Pregunta lo que quieras · @ para mencionar docs
@@ -1104,7 +1154,7 @@ export function Chat({
 
             <textarea
               ref={textareaRef}
-              className="relative z-10 w-full resize-none bg-transparent px-2 py-1 text-sm outline-none text-transparent caret-purple-600 dark:caret-purple-400 selection:bg-purple-500/25 font-sans font-semibold leading-relaxed"
+              className="relative z-10 w-full resize-none bg-transparent px-2 py-1 text-sm outline-none text-transparent caret-purple-600 dark:caret-purple-400 selection:bg-purple-500/25 font-sans font-normal leading-relaxed"
               value={input}
               onScroll={(e) => {
                 if (backdropRef.current) {

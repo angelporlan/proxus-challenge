@@ -56,6 +56,25 @@ const make = (): Effect.Effect<PdfServiceType, PdfServiceError, ChildProcessSpaw
         const width = pageMatch?.[1] ? parseFloat(pageMatch[1]) : 595;
         const height = pageMatch?.[2] ? parseFloat(pageMatch[2]) : 842;
 
+        const lineRegex = /<line\s+xMin="([\d.]+)"\s+yMin="([\d.]+)"\s+xMax="([\d.]+)"\s+yMax="([\d.]+)">([\s\S]*?)<\/line>/g;
+        const lines: { xMin: number; yMin: number; xMax: number; yMax: number; text: string }[] = [];
+        let lineMatch: RegExpExecArray | null;
+        while ((lineMatch = lineRegex.exec(output)) !== null) {
+          if (lineMatch[1] && lineMatch[2] && lineMatch[3] && lineMatch[4] && lineMatch[5]) {
+            const wordMatches = [...lineMatch[5].matchAll(/<word [^>]*>([^<]+)<\/word>/g)].map((m) => m[1]);
+            const lineText = wordMatches.join(" ").trim();
+            if (lineText.length > 0) {
+              lines.push({
+                xMin: parseFloat(lineMatch[1]),
+                yMin: parseFloat(lineMatch[2]),
+                xMax: parseFloat(lineMatch[3]),
+                yMax: parseFloat(lineMatch[4]),
+                text: lineText
+              });
+            }
+          }
+        }
+
         const wordRegex = /<word\s+xMin="([\d.]+)"\s+yMin="([\d.]+)"\s+xMax="([\d.]+)"\s+yMax="([\d.]+)">([^<]+)<\/word>/g;
         const words: { xMin: number; yMin: number; xMax: number; yMax: number; text: string }[] = [];
         let match: RegExpExecArray | null;
@@ -73,13 +92,15 @@ const make = (): Effect.Effect<PdfServiceType, PdfServiceError, ChildProcessSpaw
 
         return {
           dimensions: { width, height },
-          words
+          words,
+          lines
         };
       }),
       Effect.catch(() =>
         Effect.succeed({
           dimensions: { width: 595, height: 842 },
-          words: []
+          words: [],
+          lines: []
         })
       )
     );
@@ -122,7 +143,8 @@ const make = (): Effect.Effect<PdfServiceType, PdfServiceError, ChildProcessSpaw
       mediaType: "image/png" as const,
       data: `data:image/png;base64,${uint8ArrayToBase64(bytes)}`,
       dimensions: textData.dimensions,
-      words: textData.words
+      words: textData.words,
+      lines: textData.lines
     };
   });
 

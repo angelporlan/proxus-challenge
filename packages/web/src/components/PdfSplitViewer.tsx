@@ -1,6 +1,7 @@
 import { useAtomSet } from "@effect/atom-react";
 import type { MaterialPageImages, PageImage, PdfMaterial, PdfWord } from "@proxus/shared";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { renderMaterialPagesAction } from "../domain/materials/atoms.ts";
 
 interface PdfSplitViewerProps {
@@ -8,12 +9,66 @@ interface PdfSplitViewerProps {
   readonly initialPage?: number | undefined;
   readonly onClose?: (() => void) | undefined;
   readonly onAskAboutPage?: ((materialTitle: string, page: number) => void) | undefined;
-  readonly onAskAboutSelection?: ((text: string, page: number, materialTitle: string, actionType: "explain" | "quiz") => void) | undefined;
+  readonly onAskAboutSelection?: ((text: string, page: number, material: PdfMaterial) => void) | undefined;
 }
 
 // Module-level cache to keep rendered page images and word bounds across tab changes, renders and remounts
 const pageCache = new Map<string, PageImage>();
 const inFlightRequests = new Map<string, Promise<void>>();
+
+interface SelectionHighlight {
+  readonly left: number;
+  readonly top: number;
+  readonly width: number;
+  readonly height: number;
+}
+
+function selectionHighlightsFromRects(
+  rects: readonly DOMRect[],
+  containerRect: DOMRect
+): readonly SelectionHighlight[] {
+  const rawRects = rects
+    .filter((rect) => rect.width > 0 && rect.height > 0)
+    .map((rect) => ({
+      left: rect.left - containerRect.left,
+      top: rect.top - containerRect.top,
+      right: rect.right - containerRect.left,
+      bottom: rect.bottom - containerRect.top,
+      height: rect.height
+    }))
+    .sort((left, right) => left.top - right.top || left.left - right.left);
+
+  const merged: Array<{
+    left: number;
+    top: number;
+    right: number;
+    bottom: number;
+    height: number;
+  }> = [];
+
+  for (const rect of rawRects) {
+    const previous = merged[merged.length - 1];
+    const sameLine = previous && Math.abs(rect.top - previous.top) <= Math.max(3, rect.height * 0.45);
+    const closeEnough = previous && rect.left - previous.right <= Math.max(10, rect.height * 1.75);
+
+    if (previous && sameLine && closeEnough) {
+      previous.left = Math.min(previous.left, rect.left);
+      previous.top = Math.min(previous.top, rect.top);
+      previous.right = Math.max(previous.right, rect.right);
+      previous.bottom = Math.max(previous.bottom, rect.bottom);
+      previous.height = Math.max(previous.height, rect.height);
+    } else {
+      merged.push({ ...rect });
+    }
+  }
+
+  return merged.map((rect) => ({
+    left: Math.max(0, (rect.left / containerRect.width) * 100),
+    top: Math.max(0, (rect.top / containerRect.height) * 100),
+    width: Math.min(100, ((rect.right - rect.left) / containerRect.width) * 100),
+    height: Math.min(100, ((rect.bottom - rect.top) / containerRect.height) * 100)
+  }));
+}
 
 function getCacheKey(materialId: string, page: number): string {
   return `${materialId}::${page}`;
@@ -47,7 +102,9 @@ export function PdfSplitViewer({
     text: string;
     top: number;
     left: number;
+    isAbove: boolean;
   } | null>(null);
+  const [selectionHighlights, setSelectionHighlights] = useState<readonly SelectionHighlight[]>([]);
   const [copied, setCopied] = useState(false);
 
   const renderPagesAction = useAtomSet(renderMaterialPagesAction, { mode: "promise" });
@@ -75,6 +132,7 @@ export function PdfSplitViewer({
       mainScrollRef.current.scrollTop = 0;
     }
     setSelectionMenu(null);
+    setSelectionHighlights([]);
   }, [currentPage]);
 
   // Load missing cached pages on material change
@@ -229,11 +287,12 @@ export function PdfSplitViewer({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [handleNext, handlePrev]);
 
-  // Selection detection handler with accurate word reconstruction and spaces
+  // Selection detection handler with accurate line/word reconstruction
   const checkSelection = useCallback(() => {
     const sel = window.getSelection();
     if (!sel || sel.isCollapsed || sel.rangeCount === 0) {
       setSelectionMenu(null);
+      setSelectionHighlights([]);
       return;
     }
 
@@ -253,15 +312,17 @@ export function PdfSplitViewer({
       rect.left > contRect.right + 20
     ) {
       setSelectionMenu(null);
+      setSelectionHighlights([]);
       return;
     }
 
-    // Extract exact words with spaces from intersected data-word-idx spans
+    // Extract exact words with proper spacing. The visual layer is word-based
+    // as well: a line-sized selectable element paints a much wider rectangle
+    // than the actual glyphs, especially on headings and bullet points.
     const pageItem = loadedPages[currentPage] ?? pageCache.get(getCacheKey(material.id, currentPage));
-    const allWords = pageItem?.words;
     let extractedText = "";
 
-    if (allWords && allWords.length > 0) {
+    if (pageItem?.words && pageItem.words.length > 0) {
       const spans = Array.from(container.querySelectorAll<HTMLElement>("span[data-word-idx]"));
       const matchedIndices: number[] = [];
 
@@ -278,7 +339,7 @@ export function PdfSplitViewer({
         matchedIndices.sort((a, b) => a - b);
         let lastWord: PdfWord | null = null;
         for (const idx of matchedIndices) {
-          const w = allWords[idx];
+          const w = pageItem.words[idx];
           if (!w) continue;
           if (lastWord) {
             const lineHeight = Math.max(lastWord.yMax - lastWord.yMin, w.yMax - w.yMin, 10);
@@ -294,6 +355,24 @@ export function PdfSplitViewer({
           lastWord = w;
         }
       }
+    } else if (pageItem?.lines && pageItem.lines.length > 0) {
+      // Older cached pages may only have line metadata. New pages use the
+      // tighter word layer below.
+      const lineDivs = Array.from(container.querySelectorAll<HTMLElement>("div[data-line-idx]"));
+      const matchedLineIndices: number[] = [];
+
+      for (const div of lineDivs) {
+        if (range.intersectsNode(div)) {
+          const idxStr = div.getAttribute("data-line-idx");
+          if (idxStr !== null) matchedLineIndices.push(Number(idxStr));
+        }
+      }
+
+      matchedLineIndices.sort((a, b) => a - b);
+      extractedText = matchedLineIndices
+        .map((idx) => pageItem.lines![idx]?.text)
+        .filter(Boolean)
+        .join("\n");
     }
 
     if (!extractedText) {
@@ -303,22 +382,53 @@ export function PdfSplitViewer({
     extractedText = extractedText.trim();
     if (extractedText.length < 2) {
       setSelectionMenu(null);
+      setSelectionHighlights([]);
       return;
     }
 
-    // Calculate safe screen coordinates constrained within viewport
-    const menuWidth = 320;
-    const padding = 16;
-    const centerX = rect.left + rect.width / 2;
-    const safeLeft = Math.max(menuWidth / 2 + padding, Math.min(window.innerWidth - menuWidth / 2 - padding, centerX));
-    const isNearTop = rect.top < 80;
-    const safeTop = isNearTop ? rect.bottom + 12 : rect.top - 12;
+    // The toolbar is rendered in document.body, so calculate against the
+    // viewport rather than a possibly narrow/overflow-hidden PDF panel.
+    const rects = Array.from(range.getClientRects());
+    const calculatedHighlights = selectionHighlightsFromRects(rects, contRect);
+    setSelectionHighlights(
+      calculatedHighlights.length > 0
+        ? calculatedHighlights
+        : [{
+            left: Math.max(0, ((rect.left - contRect.left) / contRect.width) * 100),
+            top: Math.max(0, ((rect.top - contRect.top) / contRect.height) * 100),
+            width: Math.min(100, (rect.width / contRect.width) * 100),
+            height: Math.min(100, (rect.height / contRect.height) * 100)
+          }]
+    );
+    const firstRect = rects[0] ?? rect;
+    const lastRect = rects[rects.length - 1] ?? rect;
+    const toolbarHeight = 44;
+    const toolbarWidth = Math.min(320, Math.max(0, window.innerWidth - 24));
+    const gap = 10;
+    const canPlaceAbove = firstRect.top >= toolbarHeight + gap + 12;
+    const canPlaceBelow = window.innerHeight - lastRect.bottom >= toolbarHeight + gap + 12;
+    const isAbove = canPlaceAbove || !canPlaceBelow;
+    const anchorTop = isAbove ? firstRect.top - gap : lastRect.bottom + gap;
+    const safeTop = isAbove
+      ? Math.max(toolbarHeight + 12, anchorTop)
+      : Math.min(window.innerHeight - toolbarHeight - 12, anchorTop);
+    const selectionCenter = (
+      Math.min(...rects.map((item) => item.left), rect.left) +
+      Math.max(...rects.map((item) => item.right), rect.right)
+    ) / 2;
+    const minX = 12 + toolbarWidth / 2;
+    const maxX = window.innerWidth - 12 - toolbarWidth / 2;
+    const safeLeft = maxX >= minX
+      ? Math.max(minX, Math.min(maxX, selectionCenter))
+      : window.innerWidth / 2;
 
     setSelectionMenu({
       text: extractedText,
       top: safeTop,
-      left: safeLeft
+      left: safeLeft,
+      isAbove
     });
+    setCopied(false);
   }, [currentPage, loadedPages, material.id]);
 
   useEffect(() => {
@@ -331,6 +441,9 @@ export function PdfSplitViewer({
       const sel = window.getSelection();
       if (!sel || sel.isCollapsed) {
         setSelectionMenu(null);
+        setSelectionHighlights([]);
+      } else {
+        window.requestAnimationFrame(() => checkSelection());
       }
     };
 
@@ -342,14 +455,15 @@ export function PdfSplitViewer({
     };
   }, [checkSelection]);
 
-  const handleAskAi = (actionType: "explain" | "quiz" = "explain") => {
+  const handleAskAi = () => {
     if (!selectionMenu) return;
     const text = selectionMenu.text;
     setSelectionMenu(null);
+    setSelectionHighlights([]);
     window.getSelection()?.removeAllRanges();
 
     if (onAskAboutSelection) {
-      onAskAboutSelection(text, currentPage, material.title, actionType);
+      onAskAboutSelection(text, currentPage, material);
     } else if (onAskAboutPage) {
       onAskAboutPage(material.title, currentPage);
     }
@@ -382,41 +496,122 @@ export function PdfSplitViewer({
   };
 
   const renderTextLayer = (data: PageImage | undefined) => {
-    if (!data?.words || data.words.length === 0 || !data.dimensions) return null;
+    if (!data?.dimensions) return null;
+    const { width: docWidth, height: docHeight } = data.dimensions;
 
-    return (
-      <div
-        className="absolute inset-0 select-text overflow-hidden pointer-events-auto"
-        style={{ width: "100%", height: "100%" }}
-      >
-        {data.words.map((w, idx) => {
-          const left = (w.xMin / data.dimensions!.width) * 100;
-          const top = (w.yMin / data.dimensions!.height) * 100;
-          const width = ((w.xMax - w.xMin) / data.dimensions!.width) * 100;
-          const height = ((w.yMax - w.yMin) / data.dimensions!.height) * 100;
+    // Use one small selectable box per word. A line-sized selectable element
+    // causes the browser's selection background to cover the whole line.
+    if (data.words && data.words.length > 0) {
+      return (
+        <div
+          className="absolute inset-0 z-20 select-text overflow-hidden pointer-events-auto"
+          style={{ width: "100%", height: "100%", containerType: "size" }}
+        >
+          <div className="absolute inset-0 z-20 pointer-events-none" aria-hidden="true">
+            {selectionHighlights.map((highlight, idx) => (
+              <span
+                key={idx}
+                className="absolute rounded-full"
+                style={{
+                  left: `${highlight.left}%`,
+                  top: `${highlight.top + highlight.height}%`,
+                  width: `${highlight.width}%`,
+                  height: "2px",
+                  transform: "translateY(-1px)",
+                  backgroundColor: "rgba(79, 70, 229, 0.82)"
+                }}
+              />
+            ))}
+          </div>
+          {data.words.map((w, idx) => {
+            const left = (w.xMin / docWidth) * 100;
+            const top = (w.yMin / docHeight) * 100;
+            const width = ((w.xMax - w.xMin) / docWidth) * 100;
+            const height = ((w.yMax - w.yMin) / docHeight) * 100;
 
-          return (
-            <span
-              key={idx}
-              data-word-idx={idx}
-              data-word={w.text}
-              className="absolute select-text cursor-text leading-none text-transparent selection:bg-indigo-500/35 selection:text-transparent"
-              style={{
-                left: `${left}%`,
-                top: `${top}%`,
-                width: `${Math.max(width, 0.4)}%`,
-                height: `${Math.max(height, 1.2)}%`,
-                display: "inline-block",
-                userSelect: "text",
-                WebkitUserSelect: "text"
-              }}
-            >
-              {w.text}{" "}
-            </span>
-          );
-        })}
-      </div>
-    );
+            return (
+              <span
+                key={idx}
+                data-word-idx={idx}
+                data-word={w.text}
+                className="absolute z-30 select-text cursor-text text-transparent selection:bg-transparent selection:text-transparent"
+                style={{
+                  left: `${left}%`,
+                  top: `${top}%`,
+                  width: `${Math.max(width, 0.1)}%`,
+                  height: `${Math.max(height, 0.1)}%`,
+                  display: "flex",
+                  alignItems: "center",
+                  fontSize: `calc(${Math.max(height, 0.1)}cqh * 0.88)`,
+                  lineHeight: 1,
+                  whiteSpace: "nowrap",
+                  userSelect: "text",
+                  WebkitUserSelect: "text"
+                }}
+              >
+                {w.text}
+              </span>
+            );
+          })}
+        </div>
+      );
+    }
+
+    // Fallback for legacy page responses without word metadata.
+    if (data.lines && data.lines.length > 0) {
+      return (
+        <div
+          className="absolute inset-0 z-20 select-text overflow-hidden pointer-events-auto leading-none"
+          style={{ width: "100%", height: "100%", containerType: "size", userSelect: "text", WebkitUserSelect: "text" }}
+        >
+          <div className="absolute inset-0 z-20 pointer-events-none" aria-hidden="true">
+            {selectionHighlights.map((highlight, idx) => (
+              <span
+                key={idx}
+                className="absolute rounded-full"
+                style={{
+                  left: `${highlight.left}%`,
+                  top: `${highlight.top + highlight.height}%`,
+                  width: `${highlight.width}%`,
+                  height: "2px",
+                  transform: "translateY(-1px)",
+                  backgroundColor: "rgba(79, 70, 229, 0.82)"
+                }}
+              />
+            ))}
+          </div>
+          {data.lines.map((line, idx) => {
+            const left = (line.xMin / docWidth) * 100;
+            const top = (line.yMin / docHeight) * 100;
+            const width = ((line.xMax - line.xMin) / docWidth) * 100;
+            const height = ((line.yMax - line.yMin) / docHeight) * 100;
+
+            return (
+              <div
+                key={idx}
+                data-line-idx={idx}
+                className="absolute z-30 select-text cursor-text text-transparent selection:bg-transparent selection:text-transparent"
+                style={{
+                  left: `${left}%`,
+                  top: `${top}%`,
+                  width: `${Math.max(width, 0.1)}%`,
+                  height: `${Math.max(height, 0.1)}%`,
+                  fontSize: `calc(${Math.max(height, 0.1)}cqh * 0.88)`,
+                  lineHeight: 1,
+                  whiteSpace: "pre",
+                  userSelect: "text",
+                  WebkitUserSelect: "text"
+                }}
+              >
+                {line.text}
+              </div>
+            );
+          })}
+        </div>
+      );
+    }
+
+    return null;
   };
 
   return (
@@ -528,16 +723,17 @@ export function PdfSplitViewer({
       </header>
 
       {/* Floating Selection Tooltip / Action Bar */}
-      {selectionMenu && (
+      {selectionMenu && createPortal(
         <div
           style={{
             position: "fixed",
             top: `${selectionMenu.top}px`,
             left: `${selectionMenu.left}px`,
-            transform: selectionMenu.top < 80 ? "translate(-50%, 0)" : "translate(-50%, -100%)",
-            zIndex: 9999
+            transform: selectionMenu.isAbove ? "translate(-50%, -100%)" : "translate(-50%, 0)",
+            zIndex: 10000,
+            maxWidth: "calc(100vw - 24px)"
           }}
-          className="flex items-center gap-1.5 p-1.5 rounded-2xl bg-slate-900/95 dark:bg-slate-900/95 text-white shadow-2xl border border-slate-700/90 backdrop-blur-md animate-in fade-in zoom-in-95 duration-150 select-none"
+          className="pointer-events-auto flex items-center gap-1 rounded-xl border border-slate-700/80 bg-slate-950/95 p-1 text-xs text-white shadow-2xl backdrop-blur-md animate-in fade-in zoom-in-95 duration-150 select-none"
           onMouseDown={(e) => {
             // Prevent selection from clearing when clicking buttons
             e.stopPropagation();
@@ -546,32 +742,24 @@ export function PdfSplitViewer({
         >
           <button
             type="button"
-            onClick={() => handleAskAi("explain")}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-md transition active:scale-95 cursor-pointer"
+            onClick={handleAskAi}
+            className="flex min-h-8 items-center gap-1.5 rounded-lg bg-indigo-600 px-2.5 py-1 font-semibold text-white shadow-sm transition hover:bg-indigo-500 active:scale-95 cursor-pointer whitespace-nowrap"
             title="Pedir al tutor que te explique este fragmento"
           >
-            <span className="material-symbols-outlined text-[16px]">psychology</span>
+            <span className="material-symbols-outlined text-[15px]">psychology</span>
             <span>Preguntar a la IA</span>
           </button>
-          <button
-            type="button"
-            onClick={() => handleAskAi("quiz")}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl hover:bg-slate-800 text-slate-200 hover:text-white text-xs font-medium transition active:scale-95 cursor-pointer"
-            title="Crear un quiz tipo test sobre este fragmento"
-          >
-            <span className="material-symbols-outlined text-[16px]">quiz</span>
-            <span className="hidden sm:inline">Crear Quiz</span>
-          </button>
-          <div className="w-px h-4 bg-slate-700/80 mx-0.5" />
+          <div className="w-px h-3.5 bg-slate-700 mx-0.5" />
           <button
             type="button"
             onClick={handleCopy}
-            className="flex items-center gap-1 px-2 py-1.5 rounded-xl hover:bg-slate-800 text-slate-300 hover:text-white text-xs transition active:scale-95 cursor-pointer"
-            title={copied ? "¡Copiado al portapapeles!" : "Copiar fragmento"}
+            className="grid size-8 shrink-0 place-items-center rounded-lg text-slate-300 transition hover:bg-slate-700/70 hover:text-white active:scale-95 cursor-pointer"
+            title={copied ? "¡Copiado!" : "Copiar fragmento"}
           >
-            <span className="material-symbols-outlined text-[16px]">{copied ? "check" : "content_copy"}</span>
+            <span className="material-symbols-outlined text-[15px]">{copied ? "check" : "content_copy"}</span>
           </button>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Main Content: Thumbnails Sidebar + Interactive Page Canvas */}
