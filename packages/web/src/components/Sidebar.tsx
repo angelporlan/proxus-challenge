@@ -384,7 +384,7 @@ export function Sidebar({
                                   <button
                                     type="button"
                                     onClick={() => onSelectArtifact(artifact.id)}
-                                    className={`flex min-w-0 flex-1 items-start gap-2 rounded-lg px-2.5 py-2 text-left transition pr-7 ${
+                                    className={`flex min-w-0 flex-1 items-center gap-2 rounded-lg px-2.5 py-2 text-left transition pr-7 ${
                                       isSelected
                                         ? isLight
                                           ? "bg-indigo-50 border border-indigo-300/80 text-indigo-950 font-semibold shadow-xs"
@@ -394,10 +394,9 @@ export function Sidebar({
                                         : "text-slate-300 hover:bg-slate-800/60 hover:text-slate-100 border border-transparent"
                                     }`}
                                     aria-current={isSelected ? "page" : undefined}
-                                    title={artifact.title}
                                   >
                                     <span
-                                      className={`size-1.5 rounded-full shrink-0 mt-1.5 ${
+                                      className={`size-1.5 rounded-full shrink-0 ${
                                         isSelected
                                           ? "bg-indigo-600 dark:bg-indigo-400"
                                           : isLight
@@ -405,10 +404,22 @@ export function Sidebar({
                                           : "bg-slate-600 group-hover:bg-indigo-400"
                                       }`}
                                     />
-                                    <span className="block min-w-0 flex-1 text-xs leading-snug break-words line-clamp-2 font-medium">
+                                    <span className="truncate block min-w-0 flex-1 text-xs font-medium leading-snug">
                                       {artifact.title}
                                     </span>
                                   </button>
+
+                                  {/* Absolute Floating Tooltip on Hover */}
+                                  <div
+                                    role="tooltip"
+                                    className={`absolute left-2 top-full z-40 mt-1 max-w-[260px] rounded-xl border px-3 py-1.5 text-xs font-medium shadow-xl backdrop-blur-md transition-all duration-150 pointer-events-none opacity-0 translate-y-1 group-hover:opacity-100 group-hover:translate-y-0 ${
+                                      isLight
+                                        ? "bg-slate-900 text-white border-slate-700 shadow-slate-900/30"
+                                        : "bg-slate-950 text-slate-100 border-slate-700 shadow-black/80"
+                                    }`}
+                                  >
+                                    <p className="leading-snug break-words whitespace-normal">{artifact.title}</p>
+                                  </div>
 
                                   {onRequestDeleteArtifact && (
                                     <button
