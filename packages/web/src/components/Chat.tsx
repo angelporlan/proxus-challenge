@@ -29,6 +29,8 @@ interface ChatProps {
   readonly onSelectArtifact?: ((id: string) => void) | undefined;
   readonly onOpenMindMap?: (() => void) | undefined;
   readonly theme?: "dark" | "light" | undefined;
+  readonly isMaximized?: boolean | undefined;
+  readonly onToggleMaximize?: (() => void) | undefined;
 }
 
 type ChatItem =
@@ -41,7 +43,9 @@ export function Chat({
   onClearPrefill,
   onSelectArtifact,
   onOpenMindMap,
-  theme = "dark"
+  theme = "dark",
+  isMaximized = false,
+  onToggleMaximize
 }: ChatProps = {}) {
   const isLight = theme === "light";
   const [messages, setMessages] = useState<readonly AgentMessage[]>([]);
@@ -242,6 +246,37 @@ export function Chat({
               Socrático
             </button>
           </div>
+
+          {onToggleMaximize && (
+            <button
+              type="button"
+              onClick={onToggleMaximize}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-semibold transition ${
+                isMaximized
+                  ? "bg-indigo-600 text-white border-indigo-500 shadow-md shadow-indigo-600/20"
+                  : isLight
+                  ? "border-slate-200 text-slate-700 hover:text-slate-900 hover:bg-slate-100 shadow-sm"
+                  : "border-slate-800 text-slate-300 hover:text-slate-100 hover:bg-slate-800"
+              }`}
+              title={
+                isMaximized
+                  ? "Salir de Modo Chat Completo (Restaurar espacio de estudio)"
+                  : "Modo Chat Completo (Pantalla Completa)"
+              }
+              aria-label={
+                isMaximized
+                  ? "Salir de Modo Chat Completo"
+                  : "Modo Chat Completo"
+              }
+            >
+              <span className="material-symbols-outlined text-[17px]" aria-hidden="true">
+                {isMaximized ? "close_fullscreen" : "open_in_full"}
+              </span>
+              <span className="hidden sm:inline">
+                {isMaximized ? "Restaurar" : "Modo Chat"}
+              </span>
+            </button>
+          )}
 
           <button
             className={`p-1.5 rounded-xl border transition ${

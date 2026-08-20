@@ -54,6 +54,7 @@ export function App() {
   const [pdfPage, setPdfPage] = useState(1);
   const [activeTab, setActiveTab] = useState<ActiveTab>("workspace");
   const [chatPrompt, setChatPrompt] = useState<string | null>(null);
+  const [isChatMaximized, setIsChatMaximized] = useState(false);
 
   const [isLibraryOpen, setIsLibraryOpen] = useState(false);
   const [isTutorOpen, setIsTutorOpen] = useState(false);
@@ -73,6 +74,17 @@ export function App() {
   const tutorTriggerRef = useRef<HTMLElement | null>(null);
   const libraryFallbackRef = useRef<HTMLButtonElement>(null);
   const tutorFallbackRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!isChatMaximized) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsChatMaximized(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isChatMaximized]);
   const isWideLayout = useMediaQuery("(min-width: 1440px)");
   const viewportWidth = useViewportWidth();
   const layoutWidths = useMemo(
@@ -426,6 +438,19 @@ export function App() {
               <span className="material-symbols-outlined text-[17px]">upload_file</span>
               <span className="hidden sm:inline">Subir PDF</span>
             </button>
+            <button
+              type="button"
+              onClick={() => setIsChatMaximized(true)}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-semibold transition ${
+                isLight
+                  ? "border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 shadow-sm"
+                  : "border-indigo-800/80 bg-indigo-950/50 text-indigo-300 hover:bg-indigo-900/60"
+              }`}
+              title="Abrir Tutor en Modo Chat Completo (Pantalla Completa)"
+            >
+              <span className="material-symbols-outlined text-[17px]">open_in_full</span>
+              <span className="hidden sm:inline">Modo Chat</span>
+            </button>
             <IconButton label={isLight ? "Cambiar a modo oscuro" : "Cambiar a modo claro"} variant="ghost" onClick={toggleTheme}>
               <span className="material-symbols-outlined text-[18px]">{isLight ? "dark_mode" : "light_mode"}</span>
             </IconButton>
@@ -500,8 +525,38 @@ export function App() {
             setIsTutorOpen(false);
           }}
           theme={theme}
+          isMaximized={false}
+          onToggleMaximize={() => setIsChatMaximized(true)}
         />
       </ResponsivePanel>
+
+      {/* Fullscreen Focus Chat Mode Overlay */}
+      {isChatMaximized && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Tutor en Modo Chat Completo"
+          className={`fixed inset-0 z-50 flex flex-col h-screen w-screen overflow-hidden animate-in fade-in zoom-in-95 duration-150 ${
+            isLight ? "bg-slate-50 text-slate-900" : "bg-[#090d16] text-slate-100"
+          }`}
+        >
+          <Chat
+            prefillPrompt={chatPrompt}
+            onClearPrefill={() => setChatPrompt(null)}
+            onSelectArtifact={(id) => {
+              handleSelectArtifact(id);
+              setIsChatMaximized(false);
+            }}
+            onOpenMindMap={() => {
+              setActiveTab("mindmap");
+              setIsChatMaximized(false);
+            }}
+            theme={theme}
+            isMaximized={true}
+            onToggleMaximize={() => setIsChatMaximized(false)}
+          />
+        </div>
+      )}
 
       <DocumentUploadModal isOpen={isUploadOpen} onClose={() => setIsUploadOpen(false)} onUploaded={handleUploaded} />
 
