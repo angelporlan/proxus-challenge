@@ -1,6 +1,7 @@
 import { useAtomRefresh, useAtomValue } from "@effect/atom-react";
 import type { PdfMaterial } from "@proxus/shared";
 import * as AsyncResult from "effect/unstable/reactivity/AsyncResult";
+import { useState } from "react";
 import { artifactsQuery } from "../domain/artifacts/atoms.ts";
 import { materialsQuery } from "../domain/materials/atoms.ts";
 
@@ -36,6 +37,14 @@ export function Sidebar({
   const refreshMaterials = useAtomRefresh(materialsQuery);
   const refreshArtifacts = useAtomRefresh(artifactsQuery);
   const isLight = theme === "light";
+  const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>({});
+
+  const toggleCategory = (kind: string) => {
+    setCollapsedCategories((prev) => ({
+      ...prev,
+      [kind]: !prev[kind]
+    }));
+  };
 
   return (
     <aside
@@ -249,92 +258,166 @@ export function Sidebar({
         })}
       </section>
 
+      {/* Hierarchical Artifacts Section grouped by type */}
       <section className="min-w-0" aria-labelledby="resources-heading">
-        <div className="mb-2.5 flex items-center gap-1.5">
-          <span className="material-symbols-outlined text-sm text-indigo-500" aria-hidden="true">
-            school
-          </span>
-          <h2
-            id="resources-heading"
-            className={`text-xs font-semibold ${isLight ? "text-slate-700" : "text-slate-300"}`}
-          >
-            Recursos de estudio
-          </h2>
+        <div className="mb-2.5 flex items-center justify-between gap-1.5">
+          <div className="flex items-center gap-1.5">
+            <span className="material-symbols-outlined text-sm text-indigo-500" aria-hidden="true">
+              folder_special
+            </span>
+            <h2
+              id="resources-heading"
+              className={`text-xs font-semibold ${isLight ? "text-slate-700" : "text-slate-300"}`}
+            >
+              Recursos de estudio
+            </h2>
+          </div>
+          {AsyncResult.match(artifacts, {
+            onInitial: () => null,
+            onFailure: () => null,
+            onSuccess: ({ value }) => (
+              <span className={`text-[11px] font-mono font-medium px-2 py-0.5 rounded-full ${
+                isLight ? "bg-slate-100 text-slate-600" : "bg-slate-800 text-slate-400"
+              }`}>
+                {value.artifacts.length}
+              </span>
+            )
+          })}
         </div>
 
         {AsyncResult.matchWithError(artifacts, {
           onInitial: () => (
-            <div className="grid gap-1.5" aria-label="Cargando recursos">
-              {[0, 1].map((item) => (
+            <div className="grid gap-2" aria-label="Cargando recursos">
+              {[0, 1, 2].map((item) => (
                 <div
                   key={item}
-                  className="ui-skeleton ui-skeleton--animated h-11 rounded-lg"
+                  className="ui-skeleton ui-skeleton--animated h-10 rounded-lg"
                 />
               ))}
             </div>
           ),
           onError: () => <SidebarLoadError message="No se pudieron cargar los recursos." onRetry={refreshArtifacts} isLight={isLight} />,
           onDefect: () => <SidebarLoadError message="No se pudieron cargar los recursos." onRetry={refreshArtifacts} isLight={isLight} />,
-          onSuccess: ({ value }) =>
-            value.artifacts.length === 0 ? (
-              <p className={`px-1 text-xs leading-relaxed ${isLight ? "text-slate-500" : "text-slate-400"}`}>
-                Crea una nota, un quiz o un simulacro desde el tutor.
-              </p>
-            ) : (
-              <ul className="grid min-w-0 gap-1">
-                {value.artifacts.map((artifact) => {
-                  const isSelected = selectedArtifactId === artifact.id;
-                  const metadata = getArtifactMetadata(artifact.kind);
+          onSuccess: ({ value }) => {
+            if (value.artifacts.length === 0) {
+              return (
+                <p className={`px-1 text-xs leading-relaxed ${isLight ? "text-slate-500" : "text-slate-400"}`}>
+                  Pide al tutor que genere notas, esquemas, quizzes o simulacros.
+                </p>
+              );
+            }
+
+            const categoriesConfig = [
+              {
+                kind: "note" as const,
+                label: "Notas y Esquemas",
+                icon: "description",
+                badgeClass: isLight ? "bg-indigo-50 text-indigo-700 border-indigo-200" : "bg-indigo-500/15 text-indigo-300 border-indigo-500/30",
+                iconColor: "text-indigo-500"
+              },
+              {
+                kind: "quiz" as const,
+                label: "Quizzes de Práctica",
+                icon: "quiz",
+                badgeClass: isLight ? "bg-purple-50 text-purple-700 border-purple-200" : "bg-purple-500/15 text-purple-300 border-purple-500/30",
+                iconColor: "text-purple-500"
+              },
+              {
+                kind: "test" as const,
+                label: "Simulacros de Examen",
+                icon: "timer",
+                badgeClass: isLight ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-emerald-500/15 text-emerald-300 border-emerald-500/30",
+                iconColor: "text-emerald-500"
+              }
+            ];
+
+            return (
+              <div className="flex flex-col gap-2.5">
+                {categoriesConfig.map((category) => {
+                  const items = value.artifacts.filter((a) => a.kind === category.kind);
+                  const isCollapsed = collapsedCategories[category.kind] ?? false;
 
                   return (
-                    <li key={artifact.id} className="min-w-0">
+                    <div key={category.kind} className="flex flex-col min-w-0">
+                      {/* Folder / Category Header Button */}
                       <button
-                        className={`flex w-full items-center gap-2.5 rounded-xl border px-2.5 py-2 text-left transition ${
-                          isSelected
-                            ? isLight
-                              ? "border-indigo-400 bg-indigo-50"
-                              : "border-indigo-500/60 bg-indigo-950/40"
-                            : isLight
-                            ? "border-transparent hover:border-slate-200 hover:bg-slate-50"
-                            : "border-transparent hover:border-slate-800 hover:bg-slate-900/60"
-                        }`}
                         type="button"
-                        onClick={() => onSelectArtifact(artifact.id)}
-                        aria-current={isSelected ? "page" : undefined}
-                        aria-label={`Abrir ${metadata.label.toLowerCase()}: ${artifact.title}`}
+                        onClick={() => toggleCategory(category.kind)}
+                        className={`flex w-full items-center justify-between gap-1.5 rounded-lg px-2 py-1.5 text-xs font-semibold transition ${
+                          isLight
+                            ? "text-slate-800 hover:bg-slate-100"
+                            : "text-slate-200 hover:bg-slate-800/70"
+                        }`}
+                        aria-expanded={!isCollapsed}
                       >
-                        <span
-                          className={`grid size-8 shrink-0 place-items-center rounded-lg ${
-                            isSelected
-                              ? "bg-indigo-600 text-white"
-                              : isLight
-                              ? "bg-slate-100 text-slate-600"
-                              : "bg-slate-900 text-slate-400"
-                          }`}
-                        >
-                          <span className="material-symbols-outlined text-base" aria-hidden="true">
-                            {metadata.icon}
-                          </span>
-                        </span>
-                        <span className="min-w-0 flex-1">
-                          <span className={`block text-[10px] font-medium ${isLight ? "text-slate-500" : "text-slate-400"}`}>
-                            {metadata.label}
-                          </span>
-                          <strong
-                            className={`block text-xs font-semibold leading-snug break-words line-clamp-2 ${
-                              isLight ? "text-slate-800" : "text-slate-100"
-                            }`}
-                            title={artifact.title}
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <span
+                            className="material-symbols-outlined text-[16px] text-slate-400 transition-transform duration-200"
+                            style={{ transform: isCollapsed ? "rotate(-90deg)" : "rotate(0deg)" }}
                           >
-                            {artifact.title}
-                          </strong>
+                            expand_more
+                          </span>
+                          <span className={`material-symbols-outlined text-[17px] ${category.iconColor}`}>
+                            {category.icon}
+                          </span>
+                          <span className="truncate">{category.label}</span>
+                        </div>
+                        <span className={`text-[10px] font-mono px-1.5 py-0.2 rounded-full border ${category.badgeClass}`}>
+                          {items.length}
                         </span>
                       </button>
-                    </li>
+
+                      {/* Folder Contents with left tree-guide line */}
+                      {!isCollapsed && (
+                        <div className="ml-3.5 mt-1 border-l-2 border-slate-200 dark:border-slate-800/80 pl-2 flex flex-col gap-1">
+                          {items.length === 0 ? (
+                            <p className="px-2 py-1 text-[11px] text-slate-400 dark:text-slate-500 italic">
+                              Sin recursos creados
+                            </p>
+                          ) : (
+                            items.map((artifact) => {
+                              const isSelected = selectedArtifactId === artifact.id;
+                              return (
+                                <button
+                                  key={artifact.id}
+                                  type="button"
+                                  onClick={() => onSelectArtifact(artifact.id)}
+                                  className={`group flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left transition ${
+                                    isSelected
+                                      ? isLight
+                                        ? "bg-indigo-50 border border-indigo-300/80 text-indigo-950 font-semibold shadow-xs"
+                                        : "bg-indigo-950/60 border border-indigo-500/50 text-indigo-100 font-semibold shadow-xs"
+                                      : isLight
+                                      ? "text-slate-700 hover:bg-slate-100 hover:text-slate-900 border border-transparent"
+                                      : "text-slate-300 hover:bg-slate-800/60 hover:text-slate-100 border border-transparent"
+                                  }`}
+                                  aria-current={isSelected ? "page" : undefined}
+                                  title={artifact.title}
+                                >
+                                  <span
+                                    className={`size-1.5 rounded-full shrink-0 ${
+                                      isSelected
+                                        ? "bg-indigo-600 dark:bg-indigo-400"
+                                        : isLight
+                                        ? "bg-slate-400 group-hover:bg-indigo-500"
+                                        : "bg-slate-600 group-hover:bg-indigo-400"
+                                    }`}
+                                  />
+                                  <span className="truncate text-xs flex-1 leading-snug">
+                                    {artifact.title}
+                                  </span>
+                                </button>
+                              );
+                            })
+                          )}
+                        </div>
+                      )}
+                    </div>
                   );
                 })}
-              </ul>
-            )
+              </div>
+            );
+          }
         })}
       </section>
     </aside>
@@ -349,7 +432,7 @@ function SidebarLoadError({
   readonly message: string;
   readonly onRetry: () => void;
   readonly isLight: boolean;
-}) {
+  }) {
   return (
     <div
       className={`rounded-lg border p-3 text-xs ${
@@ -363,15 +446,4 @@ function SidebarLoadError({
       </button>
     </div>
   );
-}
-
-function getArtifactMetadata(kind: "note" | "quiz" | "test") {
-  switch (kind) {
-    case "note":
-      return { icon: "description", label: "Nota" } as const;
-    case "quiz":
-      return { icon: "quiz", label: "Quiz" } as const;
-    case "test":
-      return { icon: "timer", label: "Simulacro" } as const;
-  }
 }
