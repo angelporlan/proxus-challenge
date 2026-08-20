@@ -38,7 +38,11 @@ interface ChatProps {
 type ChatItem =
   | { readonly kind: "user"; readonly message: AgentMessage & { readonly role: "user" } }
   | { readonly kind: "tools"; readonly items: readonly AgentMessage[] }
-  | { readonly kind: "assistant"; readonly message: AgentMessage & { readonly role: "assistant" } };
+  | {
+      readonly kind: "assistant";
+      readonly message: AgentMessage & { readonly role: "assistant" };
+      readonly associatedTools?: readonly AgentMessage[] | undefined;
+    };
 
 interface ParsedUserDoc {
   readonly id?: string | undefined;
@@ -464,7 +468,7 @@ export function Chat({
       for await (const event of streamTutorMessage({
         input: finalPrompt,
         messages,
-        maxSteps: 8
+        maxSteps: 14
       })) {
         if (event.type === "done") {
           continue;
@@ -521,10 +525,12 @@ export function Chat({
       } else if (msg.role === "tool-call" || msg.role === "tool-result") {
         currentTools.push(msg);
       } else if (msg.role === "assistant") {
+        const toolsForTurn = [...currentTools];
         flushTools();
         items.push({
           kind: "assistant",
-          message: msg as AgentMessage & { role: "assistant" }
+          message: msg as AgentMessage & { role: "assistant" },
+          associatedTools: toolsForTurn
         });
       }
     }
@@ -815,8 +821,20 @@ export function Chat({
                   {/* Interactive Artifact Cards (if artifacts were created/referenced) */}
                   {(() => {
                     const uuidRegex = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
-                    const matches = item.message.content.match(uuidRegex);
-                    const artifactIds = matches ? Array.from(new Set(matches)) : [];
+                    const textMatches = item.message.content.match(uuidRegex) ?? [];
+                    const toolMatches: string[] = [];
+                    if (item.associatedTools) {
+                      for (const t of item.associatedTools) {
+                        try {
+                          const str = JSON.stringify(t);
+                          const m = str.match(uuidRegex);
+                          if (m) toolMatches.push(...m);
+                        } catch {
+                          // ignore
+                        }
+                      }
+                    }
+                    const artifactIds = Array.from(new Set([...textMatches, ...toolMatches]));
                     if (artifactIds.length === 0) return null;
                     return (
                       <div className="flex flex-col gap-2.5 my-3">
