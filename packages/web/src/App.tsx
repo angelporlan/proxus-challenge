@@ -371,9 +371,12 @@ export function App() {
     openTutor(prompt);
   };
 
+  const cleanDocTitle = (raw: string) => raw.replace(/\.pdf$/i, "").replace(/[-_]/g, " ").trim();
+
   const handleAskAboutPage = (materialTitle: string, page: number) => {
+    const title = cleanDocTitle(materialTitle);
     openTutor(
-      `Explica los conceptos clave de la página ${page} del material "${materialTitle}". ` +
+      `Explica los conceptos clave de la página ${page} del material "${title}". ` +
         "Si hay fórmulas o ejemplos, desglósalos paso a paso."
     );
   };
@@ -384,13 +387,14 @@ export function App() {
     materialTitle: string,
     actionType: "explain" | "quiz" = "explain"
   ) => {
+    const title = cleanDocTitle(materialTitle);
     if (actionType === "quiz") {
       openTutor(
-        `Genera una pregunta tipo test de 4 opciones basada en este fragmento de la página ${page} de «${materialTitle}»:\n\n«${text}»`
+        `Genera una pregunta tipo test de 4 opciones basada en este fragmento de la página ${page} de «${title}»:\n\n«${text}»`
       );
     } else {
       openTutor(
-        `Explícame el siguiente fragmento de la página ${page} de «${materialTitle}»:\n\n«${text}»\n\nAclara conceptos clave y pon un ejemplo práctico si aplica.`
+        `Explícame el siguiente fragmento de la página ${page} de «${title}»:\n\n«${text}»\n\nAclara conceptos clave y pon un ejemplo práctico si aplica.`
       );
     }
   };

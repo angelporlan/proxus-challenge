@@ -1,5 +1,5 @@
 import { useAtomSet } from "@effect/atom-react";
-import type { MaterialPageImages, PageImage, PdfMaterial } from "@proxus/shared";
+import type { MaterialPageImages, PageImage, PdfMaterial, PdfWord } from "@proxus/shared";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { renderMaterialPagesAction } from "../domain/materials/atoms.ts";
 
@@ -229,7 +229,7 @@ export function PdfSplitViewer({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [handleNext, handlePrev]);
 
-  // Selection detection handler
+  // Selection detection handler with accurate word reconstruction and spaces
   const checkSelection = useCallback(() => {
     const sel = window.getSelection();
     if (!sel || sel.isCollapsed || sel.rangeCount === 0) {
@@ -237,37 +237,89 @@ export function PdfSplitViewer({
       return;
     }
 
-    const text = sel.toString().trim();
-    if (text.length < 2) {
-      setSelectionMenu(null);
-      return;
-    }
-
+    const range = sel.getRangeAt(0);
     const container = pageContainerRef.current;
     if (!container) return;
 
-    const range = sel.getRangeAt(0);
+    const contRect = container.getBoundingClientRect();
     const rect = range.getBoundingClientRect();
     if (rect.width === 0 || rect.height === 0) return;
 
     // Check if selection intersects page container
-    const contRect = container.getBoundingClientRect();
     if (
-      rect.bottom < contRect.top - 50 ||
-      rect.top > contRect.bottom + 50 ||
-      rect.right < contRect.left - 50 ||
-      rect.left > contRect.right + 50
+      rect.bottom < contRect.top - 20 ||
+      rect.top > contRect.bottom + 20 ||
+      rect.right < contRect.left - 20 ||
+      rect.left > contRect.right + 20
     ) {
       setSelectionMenu(null);
       return;
     }
 
+    // Extract exact words with spaces from intersected data-word-idx spans
+    const pageItem = loadedPages[currentPage] ?? pageCache.get(getCacheKey(material.id, currentPage));
+    const allWords = pageItem?.words;
+    let extractedText = "";
+
+    if (allWords && allWords.length > 0) {
+      const spans = Array.from(container.querySelectorAll<HTMLElement>("span[data-word-idx]"));
+      const matchedIndices: number[] = [];
+
+      for (const span of spans) {
+        if (range.intersectsNode(span)) {
+          const idxStr = span.getAttribute("data-word-idx");
+          if (idxStr !== null) {
+            matchedIndices.push(Number(idxStr));
+          }
+        }
+      }
+
+      if (matchedIndices.length > 0) {
+        matchedIndices.sort((a, b) => a - b);
+        let lastWord: PdfWord | null = null;
+        for (const idx of matchedIndices) {
+          const w = allWords[idx];
+          if (!w) continue;
+          if (lastWord) {
+            const lineHeight = Math.max(lastWord.yMax - lastWord.yMin, w.yMax - w.yMin, 10);
+            const isNewLine = w.yMin - lastWord.yMin > lineHeight * 0.75;
+            if (isNewLine) {
+              extractedText += "\n" + w.text;
+            } else {
+              extractedText += " " + w.text;
+            }
+          } else {
+            extractedText = w.text;
+          }
+          lastWord = w;
+        }
+      }
+    }
+
+    if (!extractedText) {
+      extractedText = sel.toString().trim();
+    }
+
+    extractedText = extractedText.trim();
+    if (extractedText.length < 2) {
+      setSelectionMenu(null);
+      return;
+    }
+
+    // Calculate safe screen coordinates constrained within viewport
+    const menuWidth = 320;
+    const padding = 16;
+    const centerX = rect.left + rect.width / 2;
+    const safeLeft = Math.max(menuWidth / 2 + padding, Math.min(window.innerWidth - menuWidth / 2 - padding, centerX));
+    const isNearTop = rect.top < 80;
+    const safeTop = isNearTop ? rect.bottom + 12 : rect.top - 12;
+
     setSelectionMenu({
-      text,
-      top: Math.max(15, rect.top - 12),
-      left: Math.max(80, Math.min(window.innerWidth - 80, rect.left + rect.width / 2))
+      text: extractedText,
+      top: safeTop,
+      left: safeLeft
     });
-  }, []);
+  }, [currentPage, loadedPages, material.id]);
 
   useEffect(() => {
     const handleMouseUp = () => {
@@ -327,6 +379,44 @@ export function PdfSplitViewer({
       const delta = e.deltaY < 0 ? 10 : -10;
       setZoom((z) => Math.max(40, Math.min(250, z + delta)));
     }
+  };
+
+  const renderTextLayer = (data: PageImage | undefined) => {
+    if (!data?.words || data.words.length === 0 || !data.dimensions) return null;
+
+    return (
+      <div
+        className="absolute inset-0 select-text overflow-hidden pointer-events-auto"
+        style={{ width: "100%", height: "100%" }}
+      >
+        {data.words.map((w, idx) => {
+          const left = (w.xMin / data.dimensions!.width) * 100;
+          const top = (w.yMin / data.dimensions!.height) * 100;
+          const width = ((w.xMax - w.xMin) / data.dimensions!.width) * 100;
+          const height = ((w.yMax - w.yMin) / data.dimensions!.height) * 100;
+
+          return (
+            <span
+              key={idx}
+              data-word-idx={idx}
+              data-word={w.text}
+              className="absolute select-text cursor-text leading-none text-transparent selection:bg-indigo-500/35 selection:text-transparent"
+              style={{
+                left: `${left}%`,
+                top: `${top}%`,
+                width: `${Math.max(width, 0.4)}%`,
+                height: `${Math.max(height, 1.2)}%`,
+                display: "inline-block",
+                userSelect: "text",
+                WebkitUserSelect: "text"
+              }}
+            >
+              {w.text}{" "}
+            </span>
+          );
+        })}
+      </div>
+    );
   };
 
   return (
@@ -444,10 +534,10 @@ export function PdfSplitViewer({
             position: "fixed",
             top: `${selectionMenu.top}px`,
             left: `${selectionMenu.left}px`,
-            transform: "translate(-50%, -100%)",
+            transform: selectionMenu.top < 80 ? "translate(-50%, 0)" : "translate(-50%, -100%)",
             zIndex: 9999
           }}
-          className="flex items-center gap-1 p-1.5 rounded-2xl bg-slate-900/95 dark:bg-slate-900/95 text-white shadow-2xl border border-slate-700/90 backdrop-blur-md animate-in fade-in zoom-in-95 duration-150 select-none"
+          className="flex items-center gap-1.5 p-1.5 rounded-2xl bg-slate-900/95 dark:bg-slate-900/95 text-white shadow-2xl border border-slate-700/90 backdrop-blur-md animate-in fade-in zoom-in-95 duration-150 select-none"
           onMouseDown={(e) => {
             // Prevent selection from clearing when clicking buttons
             e.stopPropagation();
@@ -574,39 +664,7 @@ export function PdfSplitViewer({
                       className="max-h-[calc(100vh-165px)] max-w-full w-auto object-contain block select-none pointer-events-none"
                     />
 
-                    {/* Interactive Text Layer */}
-                    {currentPageData?.words && currentPageData.words.length > 0 && currentPageData.dimensions && (
-                      <div
-                        className="absolute inset-0 select-text overflow-hidden"
-                        style={{ width: "100%", height: "100%" }}
-                      >
-                        {currentPageData.words.map((w, idx) => {
-                          const left = (w.xMin / currentPageData.dimensions!.width) * 100;
-                          const top = (w.yMin / currentPageData.dimensions!.height) * 100;
-                          const width = ((w.xMax - w.xMin) / currentPageData.dimensions!.width) * 100;
-                          const height = ((w.yMax - w.yMin) / currentPageData.dimensions!.height) * 100;
-
-                          return (
-                            <span
-                              key={idx}
-                              data-word={w.text}
-                              className="absolute select-text cursor-text leading-none text-transparent selection:bg-indigo-500/35 selection:text-transparent"
-                              style={{
-                                left: `${left}%`,
-                                top: `${top}%`,
-                                width: `${Math.max(width, 0.4)}%`,
-                                height: `${Math.max(height, 1.2)}%`,
-                                display: "inline-block",
-                                userSelect: "text",
-                                WebkitUserSelect: "text"
-                              }}
-                            >
-                              {w.text}{" "}
-                            </span>
-                          );
-                        })}
-                      </div>
-                    )}
+                    {renderTextLayer(currentPageData)}
                   </div>
                 </div>
               ) : fitMode === "fit-width" ? (
@@ -621,39 +679,7 @@ export function PdfSplitViewer({
                     className="w-full h-auto block select-none pointer-events-none"
                   />
 
-                  {/* Interactive Text Layer */}
-                  {currentPageData?.words && currentPageData.words.length > 0 && currentPageData.dimensions && (
-                    <div
-                      className="absolute inset-0 select-text overflow-hidden"
-                      style={{ width: "100%", height: "100%" }}
-                    >
-                      {currentPageData.words.map((w, idx) => {
-                        const left = (w.xMin / currentPageData.dimensions!.width) * 100;
-                        const top = (w.yMin / currentPageData.dimensions!.height) * 100;
-                        const width = ((w.xMax - w.xMin) / currentPageData.dimensions!.width) * 100;
-                        const height = ((w.yMax - w.yMin) / currentPageData.dimensions!.height) * 100;
-
-                        return (
-                          <span
-                            key={idx}
-                            data-word={w.text}
-                            className="absolute select-text cursor-text leading-none text-transparent selection:bg-indigo-500/35 selection:text-transparent"
-                            style={{
-                              left: `${left}%`,
-                              top: `${top}%`,
-                              width: `${Math.max(width, 0.4)}%`,
-                              height: `${Math.max(height, 1.2)}%`,
-                              display: "inline-block",
-                              userSelect: "text",
-                              WebkitUserSelect: "text"
-                            }}
-                          >
-                            {w.text}{" "}
-                          </span>
-                        );
-                      })}
-                    </div>
-                  )}
+                  {renderTextLayer(currentPageData)}
                 </div>
               ) : (
                 <div
@@ -671,39 +697,7 @@ export function PdfSplitViewer({
                     className="w-full h-auto block select-none pointer-events-none"
                   />
 
-                  {/* Interactive Text Layer */}
-                  {currentPageData?.words && currentPageData.words.length > 0 && currentPageData.dimensions && (
-                    <div
-                      className="absolute inset-0 select-text overflow-hidden"
-                      style={{ width: "100%", height: "100%" }}
-                    >
-                      {currentPageData.words.map((w, idx) => {
-                        const left = (w.xMin / currentPageData.dimensions!.width) * 100;
-                        const top = (w.yMin / currentPageData.dimensions!.height) * 100;
-                        const width = ((w.xMax - w.xMin) / currentPageData.dimensions!.width) * 100;
-                        const height = ((w.yMax - w.yMin) / currentPageData.dimensions!.height) * 100;
-
-                        return (
-                          <span
-                            key={idx}
-                            data-word={w.text}
-                            className="absolute select-text cursor-text leading-none text-transparent selection:bg-indigo-500/35 selection:text-transparent"
-                            style={{
-                              left: `${left}%`,
-                              top: `${top}%`,
-                              width: `${Math.max(width, 0.4)}%`,
-                              height: `${Math.max(height, 1.2)}%`,
-                              display: "inline-block",
-                              userSelect: "text",
-                              WebkitUserSelect: "text"
-                            }}
-                          >
-                            {w.text}{" "}
-                          </span>
-                        );
-                      })}
-                    </div>
-                  )}
+                  {renderTextLayer(currentPageData)}
                 </div>
               )}
             </div>
