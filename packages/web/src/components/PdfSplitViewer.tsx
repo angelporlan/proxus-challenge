@@ -1,6 +1,6 @@
 import { useAtomSet } from "@effect/atom-react";
 import type { MaterialPageImages, PdfMaterial } from "@proxus/shared";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { renderMaterialPagesAction } from "../domain/materials/atoms.ts";
 
 interface PdfSplitViewerProps {
@@ -8,6 +8,14 @@ interface PdfSplitViewerProps {
   readonly initialPage?: number | undefined;
   readonly onClose?: (() => void) | undefined;
   readonly onAskAboutPage?: ((materialTitle: string, page: number) => void) | undefined;
+}
+
+// Module-level cache to keep rendered page images across tab changes, renders and remounts
+const pageCache = new Map<string, string>();
+const inFlightRequests = new Map<string, Promise<void>>();
+
+function getCacheKey(materialId: string, page: number): string {
+  return `${materialId}::${page}`;
 }
 
 export function PdfSplitViewer({
@@ -18,92 +26,191 @@ export function PdfSplitViewer({
 }: PdfSplitViewerProps) {
   const [currentPage, setCurrentPage] = useState(initialPage);
   const [zoom, setZoom] = useState(100);
-  const [pageImages, setPageImages] = useState<Record<number, string>>({});
+  const [loadedPages, setLoadedPages] = useState<Record<number, string>>(() => {
+    const initial: Record<number, string> = {};
+    for (let p = 1; p <= material.pageCount; p++) {
+      const cached = pageCache.get(getCacheKey(material.id, p));
+      if (cached) {
+        initial[p] = cached;
+      }
+    }
+    return initial;
+  });
   const [loadingPage, setLoadingPage] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [retryKey, setRetryKey] = useState(0);
 
-  const renderPages = useAtomSet(renderMaterialPagesAction, { mode: "promise" });
+  const renderPagesAction = useAtomSet(renderMaterialPagesAction, { mode: "promise" });
+  const isMountedRef = useRef(true);
 
   useEffect(() => {
-    setCurrentPage(initialPage);
-    setPageImages({});
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  // Sync with initialPage if prop changes externally (e.g. from mind map or chat reference)
+  useEffect(() => {
+    if (initialPage >= 1 && initialPage <= material.pageCount) {
+      setCurrentPage(initialPage);
+    }
+  }, [initialPage, material.pageCount]);
+
+  // Load missing cached pages on material change
+  useEffect(() => {
+    const fromCache: Record<number, string> = {};
+    for (let p = 1; p <= material.pageCount; p++) {
+      const cached = pageCache.get(getCacheKey(material.id, p));
+      if (cached) {
+        fromCache[p] = cached;
+      }
+    }
+    setLoadedPages(fromCache);
     setError(null);
-    setZoom(100);
-  }, [initialPage, material.id]);
+  }, [material.id, material.pageCount]);
 
+  // Fetch a list of pages with deduplication
+  const fetchPagesBatch = useCallback(async (pagesToFetch: number[]): Promise<void> => {
+    const missing = pagesToFetch.filter((p) => !pageCache.has(getCacheKey(material.id, p)));
+    if (missing.length === 0) return;
+
+    // Filter out pages that are already in-flight
+    const needsRequest = missing.filter((p) => !inFlightRequests.has(getCacheKey(material.id, p)));
+
+    if (needsRequest.length > 0) {
+      const promise = (async () => {
+        try {
+          const response: MaterialPageImages = await renderPagesAction({
+            id: material.id,
+            pages: needsRequest
+          });
+
+          if (response.pages) {
+            const newlyLoaded: Record<number, string> = {};
+            for (const item of response.pages) {
+              if (item?.data) {
+                pageCache.set(getCacheKey(material.id, item.page), item.data);
+                newlyLoaded[item.page] = item.data;
+              }
+            }
+
+            if (isMountedRef.current) {
+              setLoadedPages((prev) => ({
+                ...prev,
+                ...newlyLoaded
+              }));
+            }
+          }
+        } catch (err) {
+          if (isMountedRef.current) {
+            setError("No se pudo cargar la página.");
+          }
+        } finally {
+          for (const p of needsRequest) {
+            inFlightRequests.delete(getCacheKey(material.id, p));
+          }
+        }
+      })();
+
+      for (const p of needsRequest) {
+        inFlightRequests.set(getCacheKey(material.id, p), promise);
+      }
+
+      await promise;
+    } else {
+      // Wait for existing in-flight promises
+      const existingPromises = missing
+        .map((p) => inFlightRequests.get(getCacheKey(material.id, p)))
+        .filter((p): p is Promise<void> => Boolean(p));
+
+      if (existingPromises.length > 0) {
+        await Promise.all(existingPromises);
+        if (isMountedRef.current) {
+          const updated: Record<number, string> = {};
+          for (const p of missing) {
+            const data = pageCache.get(getCacheKey(material.id, p));
+            if (data) updated[p] = data;
+          }
+          setLoadedPages((prev) => ({ ...prev, ...updated }));
+        }
+      }
+    }
+  }, [material.id, renderPagesAction]);
+
+  // Main page loader and intelligent preloader
   useEffect(() => {
-    let isCancelled = false;
+    let active = true;
 
-    const fetchPage = async (page: number) => {
-      if (pageImages[page]) {
+    const load = async () => {
+      const currentCache = pageCache.get(getCacheKey(material.id, currentPage));
+      if (!currentCache) {
+        setLoadingPage(true);
+        setError(null);
+        await fetchPagesBatch([currentPage]);
+        if (active && isMountedRef.current) {
+          setLoadingPage(false);
+        }
+      } else {
+        setLoadingPage(false);
+      }
+
+      // Background preload: preload all pages if small (<= 8 pages) or nearby pages if larger
+      if (active) {
+        if (material.pageCount <= 8) {
+          const allPages = Array.from({ length: material.pageCount }, (_, i) => i + 1);
+          void fetchPagesBatch(allPages);
+        } else {
+          const nearby: number[] = [];
+          if (currentPage + 1 <= material.pageCount) nearby.push(currentPage + 1);
+          if (currentPage + 2 <= material.pageCount) nearby.push(currentPage + 2);
+          if (currentPage - 1 >= 1) nearby.push(currentPage - 1);
+          if (nearby.length > 0) {
+            void fetchPagesBatch(nearby);
+          }
+        }
+      }
+    };
+
+    void load();
+
+    return () => {
+      active = false;
+    };
+  }, [currentPage, fetchPagesBatch, material.id, material.pageCount]);
+
+  const handlePrev = useCallback(() => {
+    setCurrentPage((p) => Math.max(1, p - 1));
+  }, []);
+
+  const handleNext = useCallback(() => {
+    setCurrentPage((p) => Math.min(material.pageCount, p + 1));
+  }, [material.pageCount]);
+
+  // Keyboard navigation for smooth reading
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignore if user is typing in an input, textarea or contenteditable
+      const target = e.target as HTMLElement | null;
+      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) {
         return;
       }
 
-      setLoadingPage(true);
-      setError(null);
-
-      try {
-        const response: MaterialPageImages = await renderPages({
-          id: material.id,
-          pages: [page]
-        });
-
-        if (!isCancelled && response.pages && response.pages.length > 0) {
-          const first = response.pages[0];
-          if (first) {
-            setPageImages((prev) => ({
-              ...prev,
-              [page]: first.data
-            }));
-          }
-        }
-      } catch (err) {
-        if (!isCancelled) {
-          setError("No se pudo preparar esta página.");
-        }
-      } finally {
-        if (!isCancelled) {
-          setLoadingPage(false);
-        }
+      if (e.key === "ArrowLeft" || e.key === "PageUp") {
+        e.preventDefault();
+        handlePrev();
+      } else if (e.key === "ArrowRight" || e.key === "PageDown") {
+        e.preventDefault();
+        handleNext();
       }
     };
 
-    void fetchPage(currentPage);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [handleNext, handlePrev]);
 
-    // Preload next page in background
-    if (currentPage < material.pageCount && !pageImages[currentPage + 1]) {
-      void renderPages({
-        id: material.id,
-        pages: [currentPage + 1]
-      }).then((res) => {
-        if (!isCancelled && res.pages && res.pages[0]) {
-          setPageImages((prev) => ({
-            ...prev,
-            [currentPage + 1]: res.pages[0]!.data
-          }));
-        }
-      }).catch(() => {});
-    }
-
-    return () => {
-      isCancelled = true;
-    };
-  }, [currentPage, material.id, retryKey]);
-
-  const handlePrev = () => {
-    if (currentPage > 1) {
-      setCurrentPage((p) => p - 1);
-    }
-  };
-
-  const handleNext = () => {
-    if (currentPage < material.pageCount) {
-      setCurrentPage((p) => p + 1);
-    }
-  };
-
-  const currentImage = pageImages[currentPage];
+  const currentImage = useMemo(() => {
+    return loadedPages[currentPage] ?? pageCache.get(getCacheKey(material.id, currentPage));
+  }, [currentPage, loadedPages, material.id]);
 
   return (
     <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 overflow-hidden">
@@ -134,7 +241,7 @@ export function PdfSplitViewer({
             >
               <span className="material-symbols-outlined text-sm">remove</span>
             </button>
-            <span className="px-2 text-xs font-mono text-slate-700 dark:text-slate-300">{zoom}%</span>
+            <span className="px-2 text-xs font-mono text-slate-700 dark:text-slate-300 min-w-[44px] text-center">{zoom}%</span>
             <button
               type="button"
               onClick={() => setZoom((z) => Math.min(200, z + 15))}
@@ -177,33 +284,43 @@ export function PdfSplitViewer({
       <div className="flex flex-1 min-h-0 overflow-hidden">
         {/* Thumbnails Sidebar */}
         <aside className="w-20 sm:w-28 shrink-0 border-r border-slate-200 dark:border-slate-800/80 bg-slate-100/60 dark:bg-slate-900/50 overflow-y-auto p-2 flex flex-col gap-2">
-          {Array.from({ length: material.pageCount }, (_, i) => i + 1).map((pageNum) => (
-            <button
-              key={pageNum}
-              type="button"
-              onClick={() => setCurrentPage(pageNum)}
-              aria-label={`Abrir página ${pageNum}`}
-              aria-current={currentPage === pageNum ? "page" : undefined}
-              className={`w-full text-center p-1.5 rounded-xl border transition flex flex-col items-center gap-1 ${
-                currentPage === pageNum
-                  ? "border-indigo-500 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 shadow-sm"
-                  : "border-slate-200 dark:border-slate-800/80 bg-white/70 dark:bg-slate-950/60 hover:border-slate-300 dark:hover:border-slate-700 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
-              }`}
-            >
-              <div className="w-full aspect-[3/4] rounded-lg bg-slate-100 dark:bg-slate-900 flex items-center justify-center border border-slate-200 dark:border-slate-800/60 overflow-hidden">
-                {pageImages[pageNum] ? (
-                  <img
-                    src={pageImages[pageNum]}
-                    alt={`Página ${pageNum}`}
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <span className="font-mono text-xs font-bold text-slate-400 dark:text-slate-500">{pageNum}</span>
-                )}
-              </div>
-              <span className="text-[10px] font-medium font-mono">Pág. {pageNum}</span>
-            </button>
-          ))}
+          {Array.from({ length: material.pageCount }, (_, i) => i + 1).map((pageNum) => {
+            const thumbImage = loadedPages[pageNum] ?? pageCache.get(getCacheKey(material.id, pageNum));
+            const isSelected = currentPage === pageNum;
+
+            return (
+              <button
+                key={pageNum}
+                type="button"
+                onClick={() => setCurrentPage(pageNum)}
+                aria-label={`Abrir página ${pageNum}`}
+                aria-current={isSelected ? "page" : undefined}
+                className={`w-full text-center p-1.5 rounded-xl border transition flex flex-col items-center gap-1 group ${
+                  isSelected
+                    ? "border-indigo-500 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 shadow-sm"
+                    : "border-slate-200 dark:border-slate-800/80 bg-white/70 dark:bg-slate-950/60 hover:border-slate-300 dark:hover:border-slate-700 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
+                }`}
+              >
+                <div className="w-full aspect-[3/4] rounded-lg bg-slate-100 dark:bg-slate-900 flex items-center justify-center border border-slate-200 dark:border-slate-800/60 overflow-hidden relative">
+                  {thumbImage ? (
+                    <img
+                      src={thumbImage}
+                      alt={`Página ${pageNum}`}
+                      className="w-full h-full object-cover select-none"
+                    />
+                  ) : (
+                    <div className="flex flex-col items-center justify-center gap-1">
+                      <span className="font-mono text-xs font-bold text-slate-400 dark:text-slate-500">{pageNum}</span>
+                      <span className="size-1 rounded-full bg-slate-300 dark:bg-slate-700 animate-pulse" />
+                    </div>
+                  )}
+                </div>
+                <span className={`text-[10px] font-medium font-mono ${isSelected ? "font-bold" : ""}`}>
+                  Pág. {pageNum}
+                </span>
+              </button>
+            );
+          })}
         </aside>
 
         {/* Center Page Canvas */}
@@ -215,7 +332,7 @@ export function PdfSplitViewer({
             </div>
           )}
 
-          {error && (
+          {error && !currentImage && (
             <div className="m-auto max-w-md rounded-xl border border-red-200 bg-red-50 p-5 text-center text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-200">
               <span className="material-symbols-outlined text-3xl text-red-500 mb-2">error</span>
               <p className="font-semibold text-sm mb-1">No se pudo cargar la página</p>
@@ -223,7 +340,10 @@ export function PdfSplitViewer({
               <button
                 type="button"
                 className="ui-secondary-action mt-4"
-                onClick={() => setRetryKey((current) => current + 1)}
+                onClick={() => {
+                  setError(null);
+                  void fetchPagesBatch([currentPage]);
+                }}
               >
                 Reintentar
               </button>
@@ -239,6 +359,7 @@ export function PdfSplitViewer({
               }}
             >
               <img
+                key={`${material.id}-${currentPage}`}
                 src={currentImage}
                 alt={`Página ${currentPage} - ${material.title}`}
                 className="w-full h-auto block select-none"
@@ -247,26 +368,26 @@ export function PdfSplitViewer({
           )}
 
           {/* Floating Navigation Controls */}
-          <div className="sticky bottom-4 mt-auto flex items-center gap-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 px-3 py-2 shadow-lg backdrop-blur">
+          <div className="sticky bottom-4 mt-auto flex items-center gap-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 px-3 py-2 shadow-lg backdrop-blur z-20">
             <button
               type="button"
               disabled={currentPage <= 1}
               onClick={handlePrev}
-              className="grid size-9 place-items-center rounded-lg text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-30 dark:text-slate-200 dark:hover:bg-slate-800"
-              title="Página anterior"
+              className="grid size-9 place-items-center rounded-lg text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-30 dark:text-slate-200 dark:hover:bg-slate-800 transition active:scale-95"
+              title="Página anterior (Flecha Izquierda)"
               aria-label="Página anterior"
             >
               <span className="material-symbols-outlined text-lg">chevron_left</span>
             </button>
-            <span className="text-xs font-mono px-2 text-slate-700 dark:text-slate-300">
+            <span className="text-xs font-mono px-2 text-slate-700 dark:text-slate-300 select-none">
               {currentPage} / {material.pageCount}
             </span>
             <button
               type="button"
               disabled={currentPage >= material.pageCount}
               onClick={handleNext}
-              className="grid size-9 place-items-center rounded-lg text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-30 dark:text-slate-200 dark:hover:bg-slate-800"
-              title="Página siguiente"
+              className="grid size-9 place-items-center rounded-lg text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-30 dark:text-slate-200 dark:hover:bg-slate-800 transition active:scale-95"
+              title="Página siguiente (Flecha Derecha)"
               aria-label="Página siguiente"
             >
               <span className="material-symbols-outlined text-lg">chevron_right</span>
