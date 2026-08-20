@@ -15,7 +15,7 @@ interface SidebarProps {
   readonly onAskTutor?: ((prompt: string) => void) | undefined;
   readonly onRequestUpload: () => void;
   readonly onRequestDelete: (material: PdfMaterial, trigger?: HTMLButtonElement) => void;
-  readonly onRequestDeleteArtifact?: ((artifact: { readonly id: string; readonly title: string; readonly kind: "note" | "quiz" | "test" }) => void) | undefined;
+  readonly onRequestDeleteArtifact?: ((artifact: { readonly id: string; readonly title: string; readonly kind: "note" | "quiz" | "test" }, trigger?: HTMLButtonElement) => void) | undefined;
   readonly deletingMaterialId?: string | null | undefined;
   readonly recentlyUploadedId?: string | null | undefined;
   readonly theme?: "dark" | "light" | undefined;
@@ -454,7 +454,7 @@ export function Sidebar({
                                       type="button"
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        onRequestDeleteArtifact(artifact);
+                                        onRequestDeleteArtifact(artifact, e.currentTarget);
                                       }}
                                       className={`absolute right-1 top-1/2 -translate-y-1/2 grid size-6 place-items-center rounded-md text-slate-400 hover:text-red-500 hover:bg-red-500/10 transition opacity-0 group-hover:opacity-100 focus:opacity-100 ${
                                         isLight ? "bg-white/90 shadow-xs" : "bg-slate-900/90 shadow-xs"

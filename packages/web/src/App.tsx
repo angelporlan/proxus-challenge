@@ -16,6 +16,7 @@ import { ArtifactWorkspace } from "./components/ArtifactWorkspace.tsx";
 import { Chat } from "./components/Chat.tsx";
 import { DocumentUploadModal } from "./components/DocumentUploadModal.tsx";
 import { MaterialDeleteDialog } from "./components/MaterialDeleteDialog.tsx";
+import { ArtifactDeleteDialog } from "./components/ArtifactDeleteDialog.tsx";
 import { MindMapViewer } from "./components/MindMapViewer.tsx";
 import { OnboardingUpload } from "./components/OnboardingUpload.tsx";
 import { PdfSplitViewer } from "./components/PdfSplitViewer.tsx";
@@ -288,16 +289,54 @@ export function App() {
 
   const deleteArtifact = useAtomSet(deleteArtifactAction, { mode: "promise" });
 
-  const handleDeleteArtifact = async (artifact: { readonly id: string; readonly title: string; readonly kind: "note" | "quiz" | "test" }) => {
+  const [pendingArtifactDeletion, setPendingArtifactDeletion] = useState<{
+    readonly id: string;
+    readonly title: string;
+    readonly kind: "note" | "quiz" | "test";
+  } | null>(null);
+  const [isDeletingArtifact, setIsDeletingArtifact] = useState(false);
+  const [artifactDeleteError, setArtifactDeleteError] = useState<string | null>(null);
+  const artifactDeleteTriggerRef = useRef<HTMLButtonElement | null>(null);
+
+  const requestDeleteArtifact = (
+    artifact: { readonly id: string; readonly title: string; readonly kind: "note" | "quiz" | "test" },
+    trigger?: HTMLButtonElement
+  ) => {
+    artifactDeleteTriggerRef.current = trigger ?? null;
+    setArtifactDeleteError(null);
+    setPendingArtifactDeletion(artifact);
+  };
+
+  const cancelDeleteArtifact = () => {
+    if (isDeletingArtifact) return;
+    const trigger = artifactDeleteTriggerRef.current;
+    setPendingArtifactDeletion(null);
+    setArtifactDeleteError(null);
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (trigger?.isConnected) trigger.focus();
+      });
+    });
+  };
+
+  const confirmDeleteArtifact = async () => {
+    if (!pendingArtifactDeletion || isDeletingArtifact) return;
+    const artifact = pendingArtifactDeletion;
+    setIsDeletingArtifact(true);
+    setArtifactDeleteError(null);
+
     try {
       await deleteArtifact(artifact.id);
       if (selectedArtifactId === artifact.id) {
         setSelectedArtifactId(null);
         setActiveTab("workspace");
       }
+      setPendingArtifactDeletion(null);
       notify({ tone: "success", title: "Recurso de estudio eliminado" });
     } catch {
-      notify({ tone: "error", title: "No se pudo eliminar el recurso" });
+      setArtifactDeleteError("No se pudo eliminar el recurso. Comprueba la conexión e inténtalo de nuevo.");
+    } finally {
+      setIsDeletingArtifact(false);
     }
   };
 
@@ -414,7 +453,7 @@ export function App() {
           onAskTutor={(prompt) => openTutor(prompt)}
           onRequestUpload={() => setIsUploadOpen(true)}
           onRequestDelete={requestDelete}
-          onRequestDeleteArtifact={handleDeleteArtifact}
+          onRequestDeleteArtifact={requestDeleteArtifact}
           deletingMaterialId={isDeleting ? pendingDeletion?.id ?? null : null}
           recentlyUploadedId={recentlyUploadedId}
           theme={theme}
@@ -610,6 +649,14 @@ export function App() {
         error={deleteError}
         onCancel={cancelDelete}
         onConfirm={() => void confirmDelete()}
+      />
+
+      <ArtifactDeleteDialog
+        artifact={pendingArtifactDeletion}
+        isDeleting={isDeletingArtifact}
+        error={artifactDeleteError}
+        onCancel={cancelDeleteArtifact}
+        onConfirm={() => void confirmDeleteArtifact()}
       />
     </div>
   );
