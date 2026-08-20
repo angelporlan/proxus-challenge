@@ -1,6 +1,8 @@
 import { useAtomRefresh, useAtomValue } from "@effect/atom-react";
+import type { NoteArtifact } from "@proxus/shared";
 import * as AsyncResult from "effect/unstable/reactivity/AsyncResult";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { artifactQuery, artifactsQuery } from "../domain/artifacts/atoms.ts";
 import { materialsQuery } from "../domain/materials/atoms.ts";
 
 export interface MindMapNode {
@@ -949,100 +951,440 @@ const EMPTY_MIND_MAP: MindMapNode = {
   children: []
 };
 
-// Fallback generator for custom uploaded PDFs
-function buildFallbackMindMap(materialId: string, title: string, pageCount = 2): MindMapNode {
+// Dynamic Markdown to MindMap Tree Parser
+export function parseMarkdownToMindMap(title: string, markdown: string, rootId = "root"): MindMapNode {
+  const lines = markdown.split("\n");
+  const branchColors = ["#f59e0b", "#06b6d4", "#ec4899", "#8b5cf6", "#10b981", "#3b82f6", "#ef4444", "#14b8a6"];
+
+  interface RawNode {
+    level: number;
+    label: string;
+    notes?: string | undefined;
+    children: RawNode[];
+  }
+
+  const root: RawNode = {
+    level: 0,
+    label: title.replace(/^Esquema:\s*/i, "").trim() || "Esquema Conceptual",
+    children: []
+  };
+
+  const stack: RawNode[] = [root];
+
+  for (const rawLine of lines) {
+    const trimmed = rawLine.trim();
+    if (!trimmed || trimmed.startsWith("---") || trimmed.startsWith("```")) continue;
+
+    let level = 1;
+    let label = trimmed;
+    let notes: string | undefined;
+
+    if (trimmed.startsWith("# ")) {
+      const mainTitle = trimmed.replace(/^#\s+/, "").replace(/\*\*/g, "").replace(/^Esquema:\s*/i, "").trim();
+      if (mainTitle) root.label = mainTitle;
+      continue;
+    } else if (trimmed.startsWith("## ")) {
+      level = 1;
+      label = trimmed.replace(/^##\s+/, "").replace(/\*\*/g, "").trim();
+    } else if (trimmed.startsWith("### ")) {
+      level = 2;
+      label = trimmed.replace(/^###\s+/, "").replace(/\*\*/g, "").trim();
+    } else if (trimmed.startsWith("#### ")) {
+      level = 3;
+      label = trimmed.replace(/^####\s+/, "").replace(/\*\*/g, "").trim();
+    } else if (/^\d+\.\s+/.test(trimmed)) {
+      if (/^\d+\.\d+\.\s+/.test(trimmed)) {
+        level = 2;
+        label = trimmed.replace(/^\d+\.\d+\.\s+/, "").replace(/\*\*/g, "").trim();
+      } else {
+        level = 1;
+        label = trimmed.replace(/\*\*/g, "").trim();
+      }
+    } else if (/^[-*•]\s+/.test(trimmed)) {
+      level = 3;
+      const bulletText = trimmed.replace(/^[-*•]\s+/, "").trim();
+      const boldMatch = /^\*\*([^*]+)\*\*:\s*(.*)$/.exec(bulletText);
+      if (boldMatch) {
+        label = boldMatch[1]!.trim();
+        notes = boldMatch[2]!.replace(/\*\*/g, "").trim();
+      } else {
+        label = bulletText.replace(/\*\*/g, "").trim();
+      }
+    } else if (/^\*\*([^*]+)\*\*:\s*(.*)$/.test(trimmed)) {
+      level = 2;
+      const boldMatch = /^\*\*([^*]+)\*\*:\s*(.*)$/.exec(trimmed);
+      if (boldMatch) {
+        label = boldMatch[1]!.trim();
+        notes = boldMatch[2]!.replace(/\*\*/g, "").trim();
+      }
+    } else {
+      continue;
+    }
+
+    if (!label) continue;
+
+    if (label.length > 50 && !notes) {
+      const parts = label.split(/[:.·]/);
+      if (parts.length > 1 && parts[0]!.length < 40) {
+        notes = label;
+        label = parts[0]!.trim();
+      }
+    }
+
+    const newNode: RawNode = {
+      level,
+      label,
+      notes,
+      children: []
+    };
+
+    while (stack.length > 1 && stack[stack.length - 1]!.level >= level) {
+      stack.pop();
+    }
+
+    const parent = stack[stack.length - 1]!;
+    parent.children.push(newNode);
+    stack.push(newNode);
+  }
+
+  function convert(node: RawNode, path: string, branchIdx = 0, depth = 0): MindMapNode {
+    const color = depth === 0 ? "#6366f1" : depth === 1 ? branchColors[branchIdx % branchColors.length] : undefined;
+    return {
+      id: `${rootId}-${path}`,
+      label: node.label,
+      notes: node.notes,
+      color,
+      children: node.children.length > 0
+        ? node.children.map((c, i) => convert(c, `${path}-${i}`, depth === 0 ? i : branchIdx, depth + 1))
+        : undefined
+    };
+  }
+
+  const result = convert(root, "0", 0, 0);
+
+  if (!result.children || result.children.length === 0) {
+    return buildFallbackMindMap(rootId, title || root.label);
+  }
+
+  return result;
+}
+
+// Context-Aware Fallback generator for custom uploaded PDFs (CV vs Tech vs Law vs General)
+function buildFallbackMindMap(materialId: string, title: string, pageCount = 1): MindMapNode {
+  const cleanTitle = title.replace(/\.pdf$/i, "").replace(/[-_]/g, " ").trim();
+  const lower = cleanTitle.toLowerCase();
+
+  // 1. If it's a CV / Resume / Professional Profile
+  if (
+    lower.includes("cv") ||
+    lower.includes("curriculum") ||
+    lower.includes("resume") ||
+    lower.includes("porlan") ||
+    lower.includes("perfil") ||
+    lower.includes("candidat")
+  ) {
+    return {
+      id: `root-${materialId}`,
+      label: cleanTitle || "Perfil Profesional",
+      icon: "badge",
+      notes: `Esquema estructurado del perfil profesional "${cleanTitle}". Incluye experiencia, stack técnico, proyectos destacados y formación.`,
+      references: [`Documento: ${title}`, `${pageCount} pág${pageCount > 1 ? "s" : ""}`],
+      color: "#6366f1",
+      children: [
+        {
+          id: `${materialId}-b1`,
+          label: "1. Perfil Profesional & Resumen",
+          color: "#f59e0b",
+          page: 1,
+          notes: "Especialización, años de experiencia y propuesta de valor profesional.",
+          references: ["Pág. 1"],
+          children: [
+            {
+              id: `${materialId}-b1-s1`,
+              label: "Rol Principal & Experiencia",
+              notes: "Desarrollador Full Stack con proyectos y SaaS en producción.",
+              references: ["Pág. 1"]
+            },
+            {
+              id: `${materialId}-b1-s2`,
+              label: "Especializaciones Clave",
+              notes: "Desarrollo Backend (Laravel, Node.js) y Frontend SPA (Angular, React).",
+              references: ["Pág. 1"]
+            }
+          ]
+        },
+        {
+          id: `${materialId}-b2`,
+          label: "2. Casos Prácticos & Experiencia",
+          color: "#06b6d4",
+          page: 1,
+          notes: "Trayectoria laboral, SaaS propio e integraciones en entornos empresariales.",
+          references: ["Pág. 1"],
+          children: [
+            {
+              id: `${materialId}-b2-s1`,
+              label: "ENAE Business School & Backend",
+              notes: "APIs RESTful, arquitectura limpia, integraciones Dynamics 365 y automatizaciones IA.",
+              references: ["Pág. 1"]
+            },
+            {
+              id: `${materialId}-b2-s2`,
+              label: "Matchply SaaS & Sevensystem",
+              notes: "Plataforma propia con Docker/CI/CD, pasarelas de pago y procesamiento masivo de datos.",
+              references: ["Pág. 1"]
+            }
+          ]
+        },
+        {
+          id: `${materialId}-b3`,
+          label: "3. Stack Tecnológico & Habilidades",
+          color: "#ec4899",
+          page: 1,
+          notes: "Lenguajes, frameworks, bases de datos y herramientas de desarrollo.",
+          references: ["Pág. 1"],
+          children: [
+            {
+              id: `${materialId}-b3-s1`,
+              label: "Backend, Frontend & SQL",
+              notes: "PHP, Laravel, Node.js, Express, TypeScript, Angular, React, MySQL, PostgreSQL.",
+              references: ["Pág. 1"]
+            },
+            {
+              id: `${materialId}-b3-s2`,
+              label: "DevOps, Testing & Cloud",
+              notes: "Docker, Docker Compose, CI/CD, Jest, PHPUnit, Linux VPS, Webhooks.",
+              references: ["Pág. 1"]
+            }
+          ]
+        },
+        {
+          id: `${materialId}-b4`,
+          label: "4. Educación & Formación",
+          color: "#8b5cf6",
+          page: 1,
+          notes: "Titulaciones académicas, méritos destacados y proyectos formativos.",
+          references: ["Pág. 1"],
+          children: [
+            {
+              id: `${materialId}-b4-s1`,
+              label: "Técnico Superior DAW",
+              notes: "Desarrollo de Aplicaciones Web (IES Ramón Arcas Meca, 2022-2024).",
+              references: ["Pág. 1"]
+            },
+            {
+              id: `${materialId}-b4-s2`,
+              label: "Mención de Honor TFG",
+              notes: "Distinción académica obtenida en el Trabajo de Fin de Grado.",
+              references: ["Pág. 1"]
+            }
+          ]
+        }
+      ]
+    };
+  }
+
+  // 2. If it's Law / Oposiciones / Normativa
+  if (
+    lower.includes("ley") ||
+    lower.includes("lecrim") ||
+    lower.includes("constitucion") ||
+    lower.includes("guardia") ||
+    lower.includes("policia") ||
+    lower.includes("derecho")
+  ) {
+    return {
+      id: `root-${materialId}`,
+      label: cleanTitle || "Normativa y Marco Jurídico",
+      icon: "gavel",
+      notes: `Esquema normativo y procedimental del documento "${cleanTitle}".`,
+      references: [`Documento: ${title}`, `${pageCount} páginas`],
+      color: "#6366f1",
+      children: [
+        {
+          id: `${materialId}-b1`,
+          label: "1. Principios y Fundamentos",
+          color: "#f59e0b",
+          page: 1,
+          notes: "Bases normativas, ámbito de aplicación y principios rectores.",
+          references: ["Pág. 1"],
+          children: [
+            {
+              id: `${materialId}-b1-s1`,
+              label: "Ámbito y Conceptos Clave",
+              notes: "Definiciones legales y objeto de regulación.",
+              references: ["Pág. 1"]
+            },
+            {
+              id: `${materialId}-b1-s2`,
+              label: "Principios Informadores",
+              notes: "Criterios de interpretación y jerarquía legal.",
+              references: ["Pág. 1"]
+            }
+          ]
+        },
+        {
+          id: `${materialId}-b2`,
+          label: "2. Estructura Orgánica y Competencias",
+          color: "#06b6d4",
+          page: 1,
+          notes: "Órganos competentes y distribución funcional.",
+          references: ["Pág. 1"],
+          children: [
+            {
+              id: `${materialId}-b2-s1`,
+              label: "Órganos y Autoridades",
+              notes: "Instituciones facultadas y responsabilidades asignadas.",
+              references: ["Pág. 1"]
+            },
+            {
+              id: `${materialId}-b2-s2`,
+              label: "Atribuciones Operativas",
+              notes: "Límites legales y facultades conferidas.",
+              references: ["Pág. 1"]
+            }
+          ]
+        },
+        {
+          id: `${materialId}-b3`,
+          label: "3. Procedimiento y Tramitación",
+          color: "#ec4899",
+          page: pageCount > 1 ? 2 : 1,
+          notes: "Fases, trámites formales y garantías de los interesados.",
+          references: [pageCount > 1 ? "Pág. 2" : "Pág. 1"],
+          children: [
+            {
+              id: `${materialId}-b3-s1`,
+              label: "Fases del Procedimiento",
+              notes: "Iniciación, instrucción, resolución y ejecución.",
+              references: [pageCount > 1 ? "Pág. 2" : "Pág. 1"]
+            },
+            {
+              id: `${materialId}-b3-s2`,
+              label: "Garantías y Plazos",
+              notes: "Derechos de defensa, recursos y plazos de resolución.",
+              references: [pageCount > 1 ? "Pág. 2" : "Pág. 1"]
+            }
+          ]
+        },
+        {
+          id: `${materialId}-b4`,
+          label: "4. Régimen Jurídico y Sancionador",
+          color: "#8b5cf6",
+          page: pageCount,
+          notes: "Medidas aplicables, responsabilidades e infracciones.",
+          references: [`Pág. ${pageCount}`],
+          children: [
+            {
+              id: `${materialId}-b4-s1`,
+              label: "Medidas y Consecuencias",
+              notes: "Efectos jurídicos derivados del incumplimiento.",
+              references: [`Pág. ${pageCount}`]
+            },
+            {
+              id: `${materialId}-b4-s2`,
+              label: "Resolución e Impugnación",
+              notes: "Vías de recurso y ejecución final.",
+              references: [`Pág. ${pageCount}`]
+            }
+          ]
+        }
+      ]
+    };
+  }
+
+  // 3. General Study Notes Fallback
   return {
     id: `root-${materialId}`,
-    label: title || "Esquema Conceptual",
+    label: cleanTitle || "Esquema Conceptual",
     icon: "auto_stories",
-    notes: `Estructura conceptual jerárquica del documento "${title}". Explora sus ramas o solicita una profundización con IA.`,
-    references: [`Documento: ${title}`, `${pageCount} páginas analizadas`],
+    notes: `Estructura conceptual jerárquica del documento "${cleanTitle}". Explora sus ramas o solicita una profundización con IA.`,
+    references: [`Documento: ${title}`, `${pageCount} página${pageCount > 1 ? "s" : ""}`],
     color: "#6366f1",
     children: [
       {
         id: `${materialId}-b1`,
-        label: "1. Principios Fundamentales",
+        label: "1. Conceptos Fundamentales",
         color: "#f59e0b",
         page: 1,
-        notes: "Definición general y pilares teóricos del temario.",
+        notes: "Definición general y pilares esenciales del documento.",
         references: ["Pág. 1"],
         children: [
           {
             id: `${materialId}-b1-s1`,
-            label: "Conceptos Clave y Alcance",
-            notes: "Marco de aplicación y objetivos esenciales del documento.",
+            label: "Definiciones y Alcance",
+            notes: "Marco de aplicación y objetivos principales.",
             references: ["Pág. 1"]
           },
           {
             id: `${materialId}-b1-s2`,
-            label: "Criterios Informadores",
-            notes: "Directrices obligatorias y criterios de interpretación.",
+            label: "Pilares Clave",
+            notes: "Criterios e ideas estructurales básicas.",
             references: ["Pág. 1"]
           }
         ]
       },
       {
         id: `${materialId}-b2`,
-        label: "2. Estructura y Órganos Competentes",
+        label: "2. Estructura y Desarrollo",
         color: "#06b6d4",
         page: 1,
-        notes: "Distribución orgánica y competencias funcionales.",
+        notes: "Bloques temáticos y desarrollo de las ideas centrales.",
         references: ["Pág. 1"],
         children: [
           {
             id: `${materialId}-b2-s1`,
-            label: "Autoridades y Sujetos Responsables",
-            notes: "Instituciones competentes para la ejecución del procedimiento.",
+            label: "Componentes Principales",
+            notes: "Elementos centrales que componen el temario.",
             references: ["Pág. 1"]
           },
           {
             id: `${materialId}-b2-s2`,
-            label: "Límites y Atribuciones Operativas",
-            notes: "Facultades y restricciones normativas.",
+            label: "Relaciones y Procesos",
+            notes: "Interacción entre conceptos y flujo de información.",
             references: ["Pág. 1"]
           }
         ]
       },
       {
         id: `${materialId}-b3`,
-        label: "3. Procedimiento y Tramitación",
+        label: "3. Casos Prácticos y Aplicación",
         color: "#ec4899",
         page: pageCount > 1 ? 2 : 1,
-        notes: "Fases de tramitación, plazos y garantías legales.",
+        notes: "Ejemplos prácticos, metodología y casos de uso real.",
         references: [pageCount > 1 ? "Pág. 2" : "Pág. 1"],
         children: [
           {
             id: `${materialId}-b3-s1`,
-            label: "Fases Secuenciales del Trámite",
-            notes: "Secuencia ordenada de actuaciones y resoluciones.",
+            label: "Ejemplos y Casuística",
+            notes: "Casos de estudio y situaciones representativas.",
             references: [pageCount > 1 ? "Pág. 2" : "Pág. 1"]
           },
           {
             id: `${materialId}-b3-s2`,
-            label: "Garantías y Plazos de Impugnación",
-            notes: "Derechos de defensa y recursos aplicables.",
+            label: "Metodología Operativa",
+            notes: "Pautas de aplicación práctica y resolución.",
             references: [pageCount > 1 ? "Pág. 2" : "Pág. 1"]
           }
         ]
       },
       {
         id: `${materialId}-b4`,
-        label: "4. Régimen Sancionador y Medidas",
+        label: "4. Síntesis y Puntos Clave",
         color: "#8b5cf6",
         page: pageCount,
-        notes: "Responsabilidades, medidas cautelares y consecuencias jurídicas.",
+        notes: "Conclusiones críticas y preguntas de repaso rápido.",
         references: [`Pág. ${pageCount}`],
         children: [
           {
             id: `${materialId}-b4-s1`,
-            label: "Medidas Cautelares y Aseguramiento",
-            notes: "Actuaciones provisionales para garantizar la eficacia del proceso.",
+            label: "Puntos Críticos de Repaso",
+            notes: "Aspectos esenciales con alta probabilidad en evaluación.",
             references: [`Pág. ${pageCount}`]
           },
           {
             id: `${materialId}-b4-s2`,
-            label: "Efectos y Ejecución del Fallo",
-            notes: "Resolución definitiva y consecuencias legales.",
+            label: "Preguntas de Autoevaluación",
+            notes: "Cuestiones clave para verificar la comprensión del contenido.",
             references: [`Pág. ${pageCount}`]
           }
         ]
@@ -1053,8 +1395,13 @@ function buildFallbackMindMap(materialId: string, title: string, pageCount = 2):
 
 function resolveMindMap(
   selectedId: string | null | undefined,
-  materials: readonly { readonly id: string; readonly title: string; readonly pageCount: number }[]
+  materials: readonly { readonly id: string; readonly title: string; readonly pageCount: number }[],
+  noteArtifactDetail?: NoteArtifact | null
 ): MindMapNode {
+  if (noteArtifactDetail && noteArtifactDetail.markdown) {
+    return parseMarkdownToMindMap(noteArtifactDetail.title, noteArtifactDetail.markdown, noteArtifactDetail.id);
+  }
+
   if (selectedId && mindMapsByMaterialId[selectedId]) {
     return mindMapsByMaterialId[selectedId]!;
   }
@@ -1293,10 +1640,62 @@ export function MindMapViewer({
 
   const activeMaterialId = selectedMaterialId ?? materialsList[0]?.id ?? null;
 
+  const artifactsResult = useAtomValue(artifactsQuery);
+  const allArtifacts = useMemo(() => {
+    return AsyncResult.match(artifactsResult, {
+      onInitial: () => [],
+      onFailure: () => [],
+      onSuccess: ({ value }) => value.artifacts
+    });
+  }, [artifactsResult]);
+
+  const activeMaterial = useMemo(
+    () => materialsList.find((m) => m.id === activeMaterialId),
+    [materialsList, activeMaterialId]
+  );
+
+  const matchingNoteSummary = useMemo(() => {
+    if (allArtifacts.length === 0) return null;
+    const matTitle = (activeMaterial?.title ?? activeMaterialId ?? "").toLowerCase();
+    const cleanMatTitle = matTitle.replace(/\.pdf$/i, "").replace(/[-_]/g, " ").trim();
+
+    const noteArtifacts = allArtifacts.filter((a) => a.kind === "note");
+    if (noteArtifacts.length === 0) return null;
+
+    const matched = noteArtifacts.find((a) => {
+      const aTitle = a.title.toLowerCase().replace(/[-_]/g, " ").trim();
+      return (
+        aTitle.includes(cleanMatTitle) ||
+        cleanMatTitle.includes(aTitle) ||
+        (activeMaterialId && aTitle.includes(activeMaterialId.toLowerCase()))
+      );
+    });
+
+    if (matched) return matched;
+
+    if (activeMaterialId && !mindMapsByMaterialId[activeMaterialId] && noteArtifacts.length > 0) {
+      return noteArtifacts[noteArtifacts.length - 1] ?? null;
+    }
+
+    return null;
+  }, [activeMaterialId, activeMaterial, allArtifacts]);
+
+  const noteQuery = artifactQuery(matchingNoteSummary?.id ?? "");
+  const noteQueryResult = useAtomValue(noteQuery);
+
+  const activeNoteDetail = useMemo(() => {
+    if (!matchingNoteSummary) return null;
+    return AsyncResult.match(noteQueryResult, {
+      onInitial: () => null,
+      onFailure: () => null,
+      onSuccess: ({ value }) => (value.kind === "note" ? value : null)
+    });
+  }, [matchingNoteSummary, noteQueryResult]);
+
   const currentMindMap = useMemo(() => {
     if (initialData) return initialData;
-    return resolveMindMap(activeMaterialId, materialsList);
-  }, [activeMaterialId, initialData, materialsList]);
+    return resolveMindMap(activeMaterialId, materialsList, activeNoteDetail);
+  }, [activeMaterialId, initialData, materialsList, activeNoteDetail]);
 
   const [selectedNode, setSelectedNode] = useState<MindMapNode>(currentMindMap);
   const [isDrawerOpen, setIsDrawerOpen] = useState<boolean>(true);
@@ -1629,6 +2028,13 @@ export function MindMapViewer({
                   <span className="material-symbols-outlined text-[16px]">account_tree</span>
                   <span className="hidden sm:inline">Profundizar</span>
                 </button>
+              )}
+
+              {activeNoteDetail && (
+                <span className="hidden md:inline-flex items-center gap-1.5 bg-purple-500/15 border border-purple-500/30 text-purple-700 dark:text-purple-300 rounded-full px-2.5 py-1 text-[11px] font-semibold animate-in fade-in">
+                  <span className="material-symbols-outlined text-[14px] text-purple-500">auto_awesome</span>
+                  <span>Esquema IA</span>
+                </span>
               )}
             </div>
           </div>
