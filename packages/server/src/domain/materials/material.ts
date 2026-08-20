@@ -8,10 +8,25 @@ export interface PdfMaterial {
   readonly uploadedAt: string;
 }
 
+export interface PdfWord {
+  readonly xMin: number;
+  readonly yMin: number;
+  readonly xMax: number;
+  readonly yMax: number;
+  readonly text: string;
+}
+
+export interface PageDimensions {
+  readonly width: number;
+  readonly height: number;
+}
+
 export interface PageImage {
   readonly page: number;
   readonly mediaType: "image/png";
   readonly data: string;
+  readonly dimensions?: PageDimensions | undefined;
+  readonly words?: readonly PdfWord[] | undefined;
 }
 
 export interface MaterialPageImages {

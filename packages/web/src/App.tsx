@@ -378,6 +378,23 @@ export function App() {
     );
   };
 
+  const handleAskAboutSelection = (
+    text: string,
+    page: number,
+    materialTitle: string,
+    actionType: "explain" | "quiz" = "explain"
+  ) => {
+    if (actionType === "quiz") {
+      openTutor(
+        `Genera una pregunta tipo test de 4 opciones basada en este fragmento de la página ${page} de «${materialTitle}»:\n\n«${text}»`
+      );
+    } else {
+      openTutor(
+        `Explícame el siguiente fragmento de la página ${page} de «${materialTitle}»:\n\n«${text}»\n\nAclara conceptos clave y pon un ejemplo práctico si aplica.`
+      );
+    }
+  };
+
   const changeTab = (tab: ActiveTab) => {
     if (tab === "pdf" && !hasMaterials) return;
     setActiveTab(tab);
@@ -581,7 +598,13 @@ export function App() {
               onGenerateAiMap={(title) => openTutor(`Profundiza en un esquema del tema "${title}" con conceptos fundamentales y casos prácticos.`)}
             />
           ) : activeTab === "pdf" && selectedMaterialId ? (
-            <SelectedMaterialPdfViewer materialId={selectedMaterialId} initialPage={pdfPage} onClose={() => setActiveTab("workspace")} onAskAboutPage={handleAskAboutPage} />
+            <SelectedMaterialPdfViewer
+              materialId={selectedMaterialId}
+              initialPage={pdfPage}
+              onClose={() => setActiveTab("workspace")}
+              onAskAboutPage={handleAskAboutPage}
+              onAskAboutSelection={handleAskAboutSelection}
+            />
           ) : activeTab === "pdf" ? (
             <NoPdfSelected recentMaterial={recentMaterial} onOpenRecent={() => recentMaterial && handleSelectMaterial(recentMaterial.id)} onUpload={() => setIsUploadOpen(true)} />
           ) : selectedArtifactId ? (
@@ -847,11 +870,18 @@ function ResponsivePanel({ side, label, open, onClose, width, laptopWidth, isWid
   );
 }
 
-function SelectedMaterialPdfViewer({ materialId, initialPage, onClose, onAskAboutPage }: {
+function SelectedMaterialPdfViewer({
+  materialId,
+  initialPage,
+  onClose,
+  onAskAboutPage,
+  onAskAboutSelection
+}: {
   readonly materialId: string;
   readonly initialPage?: number | undefined;
   readonly onClose?: (() => void) | undefined;
   readonly onAskAboutPage?: ((materialTitle: string, page: number) => void) | undefined;
+  readonly onAskAboutSelection?: ((text: string, page: number, materialTitle: string, actionType?: "explain" | "quiz") => void) | undefined;
 }) {
   const query = materialQuery(materialId);
   const result = useAtomValue(query);
@@ -860,7 +890,15 @@ function SelectedMaterialPdfViewer({ materialId, initialPage, onClose, onAskAbou
     onInitial: () => <div className="flex h-full items-center justify-center gap-3 text-slate-400"><span className="ui-spinner" /><p className="text-sm">Cargando PDF…</p></div>,
     onError: () => <LoadError onRetry={refresh} />,
     onDefect: () => <LoadError onRetry={refresh} />,
-    onSuccess: ({ value }: { value: PdfMaterial }) => <PdfSplitViewer material={value} initialPage={initialPage} onClose={onClose} onAskAboutPage={onAskAboutPage} />
+    onSuccess: ({ value }: { value: PdfMaterial }) => (
+      <PdfSplitViewer
+        material={value}
+        initialPage={initialPage}
+        onClose={onClose}
+        onAskAboutPage={onAskAboutPage}
+        onAskAboutSelection={onAskAboutSelection}
+      />
+    )
   });
 }
 

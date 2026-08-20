@@ -1,5 +1,5 @@
 import { useAtomSet } from "@effect/atom-react";
-import type { MaterialPageImages, PdfMaterial } from "@proxus/shared";
+import type { MaterialPageImages, PageImage, PdfMaterial } from "@proxus/shared";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { renderMaterialPagesAction } from "../domain/materials/atoms.ts";
 
@@ -8,10 +8,11 @@ interface PdfSplitViewerProps {
   readonly initialPage?: number | undefined;
   readonly onClose?: (() => void) | undefined;
   readonly onAskAboutPage?: ((materialTitle: string, page: number) => void) | undefined;
+  readonly onAskAboutSelection?: ((text: string, page: number, materialTitle: string, actionType: "explain" | "quiz") => void) | undefined;
 }
 
-// Module-level cache to keep rendered page images across tab changes, renders and remounts
-const pageCache = new Map<string, string>();
+// Module-level cache to keep rendered page images and word bounds across tab changes, renders and remounts
+const pageCache = new Map<string, PageImage>();
 const inFlightRequests = new Map<string, Promise<void>>();
 
 function getCacheKey(materialId: string, page: number): string {
@@ -22,14 +23,14 @@ export function PdfSplitViewer({
   material,
   initialPage = 1,
   onClose,
-  onAskAboutPage
+  onAskAboutPage,
+  onAskAboutSelection
 }: PdfSplitViewerProps) {
   const [currentPage, setCurrentPage] = useState(initialPage);
-  const [viewerMode, setViewerMode] = useState<"selectable" | "canvas">("selectable");
   const [fitMode, setFitMode] = useState<"fit-page" | "fit-width" | "custom">("fit-page");
   const [zoom, setZoom] = useState(100);
-  const [loadedPages, setLoadedPages] = useState<Record<number, string>>(() => {
-    const initial: Record<number, string> = {};
+  const [loadedPages, setLoadedPages] = useState<Record<number, PageImage>>(() => {
+    const initial: Record<number, PageImage> = {};
     for (let p = 1; p <= material.pageCount; p++) {
       const cached = pageCache.get(getCacheKey(material.id, p));
       if (cached) {
@@ -41,9 +42,18 @@ export function PdfSplitViewer({
   const [loadingPage, setLoadingPage] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Floating text selection toolbar state
+  const [selectionMenu, setSelectionMenu] = useState<{
+    text: string;
+    top: number;
+    left: number;
+  } | null>(null);
+  const [copied, setCopied] = useState(false);
+
   const renderPagesAction = useAtomSet(renderMaterialPagesAction, { mode: "promise" });
   const isMountedRef = useRef(true);
   const mainScrollRef = useRef<HTMLElement>(null);
+  const pageContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -59,16 +69,17 @@ export function PdfSplitViewer({
     }
   }, [initialPage, material.pageCount]);
 
-  // Reset scroll to top on page change
+  // Reset scroll to top on page change and clear selection
   useEffect(() => {
     if (mainScrollRef.current) {
       mainScrollRef.current.scrollTop = 0;
     }
+    setSelectionMenu(null);
   }, [currentPage]);
 
   // Load missing cached pages on material change
   useEffect(() => {
-    const fromCache: Record<number, string> = {};
+    const fromCache: Record<number, PageImage> = {};
     for (let p = 1; p <= material.pageCount; p++) {
       const cached = pageCache.get(getCacheKey(material.id, p));
       if (cached) {
@@ -96,11 +107,11 @@ export function PdfSplitViewer({
           });
 
           if (response.pages) {
-            const newlyLoaded: Record<number, string> = {};
+            const newlyLoaded: Record<number, PageImage> = {};
             for (const item of response.pages) {
               if (item?.data) {
-                pageCache.set(getCacheKey(material.id, item.page), item.data);
-                newlyLoaded[item.page] = item.data;
+                pageCache.set(getCacheKey(material.id, item.page), item);
+                newlyLoaded[item.page] = item;
               }
             }
 
@@ -136,10 +147,10 @@ export function PdfSplitViewer({
       if (existingPromises.length > 0) {
         await Promise.all(existingPromises);
         if (isMountedRef.current) {
-          const updated: Record<number, string> = {};
+          const updated: Record<number, PageImage> = {};
           for (const p of missing) {
-            const data = pageCache.get(getCacheKey(material.id, p));
-            if (data) updated[p] = data;
+            const item = pageCache.get(getCacheKey(material.id, p));
+            if (item) updated[p] = item;
           }
           setLoadedPages((prev) => ({ ...prev, ...updated }));
         }
@@ -218,45 +229,96 @@ export function PdfSplitViewer({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [handleNext, handlePrev]);
 
-  const currentImage = useMemo(() => {
+  // Selection detection handler
+  const checkSelection = useCallback(() => {
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed || sel.rangeCount === 0) {
+      setSelectionMenu(null);
+      return;
+    }
+
+    const text = sel.toString().trim();
+    if (text.length < 2) {
+      setSelectionMenu(null);
+      return;
+    }
+
+    const container = pageContainerRef.current;
+    if (!container) return;
+
+    const range = sel.getRangeAt(0);
+    const rect = range.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return;
+
+    // Check if selection intersects page container
+    const contRect = container.getBoundingClientRect();
+    if (
+      rect.bottom < contRect.top - 50 ||
+      rect.top > contRect.bottom + 50 ||
+      rect.right < contRect.left - 50 ||
+      rect.left > contRect.right + 50
+    ) {
+      setSelectionMenu(null);
+      return;
+    }
+
+    setSelectionMenu({
+      text,
+      top: Math.max(15, rect.top - 12),
+      left: Math.max(80, Math.min(window.innerWidth - 80, rect.left + rect.width / 2))
+    });
+  }, []);
+
+  useEffect(() => {
+    const handleMouseUp = () => {
+      // Slight delay so browser finalizes the range selection
+      setTimeout(checkSelection, 20);
+    };
+
+    const handleSelectionChange = () => {
+      const sel = window.getSelection();
+      if (!sel || sel.isCollapsed) {
+        setSelectionMenu(null);
+      }
+    };
+
+    document.addEventListener("mouseup", handleMouseUp);
+    document.addEventListener("selectionchange", handleSelectionChange);
+    return () => {
+      document.removeEventListener("mouseup", handleMouseUp);
+      document.removeEventListener("selectionchange", handleSelectionChange);
+    };
+  }, [checkSelection]);
+
+  const handleAskAi = (actionType: "explain" | "quiz" = "explain") => {
+    if (!selectionMenu) return;
+    const text = selectionMenu.text;
+    setSelectionMenu(null);
+    window.getSelection()?.removeAllRanges();
+
+    if (onAskAboutSelection) {
+      onAskAboutSelection(text, currentPage, material.title, actionType);
+    } else if (onAskAboutPage) {
+      onAskAboutPage(material.title, currentPage);
+    }
+  };
+
+  const handleCopy = async () => {
+    if (!selectionMenu) return;
+    try {
+      await navigator.clipboard.writeText(selectionMenu.text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // ignore
+    }
+  };
+
+  const currentPageData = useMemo(() => {
     return loadedPages[currentPage] ?? pageCache.get(getCacheKey(material.id, currentPage));
   }, [currentPage, loadedPages, material.id]);
 
-  const [isPanning, setIsPanning] = useState(false);
-  const panStartRef = useRef<{ x: number; y: number; scrollLeft: number; scrollTop: number }>({
-    x: 0,
-    y: 0,
-    scrollLeft: 0,
-    scrollTop: 0
-  });
-
-  const handleMouseDown = (e: React.MouseEvent<HTMLElement>) => {
-    // Only pan on primary button and when clicking background or image
-    if (e.button !== 0 || !mainScrollRef.current) return;
-    const target = e.target as HTMLElement;
-    if (target.closest("button") || target.closest("input")) return;
-
-    setIsPanning(true);
-    panStartRef.current = {
-      x: e.clientX,
-      y: e.clientY,
-      scrollLeft: mainScrollRef.current.scrollLeft,
-      scrollTop: mainScrollRef.current.scrollTop
-    };
-  };
-
-  const handleMouseMove = (e: React.MouseEvent<HTMLElement>) => {
-    if (!isPanning || !mainScrollRef.current) return;
-    e.preventDefault();
-    const dx = e.clientX - panStartRef.current.x;
-    const dy = e.clientY - panStartRef.current.y;
-    mainScrollRef.current.scrollLeft = panStartRef.current.scrollLeft - dx;
-    mainScrollRef.current.scrollTop = panStartRef.current.scrollTop - dy;
-  };
-
-  const handleMouseUp = () => {
-    setIsPanning(false);
-  };
+  const currentImage = currentPageData?.data;
 
   const handleWheel = (e: React.WheelEvent<HTMLElement>) => {
     if (e.ctrlKey || e.metaKey) {
@@ -280,112 +342,80 @@ export function PdfSplitViewer({
               {material.title}
             </h3>
             <p className="text-[11px] text-slate-500 dark:text-slate-400">
-              Página {currentPage} de {material.pageCount}
+              Página {currentPage} de {material.pageCount} • <span className="text-indigo-600 dark:text-indigo-400 font-medium">Selecciona texto para preguntar a la IA</span>
             </p>
           </div>
         </div>
 
         {/* Toolbar Controls */}
         <div className="flex items-center gap-2 shrink-0">
-          {/* Mode Switcher: Selectable Native PDF vs Slide Pages */}
+          {/* Fit Mode Switcher */}
           <div className="flex items-center rounded-xl bg-slate-100 dark:bg-slate-800/80 p-0.5 border border-slate-200 dark:border-slate-700/60 text-xs">
             <button
               type="button"
-              onClick={() => setViewerMode("selectable")}
+              onClick={() => setFitMode("fit-page")}
               className={`flex items-center gap-1 px-2.5 py-1 rounded-lg font-medium transition ${
-                viewerMode === "selectable"
+                fitMode === "fit-page"
                   ? "bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs"
                   : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
               }`}
-              title="Texto seleccionable, búsqueda y copiado"
+              title="Ajustar a pantalla completa (Página completa sin cortes)"
             >
-              <span className="material-symbols-outlined text-[15px]">edit_note</span>
-              <span className="hidden md:inline">Seleccionar texto</span>
+              <span className="material-symbols-outlined text-[15px]">fit_screen</span>
+              <span className="hidden md:inline">Ajustar página</span>
             </button>
             <button
               type="button"
-              onClick={() => setViewerMode("canvas")}
+              onClick={() => setFitMode("fit-width")}
               className={`flex items-center gap-1 px-2.5 py-1 rounded-lg font-medium transition ${
-                viewerMode === "canvas"
+                fitMode === "fit-width"
                   ? "bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs"
                   : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
               }`}
-              title="Modo diapositivas / páginas con zoom libre"
+              title="Ajustar al ancho de lectura"
             >
-              <span className="material-symbols-outlined text-[15px]">photo_library</span>
-              <span className="hidden md:inline">Modo Páginas</span>
+              <span className="material-symbols-outlined text-[15px]">width</span>
+              <span className="hidden md:inline">Ajustar ancho</span>
             </button>
           </div>
 
-          {viewerMode === "canvas" && (
-            <>
-              {/* Fit Mode Switcher */}
-              <div className="flex items-center rounded-xl bg-slate-100 dark:bg-slate-800/80 p-0.5 border border-slate-200 dark:border-slate-700/60 text-xs">
-                <button
-                  type="button"
-                  onClick={() => setFitMode("fit-page")}
-                  className={`flex items-center gap-1 px-2 py-1 rounded-lg font-medium transition ${
-                    fitMode === "fit-page"
-                      ? "bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs"
-                      : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
-                  }`}
-                  title="Ajustar a pantalla completa"
-                >
-                  <span className="material-symbols-outlined text-[15px]">fit_screen</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setFitMode("fit-width")}
-                  className={`flex items-center gap-1 px-2 py-1 rounded-lg font-medium transition ${
-                    fitMode === "fit-width"
-                      ? "bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs"
-                      : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
-                  }`}
-                  title="Ajustar al ancho"
-                >
-                  <span className="material-symbols-outlined text-[15px]">width</span>
-                </button>
-              </div>
+          {/* Zoom Controls */}
+          <div className="flex items-center rounded-xl bg-slate-100 dark:bg-slate-800/80 p-0.5 border border-slate-200 dark:border-slate-700/60">
+            <button
+              type="button"
+              onClick={() => {
+                setFitMode("custom");
+                setZoom((z) => Math.max(40, z - 15));
+              }}
+              className="grid size-8 place-items-center rounded-lg text-slate-600 hover:bg-slate-200 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-700/60 dark:hover:text-white"
+              title="Reducir zoom"
+              aria-label="Reducir zoom"
+            >
+              <span className="material-symbols-outlined text-sm">remove</span>
+            </button>
+            <span className="px-1.5 text-xs font-mono text-slate-700 dark:text-slate-300 min-w-[42px] text-center">
+              {fitMode === "fit-page" ? "Auto" : fitMode === "fit-width" ? "Ancho" : `${zoom}%`}
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                setFitMode("custom");
+                setZoom((z) => Math.min(250, z + 15));
+              }}
+              className="grid size-8 place-items-center rounded-lg text-slate-600 hover:bg-slate-200 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-700/60 dark:hover:text-white"
+              title="Aumentar zoom"
+              aria-label="Aumentar zoom"
+            >
+              <span className="material-symbols-outlined text-sm">add</span>
+            </button>
+          </div>
 
-              {/* Zoom Controls */}
-              <div className="flex items-center rounded-xl bg-slate-100 dark:bg-slate-800/80 p-0.5 border border-slate-200 dark:border-slate-700/60">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setFitMode("custom");
-                    setZoom((z) => Math.max(40, z - 15));
-                  }}
-                  className="grid size-7 place-items-center rounded-lg text-slate-600 hover:bg-slate-200 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-700/60 dark:hover:text-white"
-                  title="Reducir zoom"
-                  aria-label="Reducir zoom"
-                >
-                  <span className="material-symbols-outlined text-sm">remove</span>
-                </button>
-                <span className="px-1 text-xs font-mono text-slate-700 dark:text-slate-300 min-w-[36px] text-center">
-                  {fitMode === "fit-page" ? "Auto" : fitMode === "fit-width" ? "Ancho" : `${zoom}%`}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setFitMode("custom");
-                    setZoom((z) => Math.min(250, z + 15));
-                  }}
-                  className="grid size-7 place-items-center rounded-lg text-slate-600 hover:bg-slate-200 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-700/60 dark:hover:text-white"
-                  title="Aumentar zoom"
-                  aria-label="Aumentar zoom"
-                >
-                  <span className="material-symbols-outlined text-sm">add</span>
-                </button>
-              </div>
-            </>
-          )}
-
-          {/* Ask AI about this page */}
+          {/* Ask AI about this whole page */}
           <button
             type="button"
             onClick={() => onAskAboutPage && onAskAboutPage(material.title, currentPage)}
             className="flex min-h-8 items-center gap-1.5 rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700 transition hover:bg-indigo-100 dark:border-indigo-500/30 dark:bg-indigo-600/20 dark:text-indigo-300 dark:hover:bg-indigo-600/30"
-            title="Preguntar al tutor sobre esta página"
+            title="Preguntar al tutor sobre toda esta página"
             aria-label={`Consultar la página ${currentPage} con el tutor`}
           >
             <span className="material-symbols-outlined text-[15px]">psychology</span>
@@ -407,12 +437,60 @@ export function PdfSplitViewer({
         </div>
       </header>
 
-      {/* Main Content: Thumbnails Sidebar + Viewer Canvas */}
+      {/* Floating Selection Tooltip / Action Bar */}
+      {selectionMenu && (
+        <div
+          style={{
+            position: "fixed",
+            top: `${selectionMenu.top}px`,
+            left: `${selectionMenu.left}px`,
+            transform: "translate(-50%, -100%)",
+            zIndex: 9999
+          }}
+          className="flex items-center gap-1 p-1.5 rounded-2xl bg-slate-900/95 dark:bg-slate-900/95 text-white shadow-2xl border border-slate-700/90 backdrop-blur-md animate-in fade-in zoom-in-95 duration-150 select-none"
+          onMouseDown={(e) => {
+            // Prevent selection from clearing when clicking buttons
+            e.stopPropagation();
+            e.preventDefault();
+          }}
+        >
+          <button
+            type="button"
+            onClick={() => handleAskAi("explain")}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-md transition active:scale-95 cursor-pointer"
+            title="Pedir al tutor que te explique este fragmento"
+          >
+            <span className="material-symbols-outlined text-[16px]">psychology</span>
+            <span>Preguntar a la IA</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => handleAskAi("quiz")}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl hover:bg-slate-800 text-slate-200 hover:text-white text-xs font-medium transition active:scale-95 cursor-pointer"
+            title="Crear un quiz tipo test sobre este fragmento"
+          >
+            <span className="material-symbols-outlined text-[16px]">quiz</span>
+            <span className="hidden sm:inline">Crear Quiz</span>
+          </button>
+          <div className="w-px h-4 bg-slate-700/80 mx-0.5" />
+          <button
+            type="button"
+            onClick={handleCopy}
+            className="flex items-center gap-1 px-2 py-1.5 rounded-xl hover:bg-slate-800 text-slate-300 hover:text-white text-xs transition active:scale-95 cursor-pointer"
+            title={copied ? "¡Copiado al portapapeles!" : "Copiar fragmento"}
+          >
+            <span className="material-symbols-outlined text-[16px]">{copied ? "check" : "content_copy"}</span>
+          </button>
+        </div>
+      )}
+
+      {/* Main Content: Thumbnails Sidebar + Interactive Page Canvas */}
       <div className="flex flex-1 min-h-0 overflow-hidden relative">
         {/* Thumbnails Sidebar */}
         <aside className="w-20 sm:w-28 shrink-0 border-r border-slate-200 dark:border-slate-800/80 bg-slate-100/60 dark:bg-slate-900/50 overflow-y-auto p-2 flex flex-col gap-2 pb-24">
           {Array.from({ length: material.pageCount }, (_, i) => i + 1).map((pageNum) => {
-            const thumbImage = loadedPages[pageNum] ?? pageCache.get(getCacheKey(material.id, pageNum));
+            const pageItem = loadedPages[pageNum] ?? pageCache.get(getCacheKey(material.id, pageNum));
+            const thumbImage = pageItem?.data;
             const isSelected = currentPage === pageNum;
 
             return (
@@ -450,121 +528,214 @@ export function PdfSplitViewer({
           })}
         </aside>
 
-        {/* Center Area: Either Selectable Vector PDF or Poppler Canvas */}
-        {viewerMode === "selectable" ? (
-          <div className="flex-1 w-full h-full p-2 sm:p-3 bg-slate-100/70 dark:bg-slate-950 flex flex-col items-center justify-center min-h-0">
-            <iframe
-              key={`pdf-native-${material.id}-${currentPage}`}
-              src={`/api/materials/${material.id}/raw#page=${currentPage}`}
-              title={material.title}
-              className="w-full h-full rounded-xl border border-slate-200/80 dark:border-slate-800 bg-white shadow-xl"
-            />
-          </div>
-        ) : (
-          /* Center Page Canvas with Smooth Pan & Scroll */
-          <main
-            ref={mainScrollRef}
-            onMouseDown={handleMouseDown}
-            onMouseMove={handleMouseMove}
-            onMouseUp={handleMouseUp}
-            onMouseLeave={handleMouseUp}
-            onWheel={handleWheel}
-            className={`flex-1 w-full h-full overflow-auto bg-slate-100/80 dark:bg-slate-950/90 relative select-none ${
-              isPanning ? "cursor-grabbing" : fitMode === "custom" || fitMode === "fit-width" ? "cursor-grab" : ""
-            }`}
-          >
-            {loadingPage && !currentImage && (
-              <div className="flex flex-col items-center justify-center h-80 gap-3 text-slate-500 dark:text-slate-400 m-auto">
-                <div className="size-8 animate-spin rounded-full border-2 border-indigo-500 border-t-transparent"></div>
-                <p className="text-sm font-medium">Preparando página {currentPage}…</p>
-              </div>
-            )}
+        {/* Center Page Canvas with Interactive Selectable Text Layer */}
+        <main
+          ref={mainScrollRef}
+          onWheel={handleWheel}
+          className="flex-1 w-full h-full overflow-auto bg-slate-100/80 dark:bg-slate-950/90 relative"
+        >
+          {loadingPage && !currentImage && (
+            <div className="flex flex-col items-center justify-center h-80 gap-3 text-slate-500 dark:text-slate-400 m-auto">
+              <div className="size-8 animate-spin rounded-full border-2 border-indigo-500 border-t-transparent"></div>
+              <p className="text-sm font-medium">Preparando página {currentPage}…</p>
+            </div>
+          )}
 
-            {error && !currentImage && (
-              <div className="m-auto max-w-md rounded-xl border border-red-200 bg-red-50 p-5 text-center text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-200 mt-20">
-                <span className="material-symbols-outlined text-3xl text-red-500 mb-2">error</span>
-                <p className="font-semibold text-sm mb-1">No se pudo cargar la página</p>
-                <p className="text-xs text-red-600 dark:text-red-300/80">{error}</p>
-                <button
-                  type="button"
-                  className="ui-secondary-action mt-4"
-                  onClick={() => {
-                    setError(null);
-                    void fetchPagesBatch([currentPage]);
-                  }}
-                >
-                  Reintentar
-                </button>
-              </div>
-            )}
+          {error && !currentImage && (
+            <div className="m-auto max-w-md rounded-xl border border-red-200 bg-red-50 p-5 text-center text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-200 mt-20">
+              <span className="material-symbols-outlined text-3xl text-red-500 mb-2">error</span>
+              <p className="font-semibold text-sm mb-1">No se pudo cargar la página</p>
+              <p className="text-xs text-red-600 dark:text-red-300/80">{error}</p>
+              <button
+                type="button"
+                className="ui-secondary-action mt-4"
+                onClick={() => {
+                  setError(null);
+                  void fetchPagesBatch([currentPage]);
+                }}
+              >
+                Reintentar
+              </button>
+            </div>
+          )}
 
-            {currentImage && (
-              <div className="min-w-full min-h-full flex flex-col items-center justify-start p-4 sm:p-6 pb-36">
-                {fitMode === "fit-page" ? (
-                  <div className="flex flex-1 w-full items-center justify-center min-h-0 my-auto py-1">
-                    <img
-                      key={`${material.id}-${currentPage}`}
-                      src={currentImage}
-                      alt={`Página ${currentPage} - ${material.title}`}
-                      className="max-h-[calc(100vh-165px)] max-w-full w-auto object-contain rounded-xl shadow-2xl border border-slate-200 dark:border-slate-800 bg-white select-none transition-all duration-150"
-                    />
-                  </div>
-                ) : fitMode === "fit-width" ? (
-                  <div className="w-full max-w-3xl my-2 mx-auto rounded-xl shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-800 bg-white transition-all duration-150">
-                    <img
-                      key={`${material.id}-${currentPage}`}
-                      src={currentImage}
-                      alt={`Página ${currentPage} - ${material.title}`}
-                      className="w-full h-auto block select-none"
-                    />
-                  </div>
-                ) : (
+          {currentImage && (
+            <div className="min-w-full min-h-full flex flex-col items-center justify-start p-4 sm:p-6 pb-36">
+              {fitMode === "fit-page" ? (
+                <div className="flex flex-1 w-full items-center justify-center min-h-0 my-auto py-1">
                   <div
-                    className="transition-all duration-150 shadow-2xl rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800 bg-white my-2 mx-auto shrink-0"
-                    style={{
-                      width: `${Math.round(840 * (zoom / 100))}px`,
-                      maxWidth: "none"
-                    }}
+                    ref={pageContainerRef}
+                    className="relative inline-block rounded-xl shadow-2xl border border-slate-200 dark:border-slate-800 bg-white overflow-hidden"
                   >
                     <img
                       key={`${material.id}-${currentPage}`}
                       src={currentImage}
                       alt={`Página ${currentPage} - ${material.title}`}
-                      className="w-full h-auto block select-none pointer-events-none"
+                      className="max-h-[calc(100vh-165px)] max-w-full w-auto object-contain block select-none pointer-events-none"
                     />
-                  </div>
-                )}
-              </div>
-            )}
 
-            {/* Floating Navigation Controls */}
-            <div className="fixed bottom-5 left-1/2 -translate-x-1/2 flex items-center gap-2 rounded-2xl border border-slate-200/90 dark:border-slate-800/90 bg-white/95 dark:bg-slate-900/95 px-4 py-2 shadow-2xl backdrop-blur-md z-30">
-              <button
-                type="button"
-                disabled={currentPage <= 1}
-                onClick={handlePrev}
-                className="grid size-9 place-items-center rounded-xl text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-30 dark:text-slate-200 dark:hover:bg-slate-800 transition active:scale-95"
-                title="Página anterior (Flecha Izquierda)"
-                aria-label="Página anterior"
-              >
-                <span className="material-symbols-outlined text-lg">chevron_left</span>
-              </button>
-              <span className="text-xs font-mono px-2 text-slate-700 dark:text-slate-300 font-semibold select-none">
-                {currentPage} / {material.pageCount}
-              </span>
-              <button
-                type="button"
-                disabled={currentPage >= material.pageCount}
-                onClick={handleNext}
-                className="grid size-9 place-items-center rounded-xl text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-30 dark:text-slate-200 dark:hover:bg-slate-800 transition active:scale-95"
-                title="Página siguiente (Flecha Derecha)"
-                aria-label="Página siguiente"
-              >
-                <span className="material-symbols-outlined text-lg">chevron_right</span>
-              </button>
+                    {/* Interactive Text Layer */}
+                    {currentPageData?.words && currentPageData.words.length > 0 && currentPageData.dimensions && (
+                      <div
+                        className="absolute inset-0 select-text overflow-hidden"
+                        style={{ width: "100%", height: "100%" }}
+                      >
+                        {currentPageData.words.map((w, idx) => {
+                          const left = (w.xMin / currentPageData.dimensions!.width) * 100;
+                          const top = (w.yMin / currentPageData.dimensions!.height) * 100;
+                          const width = ((w.xMax - w.xMin) / currentPageData.dimensions!.width) * 100;
+                          const height = ((w.yMax - w.yMin) / currentPageData.dimensions!.height) * 100;
+
+                          return (
+                            <span
+                              key={idx}
+                              data-word={w.text}
+                              className="absolute select-text cursor-text leading-none text-transparent selection:bg-indigo-500/35 selection:text-transparent"
+                              style={{
+                                left: `${left}%`,
+                                top: `${top}%`,
+                                width: `${Math.max(width, 0.4)}%`,
+                                height: `${Math.max(height, 1.2)}%`,
+                                display: "inline-block",
+                                userSelect: "text",
+                                WebkitUserSelect: "text"
+                              }}
+                            >
+                              {w.text}{" "}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : fitMode === "fit-width" ? (
+                <div
+                  ref={pageContainerRef}
+                  className="relative w-full max-w-3xl my-2 mx-auto rounded-xl shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-800 bg-white"
+                >
+                  <img
+                    key={`${material.id}-${currentPage}`}
+                    src={currentImage}
+                    alt={`Página ${currentPage} - ${material.title}`}
+                    className="w-full h-auto block select-none pointer-events-none"
+                  />
+
+                  {/* Interactive Text Layer */}
+                  {currentPageData?.words && currentPageData.words.length > 0 && currentPageData.dimensions && (
+                    <div
+                      className="absolute inset-0 select-text overflow-hidden"
+                      style={{ width: "100%", height: "100%" }}
+                    >
+                      {currentPageData.words.map((w, idx) => {
+                        const left = (w.xMin / currentPageData.dimensions!.width) * 100;
+                        const top = (w.yMin / currentPageData.dimensions!.height) * 100;
+                        const width = ((w.xMax - w.xMin) / currentPageData.dimensions!.width) * 100;
+                        const height = ((w.yMax - w.yMin) / currentPageData.dimensions!.height) * 100;
+
+                        return (
+                          <span
+                            key={idx}
+                            data-word={w.text}
+                            className="absolute select-text cursor-text leading-none text-transparent selection:bg-indigo-500/35 selection:text-transparent"
+                            style={{
+                              left: `${left}%`,
+                              top: `${top}%`,
+                              width: `${Math.max(width, 0.4)}%`,
+                              height: `${Math.max(height, 1.2)}%`,
+                              display: "inline-block",
+                              userSelect: "text",
+                              WebkitUserSelect: "text"
+                            }}
+                          >
+                            {w.text}{" "}
+                          </span>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div
+                  ref={pageContainerRef}
+                  className="relative shadow-2xl rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800 bg-white my-2 mx-auto shrink-0"
+                  style={{
+                    width: `${Math.round(840 * (zoom / 100))}px`,
+                    maxWidth: "none"
+                  }}
+                >
+                  <img
+                    key={`${material.id}-${currentPage}`}
+                    src={currentImage}
+                    alt={`Página ${currentPage} - ${material.title}`}
+                    className="w-full h-auto block select-none pointer-events-none"
+                  />
+
+                  {/* Interactive Text Layer */}
+                  {currentPageData?.words && currentPageData.words.length > 0 && currentPageData.dimensions && (
+                    <div
+                      className="absolute inset-0 select-text overflow-hidden"
+                      style={{ width: "100%", height: "100%" }}
+                    >
+                      {currentPageData.words.map((w, idx) => {
+                        const left = (w.xMin / currentPageData.dimensions!.width) * 100;
+                        const top = (w.yMin / currentPageData.dimensions!.height) * 100;
+                        const width = ((w.xMax - w.xMin) / currentPageData.dimensions!.width) * 100;
+                        const height = ((w.yMax - w.yMin) / currentPageData.dimensions!.height) * 100;
+
+                        return (
+                          <span
+                            key={idx}
+                            data-word={w.text}
+                            className="absolute select-text cursor-text leading-none text-transparent selection:bg-indigo-500/35 selection:text-transparent"
+                            style={{
+                              left: `${left}%`,
+                              top: `${top}%`,
+                              width: `${Math.max(width, 0.4)}%`,
+                              height: `${Math.max(height, 1.2)}%`,
+                              display: "inline-block",
+                              userSelect: "text",
+                              WebkitUserSelect: "text"
+                            }}
+                          >
+                            {w.text}{" "}
+                          </span>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
-          </main>
-        )}
+          )}
+
+          {/* Floating Navigation Controls */}
+          <div className="fixed bottom-5 left-1/2 -translate-x-1/2 flex items-center gap-2 rounded-2xl border border-slate-200/90 dark:border-slate-800/90 bg-white/95 dark:bg-slate-900/95 px-4 py-2 shadow-2xl backdrop-blur-md z-30">
+            <button
+              type="button"
+              disabled={currentPage <= 1}
+              onClick={handlePrev}
+              className="grid size-9 place-items-center rounded-xl text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-30 dark:text-slate-200 dark:hover:bg-slate-800 transition active:scale-95 cursor-pointer"
+              title="Página anterior (Flecha Izquierda)"
+              aria-label="Página anterior"
+            >
+              <span className="material-symbols-outlined text-lg">chevron_left</span>
+            </button>
+            <span className="text-xs font-mono px-2 text-slate-700 dark:text-slate-300 font-semibold select-none">
+              {currentPage} / {material.pageCount}
+            </span>
+            <button
+              type="button"
+              disabled={currentPage >= material.pageCount}
+              onClick={handleNext}
+              className="grid size-9 place-items-center rounded-xl text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-30 dark:text-slate-200 dark:hover:bg-slate-800 transition active:scale-95 cursor-pointer"
+              title="Página siguiente (Flecha Derecha)"
+              aria-label="Página siguiente"
+            >
+              <span className="material-symbols-outlined text-lg">chevron_right</span>
+            </button>
+          </div>
+        </main>
       </div>
     </div>
   );

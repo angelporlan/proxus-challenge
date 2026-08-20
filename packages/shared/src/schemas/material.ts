@@ -9,10 +9,27 @@ export const PdfMaterial = Schema.Struct({
 });
 export type PdfMaterial = typeof PdfMaterial.Type;
 
+export const PdfWord = Schema.Struct({
+  xMin: Schema.Number,
+  yMin: Schema.Number,
+  xMax: Schema.Number,
+  yMax: Schema.Number,
+  text: Schema.String
+});
+export type PdfWord = typeof PdfWord.Type;
+
+export const PageDimensions = Schema.Struct({
+  width: Schema.Number,
+  height: Schema.Number
+});
+export type PageDimensions = typeof PageDimensions.Type;
+
 export const PageImage = Schema.Struct({
   page: Schema.Number,
   mediaType: Schema.Literal("image/png"),
-  data: Schema.String
+  data: Schema.String,
+  dimensions: Schema.optional(PageDimensions),
+  words: Schema.optional(Schema.Array(PdfWord))
 });
 export type PageImage = typeof PageImage.Type;
 
