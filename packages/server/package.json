@@ -8,7 +8,7 @@
     "agent:sum": "node --env-file=../../.env --import tsx src/domain/agents/index.ts",
     "agent:math": "node --env-file=../../.env --import tsx src/domain/agents/math.ts",
     "agent:tutor": "node --env-file=../../.env --import tsx src/domain/agents/academic-tutor.ts",
-    "dev": "node --env-file=../../.env --import tsx src/index.ts",
+    "dev": "node --env-file=../../.env --import tsx --watch src/index.ts",
     "eval:tutor:artifact-authoring": "node --env-file=../../.env --import tsx src/domain/agents/academic-tutor/evals/artifact-authoring.eval.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
