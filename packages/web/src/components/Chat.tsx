@@ -49,45 +49,26 @@ function parseUserContent(
   rawContent: string,
   materials: readonly { readonly id: string; readonly title: string; readonly pageCount?: number }[]
 ): { readonly docs: readonly ParsedUserDoc[]; readonly text: string } {
-  const mentionPattern = /@\["([^"]+)"\]/g;
-  const refPattern = /\[Documentos de referencia:\s*([^\]]+)\]/g;
-  const socraticPattern = /\[Enfoque pedagógico:\s*[^\]]+\]/g;
-
   const foundDocs: ParsedUserDoc[] = [];
+  const socraticPattern = /\[Enfoque pedagógico:\s*[^\]]+\]/g;
   let cleanText = rawContent.replace(socraticPattern, "").trim();
 
+  // 1. Match [Documentos de referencia: ...]
+  const refPattern = /\[Documentos de referencia:\s*([^\]]+)\]/g;
   let match: RegExpExecArray | null;
-  while ((match = mentionPattern.exec(rawContent)) !== null) {
-    const term = match[1]!;
-    const matchedMat = materials.find(
-      (m) =>
-        m.id === term ||
-        m.title.toLowerCase() === term.toLowerCase() ||
-        m.title.toLowerCase().includes(term.toLowerCase())
-    );
-    if (matchedMat) {
-      if (!foundDocs.some((d) => d.id === matchedMat.id)) {
-        foundDocs.push({ id: matchedMat.id, title: matchedMat.title, pageCount: matchedMat.pageCount });
-      }
-    } else {
-      foundDocs.push({ title: term.replace(/[-_]/g, " ") });
-    }
-  }
-  cleanText = cleanText.replace(mentionPattern, "").trim();
-
-  while ((match = refPattern.exec(rawContent)) !== null) {
+  while ((match = refPattern.exec(cleanText)) !== null) {
     const listStr = match[1]!;
     const items = listStr.split(",").map((s) => s.trim());
     for (const itm of items) {
-      const matchedMat = materials.find(
+      const matched = materials.find(
         (m) =>
-          m.id === itm ||
+          m.id.toLowerCase() === itm.toLowerCase() ||
           m.title.toLowerCase() === itm.toLowerCase() ||
           m.title.toLowerCase().includes(itm.toLowerCase())
       );
-      if (matchedMat) {
-        if (!foundDocs.some((d) => d.id === matchedMat.id)) {
-          foundDocs.push({ id: matchedMat.id, title: matchedMat.title, pageCount: matchedMat.pageCount });
+      if (matched) {
+        if (!foundDocs.some((d) => d.id === matched.id)) {
+          foundDocs.push({ id: matched.id, title: matched.title, pageCount: matched.pageCount });
         }
       } else if (!foundDocs.some((d) => d.title === itm)) {
         foundDocs.push({ title: itm });
@@ -95,6 +76,55 @@ function parseUserContent(
     }
   }
   cleanText = cleanText.replace(refPattern, "").trim();
+
+  // 2. Match @["..."] (explicit quoted syntax)
+  const quotedMentionPattern = /@\["([^"]+)"\]/g;
+  while ((match = quotedMentionPattern.exec(cleanText)) !== null) {
+    const term = match[1]!;
+    const matched = materials.find(
+      (m) =>
+        m.id.toLowerCase() === term.toLowerCase() ||
+        m.title.toLowerCase() === term.toLowerCase() ||
+        m.title.toLowerCase().includes(term.toLowerCase())
+    );
+    if (matched) {
+      if (!foundDocs.some((d) => d.id === matched.id)) {
+        foundDocs.push({ id: matched.id, title: matched.title, pageCount: matched.pageCount });
+      }
+    } else {
+      foundDocs.push({ title: term.replace(/[-_]/g, " ") });
+    }
+  }
+  cleanText = cleanText.replace(quotedMentionPattern, "").trim();
+
+  // 3. Match @slug or @tema-X or @word (e.g. @tema-4, @tema-4-organizacion-territorial, @constitucion)
+  const inlineMentionPattern = /@([a-zA-Z0-9_\-\.]+)/g;
+  while ((match = inlineMentionPattern.exec(cleanText)) !== null) {
+    const term = match[1]!;
+    const norm = term.toLowerCase().replace(/[-_]/g, " ").trim();
+    const slug = term.toLowerCase().replace(/\s+/g, "-").trim();
+
+    const matched = materials.find((m) => {
+      const mId = m.id.toLowerCase();
+      const mTitle = m.title.toLowerCase().replace(/[-_]/g, " ");
+      return (
+        mId === slug ||
+        mId.startsWith(slug) ||
+        mId.includes(slug) ||
+        mTitle.includes(norm) ||
+        norm.includes(mTitle)
+      );
+    });
+
+    if (matched) {
+      if (!foundDocs.some((d) => d.id === matched.id)) {
+        foundDocs.push({ id: matched.id, title: matched.title, pageCount: matched.pageCount });
+      }
+    } else {
+      foundDocs.push({ title: term.replace(/[-_]/g, " ") });
+    }
+  }
+  cleanText = cleanText.replace(inlineMentionPattern, "").trim();
 
   return {
     docs: foundDocs,
@@ -119,7 +149,9 @@ export function Chat({
   const [tutorMode, setTutorMode] = useState<TutorMode>("explanatory");
 
   // Attached & Mentioned documents state
-  const [attachedDocs, setAttachedDocs] = useState<Array<{ id: string; title: string; pageCount?: number }>>([]);
+  const [attachedDocs, setAttachedDocs] = useState<
+    Array<{ readonly id: string; readonly title: string; readonly pageCount?: number | undefined }>
+  >([]);
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -134,6 +166,8 @@ export function Chat({
   const [audioLevels, setAudioLevels] = useState<number[]>([20, 35, 60, 80, 60, 35, 20, 28]);
   const [isMagIaOpen, setIsMagIaOpen] = useState(false);
   const [isMentionOpen, setIsMentionOpen] = useState(false);
+  const [mentionQuery, setMentionQuery] = useState<string | null>(null);
+  const [selectedMentionIndex, setSelectedMentionIndex] = useState(0);
 
   const materialsResult = useAtomValue(materialsQuery);
   const availableMaterials = AsyncResult.match(materialsResult, {
@@ -141,6 +175,29 @@ export function Chat({
     onFailure: () => [],
     onSuccess: ({ value }) => value.materials
   });
+
+  const filteredMentionMaterials = useMemo(() => {
+    if (mentionQuery === null) return [];
+    if (!mentionQuery) return availableMaterials;
+    const q = mentionQuery.toLowerCase().replace(/[-_]/g, " ").trim();
+    const qSlug = mentionQuery.toLowerCase().replace(/\s+/g, "-").trim();
+    return availableMaterials.filter((m) => {
+      const mId = m.id.toLowerCase();
+      const mTitle = m.title.toLowerCase().replace(/[-_]/g, " ");
+      return mId.includes(qSlug) || mTitle.includes(q);
+    });
+  }, [mentionQuery, availableMaterials]);
+
+  const handleSelectMentionDoc = (mat: { readonly id: string; readonly title: string; readonly pageCount?: number | undefined }) => {
+    setAttachedDocs((prev) =>
+      prev.some((d) => d.id === mat.id)
+        ? prev
+        : [...prev, { id: mat.id, title: mat.title, pageCount: mat.pageCount }]
+    );
+    setInput((prev) => prev.replace(/(?:^|\s)@[a-zA-Z0-9_-]*$/, "").trim());
+    setMentionQuery(null);
+    setIsMentionOpen(false);
+  };
 
   const recognitionRef = useRef<any>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -849,13 +906,104 @@ export function Chat({
             </div>
           )}
 
+          {/* Real-time Inline Mention Autocomplete Floating Card */}
+          {mentionQuery !== null && (
+            <div
+              className={`absolute bottom-full left-3 right-3 mb-2 max-h-56 overflow-y-auto rounded-2xl border p-2 shadow-2xl z-40 ui-scale-in ${
+                isLight
+                  ? "bg-white border-purple-200 text-slate-800"
+                  : "bg-slate-900 border-purple-800/80 text-slate-100"
+              }`}
+            >
+              <div className="px-2 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-purple-600 dark:text-purple-400 flex items-center justify-between">
+                <span className="flex items-center gap-1">
+                  <span className="material-symbols-outlined text-[14px]">alternate_email</span>
+                  <span>Documentos coincidentes ({filteredMentionMaterials.length})</span>
+                </span>
+                <span className="text-[10px] text-slate-400 font-normal">Pulsa Enter o Tab para adjuntar</span>
+              </div>
+              <div className="flex flex-col gap-1 mt-1">
+                {filteredMentionMaterials.length === 0 ? (
+                  <p className="p-3 text-xs text-slate-500 text-center">No se encontraron documentos con "{mentionQuery}"</p>
+                ) : (
+                  filteredMentionMaterials.map((mat, idx) => (
+                    <button
+                      key={mat.id}
+                      type="button"
+                      onClick={() => handleSelectMentionDoc(mat)}
+                      className={`flex items-center gap-2.5 rounded-xl px-2.5 py-2 text-xs text-left transition ${
+                        idx === selectedMentionIndex
+                          ? "bg-purple-600 text-white shadow-sm"
+                          : isLight
+                          ? "hover:bg-purple-50 text-slate-700"
+                          : "hover:bg-purple-950/40 text-slate-200"
+                      }`}
+                    >
+                      <span className={`material-symbols-outlined text-base ${idx === selectedMentionIndex ? "text-white" : "text-red-500"}`}>
+                        picture_as_pdf
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold truncate">{mat.title}</p>
+                        <p className={`text-[10px] truncate ${idx === selectedMentionIndex ? "text-purple-100" : "text-slate-400"}`}>
+                          ID: {mat.id} {mat.pageCount ? `· ${mat.pageCount} páginas` : ""}
+                        </p>
+                      </div>
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded-md ${idx === selectedMentionIndex ? "bg-white/20 text-white" : "bg-purple-500/10 text-purple-600 dark:text-purple-400"}`}>
+                        Adjuntar
+                      </span>
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+
           <textarea
             className={`w-full resize-none bg-transparent px-2 py-1 text-sm outline-none placeholder:text-slate-400 dark:placeholder:text-slate-400 font-normal leading-relaxed ${
               isLight ? "text-slate-900" : "text-slate-100"
             }`}
             value={input}
-            onChange={(event) => setInput(event.currentTarget.value)}
+            onChange={(event) => {
+              const val = event.currentTarget.value;
+              setInput(val);
+              const mentionMatch = /(?:^|\s)@([a-zA-Z0-9_-]*)$/.exec(val);
+              if (mentionMatch) {
+                setMentionQuery(mentionMatch[1] ?? "");
+                setSelectedMentionIndex(0);
+              } else {
+                setMentionQuery(null);
+              }
+            }}
             onKeyDown={(e) => {
+              if (mentionQuery !== null && filteredMentionMaterials.length > 0) {
+                if (e.key === "ArrowDown") {
+                  e.preventDefault();
+                  setSelectedMentionIndex((idx) => (idx + 1) % filteredMentionMaterials.length);
+                  return;
+                }
+                if (e.key === "ArrowUp") {
+                  e.preventDefault();
+                  setSelectedMentionIndex(
+                    (idx) => (idx - 1 + filteredMentionMaterials.length) % filteredMentionMaterials.length
+                  );
+                  return;
+                }
+                if (e.key === "Enter" || e.key === "Tab") {
+                  e.preventDefault();
+                  const selected =
+                    filteredMentionMaterials[selectedMentionIndex] ?? filteredMentionMaterials[0];
+                  if (selected) {
+                    handleSelectMentionDoc(selected);
+                    return;
+                  }
+                }
+                if (e.key === "Escape") {
+                  e.preventDefault();
+                  setMentionQuery(null);
+                  return;
+                }
+              }
+
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
                 if (isListening) stopListening();
@@ -1042,14 +1190,7 @@ export function Chat({
                           <button
                             key={mat.id}
                             type="button"
-                            onClick={() => {
-                              setAttachedDocs((prev) =>
-                                prev.some((d) => d.id === mat.id)
-                                  ? prev
-                                  : [...prev, { id: mat.id, title: mat.title, pageCount: mat.pageCount }]
-                              );
-                              setIsMentionOpen(false);
-                            }}
+                            onClick={() => handleSelectMentionDoc(mat)}
                             className={`flex items-center gap-2 rounded-xl px-2.5 py-1.5 text-xs text-left transition ${
                               isLight ? "hover:bg-purple-50 text-slate-700" : "hover:bg-purple-950/40 text-slate-200"
                             }`}
