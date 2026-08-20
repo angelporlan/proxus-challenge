@@ -86,7 +86,7 @@ export function App() {
     setTimeout(() => {
       setIsChatMaximized(false);
       setIsChatClosing(false);
-    }, 320);
+    }, 280);
   }, []);
 
   useEffect(() => {

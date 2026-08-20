@@ -477,43 +477,34 @@
   from { background-position: 160% 0; }
   to { background-position: -80% 0; }
 }
-@keyframes ui-chat-expand {
+@keyframes ui-chat-slide-left {
   0% {
-    opacity: 0;
-    transform: scale(0.86) translateX(120px);
-    filter: blur(8px);
-  }
-  65% {
-    opacity: 0.95;
-    transform: scale(1.015) translateX(-6px);
-    filter: blur(0.5px);
+    transform: translateX(100%);
+    box-shadow: -20px 0 50px rgba(0, 0, 0, 0.4);
   }
   100% {
-    opacity: 1;
-    transform: scale(1) translateX(0);
-    filter: blur(0px);
+    transform: translateX(0);
+    box-shadow: none;
   }
 }
-@keyframes ui-chat-collapse {
+@keyframes ui-chat-slide-right {
   0% {
-    opacity: 1;
-    transform: scale(1) translateX(0);
-    filter: blur(0px);
+    transform: translateX(0);
+    box-shadow: none;
   }
   100% {
-    opacity: 0;
-    transform: scale(0.86) translateX(120px);
-    filter: blur(8px);
+    transform: translateX(100%);
+    box-shadow: -20px 0 50px rgba(0, 0, 0, 0.4);
   }
 }
 
 .ui-chat-expand {
-  animation: ui-chat-expand 400ms cubic-bezier(0.16, 1, 0.3, 1) both;
-  transform-origin: right center;
+  animation: ui-chat-slide-left 340ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  will-change: transform;
 }
 .ui-chat-collapse {
-  animation: ui-chat-collapse 320ms cubic-bezier(0.4, 0, 0.2, 1) both;
-  transform-origin: right center;
+  animation: ui-chat-slide-right 280ms cubic-bezier(0.4, 0, 0.2, 1) both;
+  will-change: transform;
 }
 
 @media (max-width: 640px) {
