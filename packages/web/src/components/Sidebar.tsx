@@ -2,6 +2,7 @@ import { useAtomRefresh, useAtomValue } from "@effect/atom-react";
 import type { PdfMaterial } from "@proxus/shared";
 import * as AsyncResult from "effect/unstable/reactivity/AsyncResult";
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import { artifactsQuery } from "../domain/artifacts/atoms.ts";
 import { materialsQuery } from "../domain/materials/atoms.ts";
 
@@ -480,36 +481,39 @@ export function Sidebar({
       </section>
 
       {/* Floating Tooltip positioned fixed to the right of the sidebar / trash can */}
-      {hoveredTooltip && (
-        <div
-          role="tooltip"
-          className={`fixed z-[9999] pointer-events-none rounded-xl border px-3.5 py-2.5 text-xs font-medium shadow-2xl backdrop-blur-md transition-all duration-150 animate-in fade-in zoom-in-95 ${
-            isLight
-              ? "bg-slate-900/95 text-white border-slate-700 shadow-slate-900/40"
-              : "bg-slate-950/95 text-slate-100 border-slate-700 shadow-black/90"
-          }`}
-          style={{
-            top: `${hoveredTooltip.top}px`,
-            left: `${hoveredTooltip.left}px`,
-            transform: "translateY(-50%)",
-            maxWidth: "320px"
-          }}
-        >
-          {hoveredTooltip.badge && (
-            <span className="inline-block text-[10px] font-semibold uppercase tracking-wider text-indigo-400 mb-1">
-              {hoveredTooltip.badge}
-            </span>
-          )}
-          <p className="font-semibold text-xs leading-snug break-words whitespace-normal text-white">
-            {hoveredTooltip.title}
-          </p>
-          {hoveredTooltip.subtitle && (
-            <p className="text-[11px] text-slate-400 mt-1 leading-tight break-all whitespace-normal">
-              {hoveredTooltip.subtitle}
+      {hoveredTooltip &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <div
+            role="tooltip"
+            className={`fixed z-[99999] pointer-events-none rounded-xl border px-3.5 py-2.5 text-xs font-medium shadow-2xl backdrop-blur-md transition-all duration-150 animate-in fade-in zoom-in-95 ${
+              isLight
+                ? "bg-slate-900 text-white border-slate-700 shadow-slate-900/50"
+                : "bg-slate-950 text-slate-100 border-slate-700 shadow-black/90"
+            }`}
+            style={{
+              top: `${hoveredTooltip.top}px`,
+              left: `${hoveredTooltip.left}px`,
+              transform: "translateY(-50%)",
+              maxWidth: "320px"
+            }}
+          >
+            {hoveredTooltip.badge && (
+              <span className="inline-block text-[10px] font-semibold uppercase tracking-wider text-indigo-400 mb-1">
+                {hoveredTooltip.badge}
+              </span>
+            )}
+            <p className="font-semibold text-xs leading-snug break-words whitespace-normal text-white">
+              {hoveredTooltip.title}
             </p>
-          )}
-        </div>
-      )}
+            {hoveredTooltip.subtitle && (
+              <p className="text-[11px] text-slate-400 mt-1 leading-tight break-all whitespace-normal">
+                {hoveredTooltip.subtitle}
+              </p>
+            )}
+          </div>,
+          document.body
+        )}
     </aside>
   );
 }
