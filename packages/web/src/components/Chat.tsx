@@ -33,6 +33,7 @@ interface ChatProps {
   readonly theme?: "dark" | "light" | undefined;
   readonly isMaximized?: boolean | undefined;
   readonly onToggleMaximize?: (() => void) | undefined;
+  readonly onClose?: (() => void) | undefined;
 }
 
 type ChatItem =
@@ -143,7 +144,8 @@ export function Chat({
   onOpenMindMap,
   theme = "dark",
   isMaximized = false,
-  onToggleMaximize
+  onToggleMaximize,
+  onClose
 }: ChatProps = {}) {
   const isLight = theme === "light";
   const [messages, setMessages] = useState<readonly AgentMessage[]>([]);
@@ -671,6 +673,24 @@ export function Chat({
               restart_alt
             </span>
           </button>
+
+          {onClose && !isMaximized && (
+            <button
+              className={`p-1.5 rounded-xl border transition ${
+                isLight
+                  ? "border-slate-200 text-slate-500 hover:text-slate-800 hover:bg-slate-100"
+                  : "border-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-900"
+              }`}
+              type="button"
+              onClick={onClose}
+              title="Ocultar Tutor de estudio"
+              aria-label="Ocultar Tutor de estudio"
+            >
+              <span className="material-symbols-outlined text-[17px]" aria-hidden="true">
+                dock_to_right
+              </span>
+            </button>
+          )}
         </div>
       </header>
 

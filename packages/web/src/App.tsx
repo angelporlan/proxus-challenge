@@ -61,7 +61,12 @@ export function App() {
   const [isChatClosing, setIsChatClosing] = useState(false);
 
   const [isLibraryOpen, setIsLibraryOpen] = useState(false);
-  const [isTutorOpen, setIsTutorOpen] = useState(false);
+  const [isTutorOpen, setIsTutorOpen] = useState(() => {
+    if (typeof window === "undefined") return true;
+    const isWide = window.matchMedia("(min-width: 1440px)").matches;
+    if (!isWide) return false;
+    return localStorage.getItem("proxus_tutor_open") !== "false";
+  });
   const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [recentlyUploadedId, setRecentlyUploadedId] = useState<string | null>(null);
 
@@ -178,7 +183,12 @@ export function App() {
   };
 
   const closeLibrary = useCallback(() => setIsLibraryOpen(false), []);
-  const closeTutor = useCallback(() => setIsTutorOpen(false), []);
+  const closeTutor = useCallback(() => {
+    setIsTutorOpen(false);
+    if (typeof window !== "undefined" && window.matchMedia("(min-width: 1440px)").matches) {
+      localStorage.setItem("proxus_tutor_open", "false");
+    }
+  }, []);
 
   const openLibrary = () => {
     libraryTriggerRef.current = document.activeElement instanceof HTMLElement
@@ -195,6 +205,9 @@ export function App() {
     if (prompt) setChatPrompt(prompt);
     setIsLibraryOpen(false);
     setIsTutorOpen(true);
+    if (typeof window !== "undefined" && window.matchMedia("(min-width: 1440px)").matches) {
+      localStorage.setItem("proxus_tutor_open", "true");
+    }
   };
 
   const handleSelectArtifact = (artifactId: string) => {
@@ -486,7 +499,9 @@ export function App() {
       <section
         inert={!isWideLayout && (isLibraryOpen || isTutorOpen) ? true : undefined}
         aria-hidden={!isWideLayout && (isLibraryOpen || isTutorOpen) ? true : undefined}
-        className={`flex h-screen min-w-0 flex-1 flex-col overflow-hidden border-r transition-colors min-[1440px]:min-w-[640px] ${isLight ? "border-slate-200 bg-slate-50/70" : "border-slate-800 bg-slate-950/70"}`}
+        className={`flex h-screen min-w-0 flex-1 flex-col overflow-hidden transition-colors ${
+          isTutorOpen ? "border-r" : "border-r-0"
+        } min-[1440px]:min-w-[640px] ${isLight ? "border-slate-200 bg-slate-50/70" : "border-slate-800 bg-slate-950/70"}`}
       >
         <header className={`flex shrink-0 items-center justify-between gap-3 border-b px-3 py-2.5 pr-14 sm:px-4 min-[1440px]:pr-4 ${isLight ? "border-slate-200 bg-white/95" : "border-slate-800 bg-slate-900/90"}`}>
           <div className="flex min-w-0 items-center gap-2">
@@ -526,9 +541,25 @@ export function App() {
             <IconButton label={isLight ? "Cambiar a modo oscuro" : "Cambiar a modo claro"} variant="ghost" onClick={toggleTheme}>
               <span className="material-symbols-outlined text-[18px]">{isLight ? "dark_mode" : "light_mode"}</span>
             </IconButton>
-            <IconButton ref={tutorFallbackRef} label="Abrir tutor" variant="ghost" className="min-[1440px]:hidden" onClick={() => openTutor()} aria-expanded={isTutorOpen}>
-              <span className="material-symbols-outlined text-[18px]">forum</span>
-            </IconButton>
+            <button
+              ref={tutorFallbackRef}
+              type="button"
+              onClick={() => (isTutorOpen ? closeTutor() : openTutor())}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-semibold transition ${
+                isTutorOpen
+                  ? isLight
+                    ? "border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 shadow-xs"
+                    : "border-indigo-800/80 bg-indigo-950/50 text-indigo-300 hover:bg-indigo-900/60"
+                  : isLight
+                  ? "border-slate-200 text-slate-700 hover:text-slate-900 hover:bg-slate-100 shadow-xs"
+                  : "border-slate-800 text-slate-300 hover:text-slate-100 hover:bg-slate-800/80"
+              }`}
+              title={isTutorOpen ? "Ocultar Tutor de estudio" : "Mostrar Tutor de estudio"}
+              aria-expanded={isTutorOpen}
+            >
+              <span className="material-symbols-outlined text-[17px]">forum</span>
+              <span className="hidden sm:inline">{isTutorOpen ? "Ocultar Tutor" : "Tutor"}</span>
+            </button>
           </div>
         </header>
 
@@ -563,26 +594,28 @@ export function App() {
         </div>
       </section>
 
-      <div
-        role="separator"
-        aria-label="Ajustar ancho del tutor"
-        aria-orientation="vertical"
-        aria-valuemin={360}
-        aria-valuemax={Math.max(360, Math.min(520, viewportWidth - layoutWidths.sidebar - 640 - 12))}
-        aria-valuenow={layoutWidths.chat}
-        tabIndex={0}
-        onKeyDown={adjustTutorWithKeyboard}
-        onPointerDown={beginTutorResize}
-        onPointerMove={updateTutorResize}
-        onPointerUp={finishResize}
-        onPointerCancel={finishResize}
-        onDoubleClick={() => {
-          setChatWidth(400);
-          localStorage.setItem("proxus_chat_width", "400");
-        }}
-        className={`resizer-handle hidden min-[1440px]:block ${isResizingRight ? "is-active" : ""}`}
-        title="Arrastra para ajustar; usa las flechas con teclado; doble clic para restablecer"
-      />
+      {isTutorOpen && (
+        <div
+          role="separator"
+          aria-label="Ajustar ancho del tutor"
+          aria-orientation="vertical"
+          aria-valuemin={360}
+          aria-valuemax={Math.max(360, Math.min(520, viewportWidth - layoutWidths.sidebar - 640 - 12))}
+          aria-valuenow={layoutWidths.chat}
+          tabIndex={0}
+          onKeyDown={adjustTutorWithKeyboard}
+          onPointerDown={beginTutorResize}
+          onPointerMove={updateTutorResize}
+          onPointerUp={finishResize}
+          onPointerCancel={finishResize}
+          onDoubleClick={() => {
+            setChatWidth(400);
+            localStorage.setItem("proxus_chat_width", "400");
+          }}
+          className={`resizer-handle hidden min-[1440px]:block ${isResizingRight ? "is-active" : ""}`}
+          title="Arrastra para ajustar; usa las flechas con teclado; doble clic para restablecer"
+        />
+      )}
 
       <ResponsivePanel side="right" label="Tutor de estudio" open={isTutorOpen} onClose={closeTutor} width={layoutWidths.chat} laptopWidth={480} isWide={isWideLayout} returnFocusRef={tutorTriggerRef} fallbackFocusRef={tutorFallbackRef}>
         <Chat
@@ -590,12 +623,13 @@ export function App() {
           onClearPrefill={() => setChatPrompt(null)}
           onSelectArtifact={(id) => {
             handleSelectArtifact(id);
-            setIsTutorOpen(false);
+            if (!isWideLayout) setIsTutorOpen(false);
           }}
           onOpenMindMap={() => {
             setActiveTab("mindmap");
-            setIsTutorOpen(false);
+            if (!isWideLayout) setIsTutorOpen(false);
           }}
+          onClose={closeTutor}
           theme={theme}
           isMaximized={false}
           onToggleMaximize={handleOpenFullscreenChat}
@@ -788,6 +822,10 @@ function ResponsivePanel({ side, label, open, onClose, width, laptopWidth, isWid
       });
     };
   }, [fallbackFocusRef, isWide, onClose, open, returnFocusRef]);
+
+  if (isWide && side === "right" && !open) {
+    return null;
+  }
 
   return (
     <>
