@@ -96,7 +96,7 @@ function parseUserContent(
       foundDocs.push({ title: term.replace(/[-_]/g, " ") });
     }
   }
-  cleanText = cleanText.replace(quotedMentionPattern, "").trim();
+  cleanText = cleanText.replace(quotedMentionPattern, "@$1");
 
   // 3. Match @slug or @tema-X or @word (e.g. @tema-4, @tema-4-organizacion-territorial, @constitucion)
   const inlineMentionPattern = /@([a-zA-Z0-9_\-\.]+)/g;
@@ -125,7 +125,6 @@ function parseUserContent(
       foundDocs.push({ title: term.replace(/[-_]/g, " ") });
     }
   }
-  cleanText = cleanText.replace(inlineMentionPattern, "").trim();
 
   return {
     docs: foundDocs,
@@ -195,7 +194,13 @@ export function Chat({
         ? prev
         : [...prev, { id: mat.id, title: mat.title, pageCount: mat.pageCount }]
     );
-    setInput((prev) => prev.replace(/(?:^|\s)@[a-zA-Z0-9_-]*$/, "").trim());
+    setInput((prev) => {
+      const mentionPattern = /(?:^|\s)@[a-zA-Z0-9_\-.]*$/;
+      if (mentionPattern.test(prev)) {
+        return prev.replace(/(^|\s)@[a-zA-Z0-9_\-.]*$/, `$1@${mat.title} `);
+      }
+      return `${prev ? prev.trim() + " " : ""}@${mat.title} `;
+    });
     setMentionQuery(null);
     setIsMentionOpen(false);
   };
@@ -734,7 +739,27 @@ export function Chat({
                       </div>
                     )}
                     {text ? (
-                      <div className="whitespace-pre-wrap">{text}</div>
+                      <div className="whitespace-pre-wrap">
+                        {(() => {
+                          const mentionRegex = /(@[a-zA-Z0-9_\-.]+)/g;
+                          const parts = text.split(mentionRegex);
+                          return parts.map((part, pIdx) => {
+                            if (part.startsWith("@")) {
+                              return (
+                                <span
+                                  key={pIdx}
+                                  className="inline-flex items-center gap-1 rounded-lg bg-white/20 px-1.5 py-0.5 font-semibold text-white border border-white/30 shadow-xs mx-0.5 align-baseline"
+                                >
+                                  <span className="material-symbols-outlined text-[13px] text-red-200">picture_as_pdf</span>
+                                  <span>{part}</span>
+                                  <span className="material-symbols-outlined text-[12px] text-emerald-300">check_circle</span>
+                                </span>
+                              );
+                            }
+                            return <span key={pIdx}>{part}</span>;
+                          });
+                        })()}
+                      </div>
                     ) : (
                       <div className="text-xs text-white/80 italic">Consultando documento adjunto…</div>
                     )}
@@ -909,6 +934,10 @@ export function Chat({
                   {doc.pageCount && (
                     <span className="text-[10px] text-purple-600 dark:text-purple-400">({doc.pageCount} pág{doc.pageCount > 1 ? "s" : ""})</span>
                   )}
+                  <span className="inline-flex items-center gap-0.5 rounded-md bg-emerald-500/15 dark:bg-emerald-500/25 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
+                    <span className="material-symbols-outlined text-[11px] text-emerald-500">check_circle</span>
+                    <span>Cargado</span>
+                  </span>
                   <button
                     type="button"
                     onClick={() => setAttachedDocs((prev) => prev.filter((d) => d.id !== doc.id))}
