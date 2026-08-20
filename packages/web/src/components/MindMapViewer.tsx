@@ -1,6 +1,6 @@
 import { useAtomRefresh, useAtomValue } from "@effect/atom-react";
 import * as AsyncResult from "effect/unstable/reactivity/AsyncResult";
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { materialsQuery } from "../domain/materials/atoms.ts";
 
 export interface MindMapNode {
@@ -1302,8 +1302,8 @@ export function MindMapViewer({
   const [isDrawerOpen, setIsDrawerOpen] = useState<boolean>(true);
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set());
 
-  // Infinite Canvas Pan & Zoom
-  const [zoom, setZoom] = useState<number>(0.85);
+  // Infinite Canvas Pan & Zoom (Starts with a comfortable auto-fitted scale)
+  const [zoom, setZoom] = useState<number>(0.52);
   const [pan, setPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
   const [showMinimap, setShowMinimap] = useState(true);
@@ -1370,23 +1370,13 @@ export function MindMapViewer({
     if (e.ctrlKey || e.metaKey) {
       e.preventDefault();
       const zoomFactor = e.deltaY < 0 ? 1.08 : 0.92;
-      setZoom((z) => Math.max(0.35, Math.min(2.0, Number((z * zoomFactor).toFixed(2)))));
+      setZoom((z) => Math.max(0.30, Math.min(2.0, Number((z * zoomFactor).toFixed(2)))));
     } else {
       setPan((p) => ({
         x: p.x - e.deltaX * 0.9,
         y: p.y - e.deltaY * 0.9
       }));
     }
-  };
-
-  const resetView = () => {
-    setPan({ x: 0, y: 0 });
-    setZoom(0.85);
-  };
-
-  const fitView = () => {
-    setPan({ x: 0, y: 0 });
-    setZoom(0.7);
   };
 
   // ---------------------------------------------------------------------------
@@ -1492,11 +1482,66 @@ export function MindMapViewer({
     });
 
     return {
-      rootNode: rootPosNode,
       allNodes: flattenedNodes,
       allConnectors: connectors
     };
   }, [currentMindMap, collapsedIds]);
+
+  // Dynamic Bounding Box Calculation for Auto-Fit
+  const bounds = useMemo(() => {
+    if (allNodes.length === 0) {
+      return { minX: -500, maxX: 500, minY: -300, maxY: 300, width: 1000, height: 600 };
+    }
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minY = Infinity;
+    let maxY = -Infinity;
+    for (const n of allNodes) {
+      if (n.x < minX) minX = n.x;
+      if (n.x + n.width > maxX) maxX = n.x + n.width;
+      if (n.y < minY) minY = n.y;
+      if (n.y + n.height > maxY) maxY = n.y + n.height;
+    }
+    return {
+      minX,
+      maxX,
+      minY,
+      maxY,
+      width: Math.max(300, maxX - minX),
+      height: Math.max(200, maxY - minY)
+    };
+  }, [allNodes]);
+
+  const fitView = useCallback(() => {
+    if (!canvasRef.current) return;
+    const containerW = canvasRef.current.clientWidth;
+    const containerH = canvasRef.current.clientHeight;
+    if (containerW <= 0 || containerH <= 0) return;
+
+    const paddingX = 80;
+    const paddingY = 60;
+    const scaleX = (containerW - paddingX) / bounds.width;
+    const scaleY = (containerH - paddingY) / bounds.height;
+    const optimalZoom = Math.max(0.35, Math.min(1.0, Number(Math.min(scaleX, scaleY).toFixed(2))));
+
+    const centerX = (bounds.minX + bounds.maxX) / 2;
+    const centerY = (bounds.minY + bounds.maxY) / 2;
+
+    setZoom(optimalZoom);
+    setPan({ x: -centerX * optimalZoom, y: -centerY * optimalZoom });
+  }, [bounds]);
+
+  const resetView = () => {
+    fitView();
+  };
+
+  // Auto-fit on initial render or when active topic changes
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      fitView();
+    }, 60);
+    return () => clearTimeout(timer);
+  }, [fitView, currentMindMap.id]);
 
   if (!initialData && materialsStatus !== "ready") {
     return (
