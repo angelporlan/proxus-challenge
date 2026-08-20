@@ -214,6 +214,7 @@ export function Chat({
   const simIntervalRef = useRef<any>(null);
   const magIaRef = useRef<HTMLDivElement>(null);
   const mentionRef = useRef<HTMLDivElement>(null);
+  const backdropRef = useRef<HTMLDivElement>(null);
 
   // Close menus on click outside
   useEffect(() => {
@@ -1003,61 +1004,112 @@ export function Chat({
             </div>
           )}
 
-          <textarea
-            className={`w-full resize-none bg-transparent px-2 py-1 text-sm outline-none placeholder:text-slate-400 dark:placeholder:text-slate-400 font-normal leading-relaxed ${
-              isLight ? "text-slate-900" : "text-slate-100"
-            }`}
-            value={input}
-            onChange={(event) => {
-              const val = event.currentTarget.value;
-              setInput(val);
-              const mentionMatch = /(?:^|\s)@([a-zA-Z0-9_-]*)$/.exec(val);
-              if (mentionMatch) {
-                setMentionQuery(mentionMatch[1] ?? "");
-                setSelectedMentionIndex(0);
-              } else {
-                setMentionQuery(null);
-              }
-            }}
-            onKeyDown={(e) => {
-              if (mentionQuery !== null && filteredMentionMaterials.length > 0) {
-                if (e.key === "ArrowDown") {
-                  e.preventDefault();
-                  setSelectedMentionIndex((idx) => (idx + 1) % filteredMentionMaterials.length);
-                  return;
-                }
-                if (e.key === "ArrowUp") {
-                  e.preventDefault();
-                  setSelectedMentionIndex(
-                    (idx) => (idx - 1 + filteredMentionMaterials.length) % filteredMentionMaterials.length
+          <div className="relative w-full">
+            {/* Live Backdrop for Styled Mentions */}
+            <div
+              ref={backdropRef}
+              aria-hidden="true"
+              className="absolute inset-0 pointer-events-none whitespace-pre-wrap break-words px-2 py-1 text-sm font-sans leading-relaxed overflow-hidden select-none"
+            >
+              {input ? (
+                (() => {
+                  const mentionRegex = /(@[a-zA-Z0-9_\-.]+)/g;
+                  const parts = input.split(mentionRegex);
+                  return (
+                    <>
+                      {parts.map((part, idx) => {
+                        if (part.startsWith("@")) {
+                          return (
+                            <strong
+                              key={idx}
+                              className={`font-bold px-0.5 rounded ${
+                                isLight
+                                  ? "text-purple-700 bg-purple-100"
+                                  : "text-purple-300 bg-purple-900/60"
+                              }`}
+                            >
+                              {part}
+                            </strong>
+                          );
+                        }
+                        return (
+                          <span
+                            key={idx}
+                            className={isLight ? "text-slate-900" : "text-slate-100"}
+                          >
+                            {part}
+                          </span>
+                        );
+                      })}
+                      {input.endsWith("\n") && "\n"}
+                    </>
                   );
-                  return;
+                })()
+              ) : (
+                <span className="text-slate-400">
+                  Pregunta lo que quieras · @ para mencionar docs
+                </span>
+              )}
+            </div>
+
+            <textarea
+              className="relative z-10 w-full resize-none bg-transparent px-2 py-1 text-sm outline-none text-transparent caret-purple-600 dark:caret-purple-400 selection:bg-purple-500/25 font-sans leading-relaxed font-normal"
+              value={input}
+              onScroll={(e) => {
+                if (backdropRef.current) {
+                  backdropRef.current.scrollTop = e.currentTarget.scrollTop;
                 }
-                if (e.key === "Enter" || e.key === "Tab") {
-                  e.preventDefault();
-                  const selected =
-                    filteredMentionMaterials[selectedMentionIndex] ?? filteredMentionMaterials[0];
-                  if (selected) {
-                    handleSelectMentionDoc(selected);
+              }}
+              onChange={(event) => {
+                const val = event.currentTarget.value;
+                setInput(val);
+                const mentionMatch = /(?:^|\s)@([a-zA-Z0-9_-]*)$/.exec(val);
+                if (mentionMatch) {
+                  setMentionQuery(mentionMatch[1] ?? "");
+                  setSelectedMentionIndex(0);
+                } else {
+                  setMentionQuery(null);
+                }
+              }}
+              onKeyDown={(e) => {
+                if (mentionQuery !== null && filteredMentionMaterials.length > 0) {
+                  if (e.key === "ArrowDown") {
+                    e.preventDefault();
+                    setSelectedMentionIndex((idx) => (idx + 1) % filteredMentionMaterials.length);
+                    return;
+                  }
+                  if (e.key === "ArrowUp") {
+                    e.preventDefault();
+                    setSelectedMentionIndex(
+                      (idx) => (idx - 1 + filteredMentionMaterials.length) % filteredMentionMaterials.length
+                    );
+                    return;
+                  }
+                  if (e.key === "Enter" || e.key === "Tab") {
+                    e.preventDefault();
+                    const selected =
+                      filteredMentionMaterials[selectedMentionIndex] ?? filteredMentionMaterials[0];
+                    if (selected) {
+                      handleSelectMentionDoc(selected);
+                      return;
+                    }
+                  }
+                  if (e.key === "Escape") {
+                    e.preventDefault();
+                    setMentionQuery(null);
                     return;
                   }
                 }
-                if (e.key === "Escape") {
-                  e.preventDefault();
-                  setMentionQuery(null);
-                  return;
-                }
-              }
 
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                if (isListening) stopListening();
-                void submit(input);
-              }
-            }}
-            placeholder="Pregunta lo que quieras · @ para mencionar docs"
-            rows={2}
-          />
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  if (isListening) stopListening();
+                  void submit(input);
+                }
+              }}
+              rows={2}
+            />
+          </div>
 
           <div className="mt-2 flex items-center justify-between gap-2 pt-1 border-t border-slate-100 dark:border-slate-800/50">
             {/* Left: MagIA Dropdown */}
