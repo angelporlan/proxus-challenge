@@ -507,13 +507,10 @@ export function Chat({
             rows={2}
           />
           <div
-            className={`flex items-center justify-between pt-1 px-2 border-t ${
+            className={`flex items-center justify-end pt-1 px-2 border-t ${
               isLight ? "border-slate-200" : "border-slate-800/50"
             }`}
           >
-            <span className={`text-[11px] font-mono ${isLight ? "text-slate-400" : "text-slate-500"}`}>
-              Enter para enviar · Shift+Enter nueva línea
-            </span>
             <button
               className="flex min-h-9 items-center gap-1.5 rounded-lg bg-indigo-600 px-4 py-1.5 text-xs font-semibold text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-40"
               type="submit"
