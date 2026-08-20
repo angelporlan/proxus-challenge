@@ -174,19 +174,33 @@ export function Sidebar({
                         className="min-w-0 flex-1 rounded-lg px-2.5 py-2 text-left disabled:cursor-not-allowed"
                         aria-current={isSelected ? "page" : undefined}
                         aria-label={`Abrir ${material.title}, ${pageLabel}`}
-                        title={material.title}
                       >
                         <strong
-                          className={`block text-xs font-semibold leading-snug break-words line-clamp-2 ${
+                          className={`truncate block text-xs font-semibold leading-snug ${
                             isLight ? "text-slate-800" : "text-slate-100"
                           }`}
                         >
                           {material.title}
                         </strong>
-                        <span className={`block text-[11px] leading-tight break-all line-clamp-1 mt-0.5 ${isLight ? "text-slate-500" : "text-slate-400"}`}>
+                        <span className={`truncate block text-[11px] leading-tight mt-0.5 ${isLight ? "text-slate-500" : "text-slate-400"}`}>
                           {pageLabel} · {material.fileName}
                         </span>
                       </button>
+
+                      {/* Absolute Floating Tooltip on Hover */}
+                      <div
+                        role="tooltip"
+                        className={`absolute left-2 top-full z-40 mt-1 max-w-[280px] rounded-xl border px-3 py-2 text-xs font-medium shadow-xl backdrop-blur-md transition-all duration-150 pointer-events-none opacity-0 translate-y-1 group-hover:opacity-100 group-hover:translate-y-0 ${
+                          isLight
+                            ? "bg-slate-900 text-white border-slate-700 shadow-slate-900/30"
+                            : "bg-slate-950 text-slate-100 border-slate-700 shadow-black/80"
+                        }`}
+                      >
+                        <p className="font-semibold text-xs leading-snug break-words whitespace-normal text-white">{material.title}</p>
+                        <p className="text-[11px] text-slate-400 mt-1 leading-tight break-all whitespace-normal">
+                          {pageLabel} · {material.fileName}
+                        </p>
+                      </div>
 
                       {/* Floating Quick Action Overlay Buttons (Appears on Hover) */}
                       <div
