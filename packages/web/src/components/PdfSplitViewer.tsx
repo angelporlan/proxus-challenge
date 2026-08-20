@@ -221,6 +221,51 @@ export function PdfSplitViewer({
     return loadedPages[currentPage] ?? pageCache.get(getCacheKey(material.id, currentPage));
   }, [currentPage, loadedPages, material.id]);
 
+  const [isPanning, setIsPanning] = useState(false);
+  const panStartRef = useRef<{ x: number; y: number; scrollLeft: number; scrollTop: number }>({
+    x: 0,
+    y: 0,
+    scrollLeft: 0,
+    scrollTop: 0
+  });
+
+  const handleMouseDown = (e: React.MouseEvent<HTMLElement>) => {
+    // Only pan on primary button and when clicking background or image
+    if (e.button !== 0 || !mainScrollRef.current) return;
+    const target = e.target as HTMLElement;
+    if (target.closest("button") || target.closest("input")) return;
+
+    setIsPanning(true);
+    panStartRef.current = {
+      x: e.clientX,
+      y: e.clientY,
+      scrollLeft: mainScrollRef.current.scrollLeft,
+      scrollTop: mainScrollRef.current.scrollTop
+    };
+  };
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLElement>) => {
+    if (!isPanning || !mainScrollRef.current) return;
+    e.preventDefault();
+    const dx = e.clientX - panStartRef.current.x;
+    const dy = e.clientY - panStartRef.current.y;
+    mainScrollRef.current.scrollLeft = panStartRef.current.scrollLeft - dx;
+    mainScrollRef.current.scrollTop = panStartRef.current.scrollTop - dy;
+  };
+
+  const handleMouseUp = () => {
+    setIsPanning(false);
+  };
+
+  const handleWheel = (e: React.WheelEvent<HTMLElement>) => {
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault();
+      setFitMode("custom");
+      const delta = e.deltaY < 0 ? 10 : -10;
+      setZoom((z) => Math.max(40, Math.min(250, z + delta)));
+    }
+  };
+
   return (
     <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 overflow-hidden relative">
       {/* Top Header Bar */}
@@ -275,7 +320,7 @@ export function PdfSplitViewer({
               type="button"
               onClick={() => {
                 setFitMode("custom");
-                setZoom((z) => Math.max(50, z - 15));
+                setZoom((z) => Math.max(40, z - 15));
               }}
               className="grid size-8 place-items-center rounded-lg text-slate-600 hover:bg-slate-200 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-700/60 dark:hover:text-white"
               title="Reducir zoom"
@@ -283,14 +328,14 @@ export function PdfSplitViewer({
             >
               <span className="material-symbols-outlined text-sm">remove</span>
             </button>
-            <span className="px-1.5 text-xs font-mono text-slate-700 dark:text-slate-300 min-w-[40px] text-center">
+            <span className="px-1.5 text-xs font-mono text-slate-700 dark:text-slate-300 min-w-[42px] text-center">
               {fitMode === "fit-page" ? "Auto" : fitMode === "fit-width" ? "Ancho" : `${zoom}%`}
             </span>
             <button
               type="button"
               onClick={() => {
                 setFitMode("custom");
-                setZoom((z) => Math.min(200, z + 15));
+                setZoom((z) => Math.min(250, z + 15));
               }}
               className="grid size-8 place-items-center rounded-lg text-slate-600 hover:bg-slate-200 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-700/60 dark:hover:text-white"
               title="Aumentar zoom"
@@ -370,10 +415,17 @@ export function PdfSplitViewer({
           })}
         </aside>
 
-        {/* Center Page Canvas */}
+        {/* Center Page Canvas with Smooth Pan & Scroll */}
         <main
           ref={mainScrollRef}
-          className="flex-1 overflow-auto p-4 sm:p-6 flex flex-col items-center justify-start bg-slate-100/70 dark:bg-slate-950 relative pb-28"
+          onMouseDown={handleMouseDown}
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleMouseUp}
+          onMouseLeave={handleMouseUp}
+          onWheel={handleWheel}
+          className={`flex-1 w-full h-full overflow-auto bg-slate-100/80 dark:bg-slate-950/90 relative select-none ${
+            isPanning ? "cursor-grabbing" : fitMode === "custom" || fitMode === "fit-width" ? "cursor-grab" : ""
+          }`}
         >
           {loadingPage && !currentImage && (
             <div className="flex flex-col items-center justify-center h-80 gap-3 text-slate-500 dark:text-slate-400 m-auto">
@@ -383,7 +435,7 @@ export function PdfSplitViewer({
           )}
 
           {error && !currentImage && (
-            <div className="m-auto max-w-md rounded-xl border border-red-200 bg-red-50 p-5 text-center text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-200">
+            <div className="m-auto max-w-md rounded-xl border border-red-200 bg-red-50 p-5 text-center text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-200 mt-20">
               <span className="material-symbols-outlined text-3xl text-red-500 mb-2">error</span>
               <p className="font-semibold text-sm mb-1">No se pudo cargar la página</p>
               <p className="text-xs text-red-600 dark:text-red-300/80">{error}</p>
@@ -401,18 +453,18 @@ export function PdfSplitViewer({
           )}
 
           {currentImage && (
-            <>
+            <div className="min-w-full min-h-full flex flex-col items-center justify-start p-4 sm:p-6 pb-36">
               {fitMode === "fit-page" ? (
-                <div className="flex flex-1 w-full items-center justify-center min-h-0 my-auto py-2">
+                <div className="flex flex-1 w-full items-center justify-center min-h-0 my-auto py-1">
                   <img
                     key={`${material.id}-${currentPage}`}
                     src={currentImage}
                     alt={`Página ${currentPage} - ${material.title}`}
-                    className="max-h-[calc(100vh-165px)] max-w-full w-auto object-contain rounded-xl shadow-xl border border-slate-200 dark:border-slate-800 bg-white select-none transition-all duration-150"
+                    className="max-h-[calc(100vh-165px)] max-w-full w-auto object-contain rounded-xl shadow-2xl border border-slate-200 dark:border-slate-800 bg-white select-none transition-all duration-150"
                   />
                 </div>
               ) : fitMode === "fit-width" ? (
-                <div className="w-full max-w-3xl my-2 mx-auto rounded-xl shadow-xl overflow-hidden border border-slate-200 dark:border-slate-800 bg-white transition-all duration-150">
+                <div className="w-full max-w-3xl my-2 mx-auto rounded-xl shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-800 bg-white transition-all duration-150">
                   <img
                     key={`${material.id}-${currentPage}`}
                     src={currentImage}
@@ -422,25 +474,25 @@ export function PdfSplitViewer({
                 </div>
               ) : (
                 <div
-                  className="transition-[width] duration-150 shadow-xl rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800 bg-white my-2 mx-auto"
+                  className="transition-all duration-150 shadow-2xl rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800 bg-white my-2 mx-auto shrink-0"
                   style={{
-                    width: `${zoom}%`,
-                    maxWidth: `${Math.max(100, zoom)}%`
+                    width: `${Math.round(840 * (zoom / 100))}px`,
+                    maxWidth: "none"
                   }}
                 >
                   <img
                     key={`${material.id}-${currentPage}`}
                     src={currentImage}
                     alt={`Página ${currentPage} - ${material.title}`}
-                    className="w-full h-auto block select-none"
+                    className="w-full h-auto block select-none pointer-events-none"
                   />
                 </div>
               )}
-            </>
+            </div>
           )}
 
           {/* Floating Navigation Controls */}
-          <div className="absolute bottom-5 left-1/2 -translate-x-1/2 flex items-center gap-2 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 px-4 py-2 shadow-2xl backdrop-blur-md z-30">
+          <div className="fixed bottom-5 left-1/2 -translate-x-1/2 flex items-center gap-2 rounded-2xl border border-slate-200/90 dark:border-slate-800/90 bg-white/95 dark:bg-slate-900/95 px-4 py-2 shadow-2xl backdrop-blur-md z-30">
             <button
               type="button"
               disabled={currentPage <= 1}
