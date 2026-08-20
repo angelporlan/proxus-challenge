@@ -915,12 +915,9 @@ export function Chat({
                   : "bg-slate-900 border-purple-800/80 text-slate-100"
               }`}
             >
-              <div className="px-2 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-purple-600 dark:text-purple-400 flex items-center justify-between">
-                <span className="flex items-center gap-1">
-                  <span className="material-symbols-outlined text-[14px]">alternate_email</span>
-                  <span>Documentos coincidentes ({filteredMentionMaterials.length})</span>
-                </span>
-                <span className="text-[10px] text-slate-400 font-normal">Pulsa Enter o Tab para adjuntar</span>
+              <div className="px-2 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-purple-600 dark:text-purple-400 flex items-center gap-1">
+                <span className="material-symbols-outlined text-[14px]">alternate_email</span>
+                <span>Documentos coincidentes ({filteredMentionMaterials.length})</span>
               </div>
               <div className="flex flex-col gap-1 mt-1">
                 {filteredMentionMaterials.length === 0 ? (
@@ -944,9 +941,11 @@ export function Chat({
                       </span>
                       <div className="flex-1 min-w-0">
                         <p className="font-semibold truncate">{mat.title}</p>
-                        <p className={`text-[10px] truncate ${idx === selectedMentionIndex ? "text-purple-100" : "text-slate-400"}`}>
-                          ID: {mat.id} {mat.pageCount ? `· ${mat.pageCount} páginas` : ""}
-                        </p>
+                        {mat.pageCount ? (
+                          <p className={`text-[10px] truncate ${idx === selectedMentionIndex ? "text-purple-100" : "text-slate-400"}`}>
+                            {mat.pageCount} páginas
+                          </p>
+                        ) : null}
                       </div>
                       <span className={`text-[10px] px-1.5 py-0.5 rounded-md ${idx === selectedMentionIndex ? "bg-white/20 text-white" : "bg-purple-500/10 text-purple-600 dark:text-purple-400"}`}>
                         Adjuntar
