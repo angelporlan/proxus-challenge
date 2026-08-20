@@ -1,7 +1,6 @@
-import { useAtomSet } from "@effect/atom-react";
 import type { PdfMaterial } from "@proxus/shared";
-import { useState, type DragEvent, type ChangeEvent } from "react";
-import { uploadMaterialAction } from "../domain/materials/atoms.ts";
+import { PdfUploadDropzone } from "./upload/PdfUploadDropzone.tsx";
+import { usePdfUpload } from "./upload/usePdfUpload.ts";
 
 interface OnboardingUploadProps {
   readonly onUploaded?: ((material: PdfMaterial) => void) | undefined;
@@ -9,257 +8,202 @@ interface OnboardingUploadProps {
   readonly isCompact?: boolean | undefined;
 }
 
+const quickPrompts = [
+  {
+    icon: "quiz",
+    title: "Generar quiz de práctica",
+    description: "Preguntas de opción múltiple y verdadero o falso",
+    prompt: "Crea un quiz de 3 preguntas de opción múltiple basado en mis materiales."
+  },
+  {
+    icon: "timer",
+    title: "Simulacro de examen",
+    description: "Practica con tiempo y recibe una puntuación",
+    prompt: "Crea un test de examen con 3 preguntas sobre el temario principal."
+  },
+  {
+    icon: "summarize",
+    title: "Resumen estructurado",
+    description: "Repasa conceptos clave, ejemplos y fórmulas",
+    prompt: "Crea una nota de estudio estructurada resumiendo los conceptos clave de mis materiales."
+  },
+  {
+    icon: "psychology",
+    title: "Tutoría socrática",
+    description: "Avanza paso a paso con preguntas guiadas",
+    prompt: "Explícame el concepto más importante de mis notas de forma socrática, haciéndome preguntas para razonarlo."
+  }
+] as const;
+
 export function OnboardingUpload({
   onUploaded,
   onSelectPrompt,
   isCompact = false
 }: OnboardingUploadProps) {
-  const uploadMaterial = useAtomSet(uploadMaterialAction, { mode: "promise" });
-  const [isDragging, setIsDragging] = useState(false);
-  const [isUploading, setIsUploading] = useState(false);
-  const [uploadError, setUploadError] = useState<string | null>(null);
-  const [lastUploaded, setLastUploaded] = useState<PdfMaterial | null>(null);
+  const {
+    file,
+    title,
+    setTitle,
+    phase,
+    error,
+    uploadedMaterial,
+    isBusy,
+    selectFile,
+    removeFile,
+    upload
+  } = usePdfUpload({ onUploaded });
 
-  const processFile = async (file: File) => {
-    if (!file.name.toLowerCase().endsWith(".pdf")) {
-      setUploadError("Por favor selecciona un archivo en formato PDF (.pdf)");
-      return;
-    }
-
-    setIsUploading(true);
-    setUploadError(null);
-
-    try {
-      const base64 = await fileToBase64(file);
-      const title = file.name.replace(/\.[^/.]+$/, "").replace(/[-_]/g, " ");
-
-      const result = await uploadMaterial({
-        fileName: file.name,
-        title,
-        contentBase64: base64
-      });
-
-      setLastUploaded(result);
-      if (onUploaded) {
-        onUploaded(result);
-      }
-    } catch (err) {
-      setUploadError(err instanceof Error ? err.message : "Error al procesar y subir el archivo PDF.");
-    } finally {
-      setIsUploading(false);
-    }
-  };
-
-  const handleDragOver = (e: DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    setIsDragging(true);
-  };
-
-  const handleDragLeave = (e: DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    setIsDragging(false);
-  };
-
-  const handleDrop = (e: DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    setIsDragging(false);
-    const files = e.dataTransfer.files;
-    if (files.length > 0 && files[0]) {
-      void processFile(files[0]);
-    }
-  };
-
-  const handleFileInput = (e: ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (files && files.length > 0 && files[0]) {
-      void processFile(files[0]);
-    }
-  };
+  const uploadLabel = phase === "reading"
+    ? "Leyendo PDF…"
+    : phase === "processing"
+      ? "Procesando PDF…"
+      : phase === "error"
+        ? "Reintentar subida"
+        : "Subir PDF";
 
   if (isCompact) {
     return (
-      <div
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
-        className={`relative group rounded-2xl border-2 border-dashed p-4 text-center transition-all ${
-          isDragging
-            ? "border-indigo-500 bg-indigo-50 dark:bg-indigo-950/30 scale-[0.99]"
-            : "border-slate-300 dark:border-slate-800 hover:border-slate-400 dark:hover:border-slate-700 bg-white/70 dark:bg-slate-900/40"
-        }`}
+      <form
+        className="flex flex-col gap-3"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void upload();
+        }}
       >
-        <input
-          type="file"
-          accept=".pdf,application/pdf"
-          onChange={handleFileInput}
-          disabled={isUploading}
-          className="absolute inset-0 z-10 opacity-0 cursor-pointer disabled:cursor-not-allowed"
-          title="Subir PDF"
+        <PdfUploadDropzone
+          file={file}
+          phase={phase}
+          error={error}
+          disabled={isBusy}
+          compact
+          onFileSelect={selectFile}
+          onRemove={removeFile}
         />
-        <div className="flex flex-col items-center justify-center gap-2">
-          <div className="grid size-9 place-items-center rounded-xl bg-indigo-50 dark:bg-indigo-600/20 text-indigo-600 dark:text-indigo-400 group-hover:bg-indigo-100 transition">
-            <span className="material-symbols-outlined text-xl">
-              {isUploading ? "hourglass_empty" : "upload_file"}
-            </span>
-          </div>
-          <div>
-            <p className="text-xs font-semibold text-slate-800 dark:text-slate-200">
-              {isUploading ? "Subiendo…" : "Arrastra un PDF aquí"}
-            </p>
-            <span className="text-[10px] text-slate-500 dark:text-slate-400">o pulsa para explorar</span>
-          </div>
-        </div>
-      </div>
+        {file !== null && phase !== "success" && (
+          <button
+            type="submit"
+            disabled={isBusy}
+            className="w-full rounded-xl bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {uploadLabel}
+          </button>
+        )}
+      </form>
     );
   }
 
   return (
-    <div className="max-w-2xl mx-auto p-6 sm:p-10 flex flex-col items-center justify-center min-h-full text-center">
-      {/* Hero Badge */}
-      <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-indigo-200 dark:border-indigo-800/60 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 text-xs font-medium mb-6">
-        <span className="material-symbols-outlined text-sm">auto_stories</span>
-        <span>Cognitive Flow Study Workspace</span>
+    <div className="mx-auto flex min-h-full max-w-2xl flex-col items-center justify-center p-6 text-center sm:p-10">
+      <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-medium text-indigo-700 dark:border-indigo-800/60 dark:bg-indigo-950/40 dark:text-indigo-300">
+        <span className="material-symbols-outlined text-sm" aria-hidden="true">auto_stories</span>
+        <span>Tu espacio de estudio</span>
       </div>
 
-      <h2 className="font-display font-bold text-3xl sm:text-4xl text-slate-900 dark:text-slate-100 mb-3 tracking-tight">
-        Sube tus apuntes o temario
+      <h2 className="mb-3 font-display text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-100 sm:text-4xl">
+        Añade tus apuntes
       </h2>
-      <p className="text-slate-600 dark:text-slate-400 text-base max-w-lg mb-8 leading-relaxed">
-        El tutor académico analizará tu documento PDF, extraerá las páginas y creará resúmenes, quizzes y simulacros a medida.
+      <p className="mb-8 max-w-lg text-base leading-relaxed text-slate-600 dark:text-slate-400">
+        Sube un PDF para consultarlo, preparar resúmenes y crear ejercicios basados en tu temario.
       </p>
 
-      {/* Drag and Drop Zone */}
-      <div
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
-        className={`w-full relative group rounded-3xl border-2 border-dashed p-10 transition-all cursor-pointer ${
-          isDragging
-            ? "border-indigo-500 bg-indigo-50 dark:bg-indigo-950/40 scale-[1.01]"
-            : "border-slate-300 dark:border-slate-800 hover:border-indigo-400 bg-white/80 dark:bg-slate-900/40 hover:bg-indigo-50/20 shadow-sm"
-        }`}
+      <form
+        className="w-full rounded-xl border border-slate-200 bg-white/70 p-4 text-left shadow-sm dark:border-slate-800 dark:bg-slate-900/35 sm:p-5"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void upload();
+        }}
       >
-        <input
-          type="file"
-          accept=".pdf,application/pdf"
-          onChange={handleFileInput}
-          disabled={isUploading}
-          className="absolute inset-0 z-10 opacity-0 cursor-pointer disabled:cursor-not-allowed"
-          title="Seleccionar PDF"
+        <PdfUploadDropzone
+          file={file}
+          phase={phase}
+          error={error}
+          disabled={isBusy}
+          onFileSelect={selectFile}
+          onRemove={removeFile}
         />
 
-        <div className="flex flex-col items-center gap-4">
-          <div className="grid size-16 place-items-center rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800/40 group-hover:scale-110 transition duration-200">
-            <span className="material-symbols-outlined text-3xl">cloud_upload</span>
-          </div>
-
-          {isUploading ? (
-            <div>
-              <div className="flex items-center justify-center gap-2 mb-2">
-                <div className="size-4 animate-spin rounded-full border-2 border-indigo-500 border-t-transparent"></div>
-                <p className="font-semibold text-slate-800 dark:text-slate-200">Procesando y validando PDF…</p>
-              </div>
-              <p className="text-xs text-slate-500 dark:text-slate-400">Extrayendo páginas con Poppler y preparando el tutor</p>
-            </div>
-          ) : (
-            <div>
-              <p className="font-semibold text-slate-900 dark:text-slate-200 text-lg mb-1">
-                Arrastra tu PDF aquí o <span className="text-indigo-600 dark:text-indigo-400 underline underline-offset-4">explora tus archivos</span>
-              </p>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                Soporta PDFs académicos, apuntes, presentaciones o temarios
-              </p>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {uploadError && (
-        <div className="mt-4 w-full p-4 rounded-2xl border border-red-200 dark:border-red-900/60 bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-200 text-sm flex items-center gap-3">
-          <span className="material-symbols-outlined text-red-500">error</span>
-          <span>{uploadError}</span>
-        </div>
-      )}
-
-      {lastUploaded && (
-        <div className="mt-6 w-full p-5 rounded-2xl border border-emerald-200 dark:border-emerald-800/50 bg-emerald-50 dark:bg-emerald-950/30 text-left flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <span className="material-symbols-outlined text-emerald-600 dark:text-emerald-400 text-2xl">check_circle</span>
-            <div>
-              <p className="font-semibold text-slate-900 dark:text-slate-100 text-sm">{lastUploaded.title}</p>
-              <p className="text-xs text-slate-500 dark:text-slate-400">{lastUploaded.pageCount} páginas procesadas</p>
-            </div>
-          </div>
-          <span className="text-xs bg-emerald-100 dark:bg-emerald-500/10 border border-emerald-300 dark:border-emerald-500/20 text-emerald-700 dark:text-emerald-300 px-3 py-1 rounded-full font-medium">
-            Listo para estudiar
-          </span>
-        </div>
-      )}
-
-      {/* Quick Prompts */}
-      <div className="mt-10 w-full text-left">
-        <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-3">
-          ¿Qué puedes hacer con tu tutor?
-        </p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {[
-            {
-              icon: "quiz",
-              title: "Generar Quiz de práctica",
-              desc: "Preguntas de opción múltiple y verdadero/falso",
-              prompt: "Crea un quiz de 3 preguntas de opción múltiple basado en mis materiales."
-            },
-            {
-              icon: "timer",
-              title: "Simulacro de Examen",
-              desc: "Ponte a prueba con temporizador y puntuación",
-              prompt: "Crea un test de examen con 3 preguntas sobre el temario principal."
-            },
-            {
-              icon: "summarize",
-              title: "Resumen estructurado",
-              desc: "Notas con conceptos clave y fórmulas",
-              prompt: "Crea una nota de estudio estructurada resumiendo los conceptos clave de mis materiales."
-            },
-            {
-              icon: "psychology",
-              title: "Tutoría socrática",
-              desc: "Aprende paso a paso con preguntas guiadas",
-              prompt: "Explícame el concepto más importante de mis notas de forma socrática, haciéndome preguntas para razonarlo."
-            }
-          ].map((item, idx) => (
-            <button
-              key={idx}
-              type="button"
-              onClick={() => onSelectPrompt && onSelectPrompt(item.prompt)}
-              className="flex items-start gap-3 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-900/50 hover:bg-white dark:hover:bg-slate-900 hover:border-indigo-400 text-left transition group shadow-sm"
+        {file !== null && (
+          <div className="mt-4">
+            <label
+              htmlFor="onboarding-upload-title"
+              className="mb-1.5 block text-sm font-semibold text-slate-700 dark:text-slate-200"
             >
-              <div className="grid size-9 shrink-0 place-items-center rounded-xl bg-slate-100 dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 group-hover:bg-indigo-50 dark:group-hover:bg-indigo-600/20 group-hover:text-indigo-600 transition">
+              Título del material
+            </label>
+            <input
+              id="onboarding-upload-title"
+              type="text"
+              value={title}
+              onChange={(event) => setTitle(event.currentTarget.value)}
+              disabled={isBusy || phase === "success"}
+              className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 outline-none transition-shadow placeholder:text-slate-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500"
+              placeholder="Por ejemplo: Tema 1 · Introducción"
+            />
+          </div>
+        )}
+
+        {file !== null && phase !== "success" && (
+          <div className="mt-4 flex justify-end">
+            <button
+              type="submit"
+              disabled={isBusy}
+              className="inline-flex min-w-36 items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isBusy && (
+                <span
+                  className="size-3.5 animate-spin rounded-full border-2 border-white/40 border-t-white"
+                  aria-hidden="true"
+                />
+              )}
+              {uploadLabel}
+            </button>
+          </div>
+        )}
+      </form>
+
+      {uploadedMaterial !== null && (
+        <div
+          className="mt-5 flex w-full items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-left text-emerald-800 dark:border-emerald-800/60 dark:bg-emerald-950/30 dark:text-emerald-200"
+          role="status"
+          aria-live="polite"
+        >
+          <span className="material-symbols-outlined text-2xl" aria-hidden="true">check_circle</span>
+          <div>
+            <p className="text-sm font-semibold">{uploadedMaterial.title}</p>
+            <p className="text-xs opacity-80">
+              {uploadedMaterial.pageCount} {uploadedMaterial.pageCount === 1 ? "página preparada" : "páginas preparadas"}
+            </p>
+          </div>
+        </div>
+      )}
+
+      <div className="mt-10 w-full text-left">
+        <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+          Ideas para empezar
+        </p>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {quickPrompts.map((item) => (
+            <button
+              key={item.title}
+              type="button"
+              onClick={() => onSelectPrompt?.(item.prompt)}
+              className="group flex items-start gap-3 rounded-xl border border-slate-200 bg-white/70 p-4 text-left shadow-sm transition-colors hover:border-indigo-400 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-slate-800 dark:bg-slate-900/50 dark:hover:bg-slate-900"
+            >
+              <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-slate-100 text-indigo-600 transition-colors group-hover:bg-indigo-50 dark:bg-slate-800 dark:text-indigo-400 dark:group-hover:bg-indigo-600/20" aria-hidden="true">
                 <span className="material-symbols-outlined text-lg">{item.icon}</span>
-              </div>
-              <div>
-                <p className="text-xs font-semibold text-slate-900 dark:text-slate-200 group-hover:text-indigo-600 dark:group-hover:text-indigo-300">
+              </span>
+              <span>
+                <strong className="block text-xs font-semibold text-slate-900 group-hover:text-indigo-600 dark:text-slate-200 dark:group-hover:text-indigo-300">
                   {item.title}
-                </p>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">{item.desc}</p>
-              </div>
+                </strong>
+                <span className="mt-0.5 block text-[11px] text-slate-500 dark:text-slate-400">
+                  {item.description}
+                </span>
+              </span>
             </button>
           ))}
         </div>
       </div>
     </div>
   );
-}
-
-function fileToBase64(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = reader.result as string;
-      const base64 = result.includes(",") ? result.split(",")[1] ?? "" : result;
-      resolve(base64);
-    };
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
 }

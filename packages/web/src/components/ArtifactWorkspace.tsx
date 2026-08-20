@@ -1,4 +1,4 @@
-import { useAtomSet, useAtomValue } from "@effect/atom-react";
+import { useAtomRefresh, useAtomSet, useAtomValue } from "@effect/atom-react";
 import type {
   Artifact,
   ArtifactAttempt,
@@ -45,14 +45,14 @@ export function ArtifactWorkspace({
 function EmptyWorkspace() {
   return (
     <main className="h-full min-w-0 overflow-y-auto p-6 flex items-center justify-center">
-      <div className="max-w-md text-center p-8 rounded-3xl border border-dashed border-slate-300 dark:border-slate-800 bg-white/60 dark:bg-slate-900/30">
-        <div className="grid size-14 place-items-center rounded-2xl bg-indigo-600/10 text-indigo-500 mx-auto mb-4 border border-indigo-500/20">
+      <div className="max-w-md rounded-xl border border-dashed border-slate-300 bg-white/60 p-8 text-center dark:border-slate-800 dark:bg-slate-900/30">
+        <div className="mx-auto mb-4 grid size-14 place-items-center rounded-xl border border-indigo-500/20 bg-indigo-600/10 text-indigo-500">
           <span className="material-symbols-outlined text-2xl">menu_book</span>
         </div>
         <p className="font-bold text-indigo-500 text-xs uppercase tracking-widest mb-1">Espacio de Estudio</p>
         <h2 className="font-display font-bold text-2xl text-slate-800 dark:text-slate-100 mb-2">Selecciona un recurso</h2>
         <p className="text-slate-500 dark:text-slate-400 text-sm leading-relaxed">
-          Elige una nota de estudio, quiz o simulacro en la barra lateral, o pide al tutor de IA que genere uno a partir de tus PDFs.
+          Elige una nota, un quiz o un simulacro en la biblioteca, o pide al tutor que prepare uno a partir de tus PDFs.
         </p>
       </div>
     </main>
@@ -66,7 +66,9 @@ function ArtifactDetail({
   readonly artifactId: string;
   readonly onAskTutorAboutQuestion?: ArtifactWorkspaceProps["onAskTutorAboutQuestion"];
 }) {
-  const artifact = useAtomValue(artifactQuery(artifactId));
+  const query = artifactQuery(artifactId);
+  const artifact = useAtomValue(query);
+  const refresh = useAtomRefresh(query);
 
   return (
     <main className="h-full min-w-0 overflow-y-auto p-4 sm:p-6">
@@ -77,16 +79,8 @@ function ArtifactDetail({
             <p className="text-sm">Cargando recurso…</p>
           </div>
         ),
-        onError: (error) => (
-          <div className="p-4 rounded-2xl border border-red-200 dark:border-red-900/60 bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-200 text-sm">
-            {String(error)}
-          </div>
-        ),
-        onDefect: (defect) => (
-          <div className="p-4 rounded-2xl border border-red-200 dark:border-red-900/60 bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-200 text-sm">
-            {String(defect)}
-          </div>
-        ),
+        onError: () => <ArtifactLoadError onRetry={refresh} />,
+        onDefect: () => <ArtifactLoadError onRetry={refresh} />,
         onSuccess: ({ value }) => (
           <ArtifactContent
             artifact={value}
@@ -95,6 +89,27 @@ function ArtifactDetail({
         )
       })}
     </main>
+  );
+}
+
+function ArtifactLoadError({ onRetry }: { readonly onRetry: () => void }) {
+  return (
+    <div className="flex min-h-64 items-center justify-center text-center">
+      <div className="max-w-sm">
+        <span className="material-symbols-outlined text-3xl text-red-500" aria-hidden="true">
+          error
+        </span>
+        <h2 className="mt-2 text-base font-semibold text-slate-900 dark:text-slate-100">
+          No se pudo abrir el recurso
+        </h2>
+        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+          Comprueba la conexión y vuelve a intentarlo.
+        </p>
+        <button type="button" className="ui-secondary-action mt-4" onClick={onRetry}>
+          Reintentar
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -129,7 +144,7 @@ function NoteViewer({ artifact }: { readonly artifact: Extract<Artifact, { reado
   };
 
   return (
-    <article className="mx-auto max-w-3xl rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/90 p-6 sm:p-8 shadow-xl">
+    <article className="mx-auto max-w-3xl rounded-xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900/90 sm:p-8">
       <div className="flex items-center justify-between gap-4 mb-4">
         <div className="flex items-center gap-2">
           <span className="grid size-7 place-items-center rounded-lg bg-indigo-50 dark:bg-indigo-600/20 text-indigo-600 dark:text-indigo-400 font-mono text-xs">
@@ -140,7 +155,7 @@ function NoteViewer({ artifact }: { readonly artifact: Extract<Artifact, { reado
         <button
           type="button"
           onClick={copyNote}
-          className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 transition"
+          className="flex min-h-9 items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1 text-xs font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 dark:border-slate-800 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100"
         >
           <span className="material-symbols-outlined text-xs">{copied ? "check" : "content_copy"}</span>
           <span>{copied ? "Copiado" : "Copiar"}</span>
@@ -207,8 +222,8 @@ function ExerciseSolver({
       const payload = buildSubmitInput(artifact, answers);
       const result = await submitAttempt(payload);
       setAttempt(result);
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
+    } catch {
+      setError("No se pudieron guardar tus respuestas. Comprueba la conexión e inténtalo de nuevo.");
     } finally {
       setIsSubmitting(false);
     }
@@ -225,7 +240,7 @@ function ExerciseSolver({
   return (
     <article className="mx-auto max-w-3xl pb-12">
       {/* Exercise Header */}
-      <header className="mb-6 rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/90 p-5 sm:p-6 shadow-xl">
+      <header className="mb-6 rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900/90 sm:p-6">
         <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
           <div className="flex items-center gap-2">
             <span className="grid size-7 place-items-center rounded-lg bg-indigo-50 dark:bg-indigo-600/20 text-indigo-600 dark:text-indigo-400">
@@ -243,7 +258,7 @@ function ExerciseSolver({
             {isExamMode && attempt === null && (
               <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono font-semibold border ${
                 timeLeft < 60
-                  ? "border-red-500 bg-red-50 dark:bg-red-950/60 text-red-700 dark:text-red-300 animate-pulse"
+                  ? "border-red-500 bg-red-50 dark:bg-red-950/60 text-red-700 dark:text-red-300"
                   : "border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200"
               }`}>
                 <span className="material-symbols-outlined text-xs">timer</span>
@@ -253,7 +268,7 @@ function ExerciseSolver({
             <button
               type="button"
               onClick={() => setIsExamMode(!isExamMode)}
-              className="px-2.5 py-1 text-xs rounded-full border border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 text-slate-700 dark:text-slate-300 transition"
+              className="min-h-9 rounded-lg border border-slate-200 px-2.5 py-1 text-xs text-slate-700 transition hover:border-slate-300 dark:border-slate-700 dark:text-slate-300 dark:hover:border-slate-600"
             >
               {isExamMode ? "Vista Simulacro" : "Vista Lista"}
             </button>
@@ -262,7 +277,7 @@ function ExerciseSolver({
 
         <h2 className="font-display font-bold text-2xl sm:text-3xl text-slate-900 dark:text-slate-100 mb-2">{artifact.title}</h2>
         <p className="text-slate-500 dark:text-slate-400 text-xs sm:text-sm">
-          {artifact.questions.length} preguntas · Responde con atención y revisa las correcciones y explicaciones de la IA.
+          {artifact.questions.length} preguntas · Responde con atención y revisa las correcciones y explicaciones al terminar.
         </p>
 
         {/* Question Progress Tracker Pills */}
@@ -374,7 +389,7 @@ function ExerciseSolver({
       {attempt?.status === "graded" && <AttemptSummary attempt={attempt} />}
 
       {error !== undefined && (
-        <div className="mt-4 p-4 rounded-2xl border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-200 text-xs">
+        <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-4 text-xs text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">
           {error}
         </div>
       )}
@@ -390,7 +405,7 @@ function ExerciseSolver({
               )}
             </div>
             <button
-              className="rounded-2xl bg-indigo-600 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-indigo-600/30 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed transition"
+              className="rounded-lg bg-indigo-600 px-6 py-3 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-40"
               type="button"
               onClick={submit}
               disabled={unansweredQuestions.length > 0 || isSubmitting}
@@ -447,7 +462,7 @@ function QuestionCard({
   readonly onAskTutorAboutQuestion?: ArtifactWorkspaceProps["onAskTutorAboutQuestion"];
 }) {
   return (
-    <section className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/80 p-5 sm:p-6 shadow-lg">
+    <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900/80 sm:p-6">
       <div className="mb-4 flex items-start justify-between gap-4">
         <div>
           <span className="font-mono text-xs text-indigo-600 dark:text-indigo-400 font-semibold uppercase tracking-wider block mb-1">
@@ -468,7 +483,7 @@ function QuestionCard({
       )}
       {question.type === "short-answer" && (
         <textarea
-          className="min-h-28 w-full rounded-2xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 p-3.5 text-slate-900 dark:text-slate-100 text-sm outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 disabled:opacity-70 transition placeholder:text-slate-400 dark:placeholder:text-slate-600"
+          className="min-h-28 w-full rounded-lg border border-slate-300 bg-slate-50 p-3.5 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 disabled:opacity-70 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-600"
           value={value}
           disabled={disabled}
           onChange={(event) => onChange(event.currentTarget.value)}
@@ -506,7 +521,7 @@ function MultipleChoiceInput({
         return (
           <label
             key={option.id}
-            className={`flex cursor-pointer items-center gap-3 rounded-2xl border p-3.5 transition ${
+            className={`flex cursor-pointer items-center gap-3 rounded-xl border p-3.5 transition ${
               isSelected
                 ? "border-indigo-500 bg-indigo-50 dark:bg-indigo-950/40 text-slate-900 dark:text-slate-100 shadow-sm"
                 : "border-slate-200 dark:border-slate-800/80 bg-slate-50/50 dark:bg-slate-950/50 text-slate-700 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-950"
@@ -548,7 +563,7 @@ function TrueFalseInput({
         return (
           <label
             key={nextValue}
-            className={`flex cursor-pointer items-center gap-3 rounded-2xl border p-3.5 transition ${
+            className={`flex cursor-pointer items-center gap-3 rounded-xl border p-3.5 transition ${
               isSelected
                 ? "border-indigo-500 bg-indigo-50 dark:bg-indigo-950/40 text-slate-900 dark:text-slate-100 shadow-sm"
                 : "border-slate-200 dark:border-slate-800/80 bg-slate-50/50 dark:bg-slate-950/50 text-slate-700 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-950"
@@ -576,7 +591,7 @@ function AttemptSummary({ attempt }: { readonly attempt: Extract<ArtifactAttempt
   const isPassed = percentage >= 50;
 
   return (
-    <section className={`mt-6 rounded-3xl border p-6 ${
+    <section className={`mt-6 rounded-xl border p-6 ${
       isPassed
         ? "border-emerald-300 dark:border-emerald-800/60 bg-emerald-50 dark:bg-emerald-950/25"
         : "border-amber-300 dark:border-amber-800/60 bg-amber-50 dark:bg-amber-950/25"
@@ -632,7 +647,7 @@ function CorrectionDetails({
   const isIncorrect = "correct" in correction ? !correction.correct : (correction.score < correction.maxScore);
 
   return (
-    <div className="mt-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 p-4 text-xs sm:text-sm">
+    <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4 text-xs dark:border-slate-800 dark:bg-slate-950 sm:text-sm">
       {correction.questionType === "multiple-choice" && question.type === "multiple-choice" && (
         <>
           <p className="text-slate-700 dark:text-slate-300">

@@ -21,11 +21,15 @@ export function PdfSplitViewer({
   const [pageImages, setPageImages] = useState<Record<number, string>>({});
   const [loadingPage, setLoadingPage] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [retryKey, setRetryKey] = useState(0);
 
   const renderPages = useAtomSet(renderMaterialPagesAction, { mode: "promise" });
 
   useEffect(() => {
     setCurrentPage(initialPage);
+    setPageImages({});
+    setError(null);
+    setZoom(100);
   }, [initialPage, material.id]);
 
   useEffect(() => {
@@ -56,7 +60,7 @@ export function PdfSplitViewer({
         }
       } catch (err) {
         if (!isCancelled) {
-          setError(err instanceof Error ? err.message : "Error al renderizar página del PDF con Poppler");
+          setError("No se pudo preparar esta página.");
         }
       } finally {
         if (!isCancelled) {
@@ -85,7 +89,7 @@ export function PdfSplitViewer({
     return () => {
       isCancelled = true;
     };
-  }, [currentPage, material.id]);
+  }, [currentPage, material.id, retryKey]);
 
   const handlePrev = () => {
     if (currentPage > 1) {
@@ -124,8 +128,9 @@ export function PdfSplitViewer({
             <button
               type="button"
               onClick={() => setZoom((z) => Math.max(50, z - 15))}
-              className="p-1 rounded text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-700/60"
+              className="grid size-9 place-items-center rounded-lg text-slate-600 hover:bg-slate-200 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-700/60 dark:hover:text-white"
               title="Reducir zoom"
+              aria-label="Reducir zoom"
             >
               <span className="material-symbols-outlined text-sm">remove</span>
             </button>
@@ -133,8 +138,9 @@ export function PdfSplitViewer({
             <button
               type="button"
               onClick={() => setZoom((z) => Math.min(200, z + 15))}
-              className="p-1 rounded text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-700/60"
+              className="grid size-9 place-items-center rounded-lg text-slate-600 hover:bg-slate-200 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-700/60 dark:hover:text-white"
               title="Aumentar zoom"
+              aria-label="Aumentar zoom"
             >
               <span className="material-symbols-outlined text-sm">add</span>
             </button>
@@ -144,8 +150,9 @@ export function PdfSplitViewer({
           <button
             type="button"
             onClick={() => onAskAboutPage && onAskAboutPage(material.title, currentPage)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-600/20 hover:bg-indigo-100 dark:hover:bg-indigo-600/30 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-500/30 text-xs font-medium transition"
+            className="flex min-h-9 items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-medium text-indigo-700 transition hover:bg-indigo-100 dark:border-indigo-500/30 dark:bg-indigo-600/20 dark:text-indigo-300 dark:hover:bg-indigo-600/30"
             title="Preguntar al tutor sobre esta página"
+            aria-label={`Consultar la página ${currentPage} con el tutor`}
           >
             <span className="material-symbols-outlined text-sm">psychology</span>
             <span className="hidden sm:inline">Consultar página</span>
@@ -156,8 +163,9 @@ export function PdfSplitViewer({
             <button
               type="button"
               onClick={onClose}
-              className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
+              className="grid size-9 place-items-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
               title="Cerrar visor"
+              aria-label="Cerrar visor PDF"
             >
               <span className="material-symbols-outlined text-base">close</span>
             </button>
@@ -174,6 +182,8 @@ export function PdfSplitViewer({
               key={pageNum}
               type="button"
               onClick={() => setCurrentPage(pageNum)}
+              aria-label={`Abrir página ${pageNum}`}
+              aria-current={currentPage === pageNum ? "page" : undefined}
               className={`w-full text-center p-1.5 rounded-xl border transition flex flex-col items-center gap-1 ${
                 currentPage === pageNum
                   ? "border-indigo-500 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 shadow-sm"
@@ -201,21 +211,28 @@ export function PdfSplitViewer({
           {loadingPage && !currentImage && (
             <div className="flex flex-col items-center justify-center h-80 gap-3 text-slate-500 dark:text-slate-400">
               <div className="size-8 animate-spin rounded-full border-2 border-indigo-500 border-t-transparent"></div>
-              <p className="text-sm font-medium">Renderizando página {currentPage} con Poppler…</p>
+              <p className="text-sm font-medium">Preparando página {currentPage}…</p>
             </div>
           )}
 
           {error && (
-            <div className="m-auto max-w-md p-5 rounded-2xl border border-red-200 dark:border-red-900/60 bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-200 text-center">
+            <div className="m-auto max-w-md rounded-xl border border-red-200 bg-red-50 p-5 text-center text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-200">
               <span className="material-symbols-outlined text-3xl text-red-500 mb-2">error</span>
               <p className="font-semibold text-sm mb-1">No se pudo cargar la página</p>
               <p className="text-xs text-red-600 dark:text-red-300/80">{error}</p>
+              <button
+                type="button"
+                className="ui-secondary-action mt-4"
+                onClick={() => setRetryKey((current) => current + 1)}
+              >
+                Reintentar
+              </button>
             </div>
           )}
 
           {currentImage && (
             <div
-              className="transition-all duration-150 shadow-2xl rounded-lg overflow-hidden border border-slate-200 dark:border-slate-800 bg-white"
+              className="transition-[width] duration-150 shadow-lg rounded-lg overflow-hidden border border-slate-200 dark:border-slate-800 bg-white"
               style={{
                 width: `${zoom}%`,
                 maxWidth: `${Math.max(100, zoom)}%`
@@ -230,13 +247,14 @@ export function PdfSplitViewer({
           )}
 
           {/* Floating Navigation Controls */}
-          <div className="sticky bottom-4 mt-auto flex items-center gap-2 rounded-full border border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-900/90 px-4 py-2 shadow-xl backdrop-blur">
+          <div className="sticky bottom-4 mt-auto flex items-center gap-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 px-3 py-2 shadow-lg backdrop-blur">
             <button
               type="button"
               disabled={currentPage <= 1}
               onClick={handlePrev}
-              className="p-1.5 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:cursor-not-allowed text-slate-700 dark:text-slate-200"
+              className="grid size-9 place-items-center rounded-lg text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-30 dark:text-slate-200 dark:hover:bg-slate-800"
               title="Página anterior"
+              aria-label="Página anterior"
             >
               <span className="material-symbols-outlined text-lg">chevron_left</span>
             </button>
@@ -247,8 +265,9 @@ export function PdfSplitViewer({
               type="button"
               disabled={currentPage >= material.pageCount}
               onClick={handleNext}
-              className="p-1.5 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:cursor-not-allowed text-slate-700 dark:text-slate-200"
+              className="grid size-9 place-items-center rounded-lg text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-30 dark:text-slate-200 dark:hover:bg-slate-800"
               title="Página siguiente"
+              aria-label="Página siguiente"
             >
               <span className="material-symbols-outlined text-lg">chevron_right</span>
             </button>

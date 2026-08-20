@@ -10,24 +10,14 @@ import { streamTutorMessage } from "../domain/tutor/stream.ts";
 
 const starterPrompts = [
   {
-    icon: "list_alt",
-    label: "Listar materiales",
-    prompt: "Lista los materiales y apuntes que tengo subidos."
-  },
-  {
     icon: "quiz",
-    label: "Crear Quiz de práctica",
+    label: "Crear un quiz",
     prompt: "Crea un quiz de 3 preguntas de opción múltiple basado en mis materiales subidos."
   },
   {
     icon: "psychology",
-    label: "Modo Socrático",
+    label: "Repasar un tema",
     prompt: "Explícame el concepto más difícil de mis materiales de forma socrática, haciéndome preguntas para que lo deduzca."
-  },
-  {
-    icon: "summarize",
-    label: "Resumen clave",
-    prompt: "Crea una nota de estudio estructurada con los puntos clave y fórmulas de mis materiales."
   }
 ] as const;
 
@@ -39,21 +29,19 @@ interface ChatProps {
   readonly onSelectArtifact?: ((id: string) => void) | undefined;
   readonly onOpenMindMap?: (() => void) | undefined;
   readonly theme?: "dark" | "light" | undefined;
-  readonly onToggleTheme?: (() => void) | undefined;
 }
 
 type ChatItem =
   | { readonly kind: "user"; readonly message: AgentMessage & { readonly role: "user" } }
-  | { readonly kind: "tools"; readonly items: readonly AgentMessage[]; readonly active: boolean }
-  | { readonly kind: "assistant"; readonly message: AgentMessage & { readonly role: "assistant" }; readonly isLatest: boolean };
+  | { readonly kind: "tools"; readonly items: readonly AgentMessage[] }
+  | { readonly kind: "assistant"; readonly message: AgentMessage & { readonly role: "assistant" } };
 
 export function Chat({
   prefillPrompt,
   onClearPrefill,
   onSelectArtifact,
   onOpenMindMap,
-  theme = "dark",
-  onToggleTheme
+  theme = "dark"
 }: ChatProps = {}) {
   const isLight = theme === "light";
   const [messages, setMessages] = useState<readonly AgentMessage[]>([]);
@@ -75,7 +63,7 @@ export function Chat({
   }, [prefillPrompt, isSending, onClearPrefill]);
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    messagesEndRef.current?.scrollIntoView({ behavior: "auto" });
   };
 
   useEffect(() => {
@@ -126,8 +114,8 @@ export function Chat({
       }
 
       setInput("");
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
+    } catch {
+      setError("No se pudo completar la respuesta. Comprueba la conexión e inténtalo de nuevo.");
     } finally {
       setIsSending(false);
     }
@@ -142,8 +130,7 @@ export function Chat({
       if (currentTools.length > 0) {
         items.push({
           kind: "tools",
-          items: [...currentTools],
-          active: isSending && items.length === 0
+          items: [...currentTools]
         });
         currentTools = [];
       }
@@ -160,11 +147,9 @@ export function Chat({
         currentTools.push(msg);
       } else if (msg.role === "assistant") {
         flushTools();
-        const isLatest = i === messages.length - 1;
         items.push({
           kind: "assistant",
-          message: msg as AgentMessage & { role: "assistant" },
-          isLatest
+          message: msg as AgentMessage & { role: "assistant" }
         });
       }
     }
@@ -174,20 +159,29 @@ export function Chat({
   }, [messages, isSending]);
 
   return (
-    <main
-      className={`grid h-screen max-h-screen min-w-0 grid-rows-[auto_1fr_auto] max-md:h-auto max-md:max-h-none flex-1 transition-colors ${
+    <section
+      aria-label="Tutor de estudio"
+      className={`grid h-full min-h-0 max-h-full min-w-0 grid-rows-[auto_1fr_auto] flex-1 transition-colors ${
         isLight ? "bg-slate-50 text-slate-900" : "bg-[#090d16] text-slate-100"
       }`}
     >
       {/* Header */}
       <header
-        className={`flex flex-wrap items-center justify-between gap-3 border-b px-5 py-4 backdrop-blur z-10 transition-colors ${
+        className={`flex flex-wrap items-center justify-between gap-3 border-b px-5 py-4 pr-14 backdrop-blur z-10 transition-colors min-[1440px]:pr-5 ${
           isLight ? "border-slate-200 bg-white/90" : "border-slate-800 bg-slate-950/80"
         }`}
       >
         <div className="flex items-center gap-3">
-          <div className="grid size-9 place-items-center rounded-xl bg-gradient-to-br from-indigo-500 to-indigo-700 text-white shadow-md shadow-indigo-600/30">
-            <span className="material-symbols-outlined text-lg">smart_toy</span>
+          <div
+            className={`grid size-9 place-items-center rounded-xl border ${
+              isLight
+                ? "border-indigo-200 bg-indigo-50 text-indigo-700"
+                : "border-indigo-500/20 bg-indigo-500/10 text-indigo-300"
+            }`}
+          >
+            <span className="material-symbols-outlined text-lg" aria-hidden="true">
+              local_library
+            </span>
           </div>
           <div>
             <div className="flex items-center gap-2">
@@ -196,14 +190,14 @@ export function Chat({
                   isLight ? "text-slate-900" : "text-slate-100"
                 }`}
               >
-                Tutor Académico IA
+                Tutor de estudio
               </h1>
-              <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded-full bg-indigo-600/10 text-indigo-500 border border-indigo-500/20">
-                Gemini
+              <span className="rounded-full border border-indigo-500/20 bg-indigo-500/10 px-2 py-0.5 text-[10px] font-medium text-indigo-500">
+                con IA
               </span>
             </div>
             <p className={`text-[11px] mt-0.5 ${isLight ? "text-slate-500" : "text-slate-400"}`}>
-              Asistente pedagógico contextual
+              Pregunta, repasa y practica con tus materiales
             </p>
           </div>
         </div>
@@ -214,11 +208,14 @@ export function Chat({
             className={`flex items-center rounded-xl p-0.5 text-xs border ${
               isLight ? "bg-slate-100 border-slate-200" : "bg-slate-900 border-slate-800"
             }`}
+            role="group"
+            aria-label="Modo de tutoría"
           >
             <button
               type="button"
               onClick={() => setTutorMode("explanatory")}
-              className={`px-2.5 py-1 rounded-lg font-medium transition ${
+              aria-pressed={tutorMode === "explanatory"}
+              className={`min-h-9 px-2.5 py-1 rounded-lg font-medium transition ${
                 tutorMode === "explanatory"
                   ? "bg-indigo-600 text-white shadow-sm"
                   : isLight
@@ -232,7 +229,8 @@ export function Chat({
             <button
               type="button"
               onClick={() => setTutorMode("socratic")}
-              className={`px-2.5 py-1 rounded-lg font-medium transition ${
+              aria-pressed={tutorMode === "socratic"}
+              className={`min-h-9 px-2.5 py-1 rounded-lg font-medium transition ${
                 tutorMode === "socratic"
                   ? "bg-indigo-600 text-white shadow-sm"
                   : isLight
@@ -245,23 +243,6 @@ export function Chat({
             </button>
           </div>
 
-          {onToggleTheme && (
-            <button
-              type="button"
-              onClick={onToggleTheme}
-              className={`p-1.5 rounded-xl border transition ${
-                isLight
-                  ? "border-slate-200 text-slate-700 hover:text-slate-900 hover:bg-slate-100"
-                  : "border-slate-800 text-amber-300 hover:text-amber-200 hover:bg-slate-900"
-              }`}
-              title={isLight ? "Cambiar a Modo Oscuro" : "Cambiar a Modo Claro"}
-            >
-              <span className="material-symbols-outlined text-base">
-                {isLight ? "dark_mode" : "light_mode"}
-              </span>
-            </button>
-          )}
-
           <button
             className={`p-1.5 rounded-xl border transition ${
               isLight
@@ -272,8 +253,11 @@ export function Chat({
             onClick={() => setMessages([])}
             disabled={messages.length === 0}
             title="Limpiar conversación"
+            aria-label="Limpiar conversación"
           >
-            <span className="material-symbols-outlined text-base">restart_alt</span>
+            <span className="material-symbols-outlined text-base" aria-hidden="true">
+              restart_alt
+            </span>
           </button>
         </div>
       </header>
@@ -282,20 +266,22 @@ export function Chat({
       <section className="flex flex-col gap-4 overflow-y-auto p-4 sm:p-6" aria-live="polite">
         {messages.length === 0 ? (
           <div className="m-auto w-full max-w-2xl text-center py-6">
-            <div className="grid size-16 place-items-center rounded-3xl bg-indigo-600/10 text-indigo-500 border border-indigo-500/20 mx-auto mb-4">
-              <span className="material-symbols-outlined text-3xl">psychology_alt</span>
+            <div className="mx-auto mb-4 grid size-12 place-items-center rounded-xl border border-indigo-500/20 bg-indigo-600/10 text-indigo-500">
+              <span className="material-symbols-outlined text-2xl" aria-hidden="true">
+                menu_book
+              </span>
             </div>
             <h2
               className={`font-display font-bold text-2xl sm:text-3xl mb-2 ${
                 isLight ? "text-slate-900" : "text-slate-100"
               }`}
             >
-              ¿En qué te puedo ayudar hoy?
+              ¿Qué quieres estudiar?
             </h2>
             <p className={`text-xs sm:text-sm max-w-md mx-auto mb-8 leading-relaxed ${
               isLight ? "text-slate-600" : "text-slate-400"
             }`}>
-              Haz preguntas sobre tus PDFs subidos, solicita quizzes de práctica o pide explicaciones paso a paso.
+              Pregunta sobre tus materiales o elige una forma de empezar.
             </p>
 
             {/* Quick Starters Grid */}
@@ -303,7 +289,7 @@ export function Chat({
               {starterPrompts.map((item, idx) => (
                 <button
                   key={idx}
-                  className={`flex items-start gap-3 rounded-2xl border p-3.5 transition group ${
+                  className={`group flex items-start gap-3 rounded-xl border p-3.5 transition ${
                     isLight
                       ? "border-slate-200 bg-white hover:border-indigo-400 hover:bg-indigo-50/40 text-slate-800 shadow-sm"
                       : "border-slate-800/80 bg-slate-900/60 hover:border-indigo-500/50 hover:bg-slate-900 text-slate-200"
@@ -311,7 +297,7 @@ export function Chat({
                   type="button"
                   onClick={() => void submit(item.prompt)}
                 >
-                  <span className="material-symbols-outlined text-indigo-500 text-lg group-hover:scale-110 transition">
+                  <span className="material-symbols-outlined text-indigo-500 text-lg" aria-hidden="true">
                     {item.icon}
                   </span>
                   <div>
@@ -336,11 +322,11 @@ export function Chat({
           groupedItems.map((item, index) => {
             if (item.kind === "user") {
               return (
-                <article key={index} className="flex flex-col gap-1 max-w-2xl self-end items-end">
+                <article key={index} className="ui-enter flex flex-col gap-1 max-w-2xl self-end items-end">
                   <span className="text-[11px] font-mono font-semibold uppercase tracking-wider text-indigo-500 px-1">
                     Tú
                   </span>
-                  <div className="p-4 sm:p-5 rounded-2xl bg-indigo-600 text-white rounded-br-sm shadow-md shadow-indigo-950/20 text-sm leading-relaxed whitespace-pre-wrap">
+                  <div className="rounded-xl rounded-br-sm bg-indigo-600 p-4 text-sm leading-relaxed text-white sm:p-5 whitespace-pre-wrap">
                     {item.message.content}
                   </div>
                 </article>
@@ -359,89 +345,62 @@ export function Chat({
             }
 
             return (
-              <article key={index} className="flex flex-col gap-1.5 max-w-3xl self-start items-start w-full">
+              <article key={index} className="ui-enter flex flex-col gap-1.5 max-w-3xl self-start items-start w-full">
                 <div className="flex items-center gap-2 px-1">
                   <span className={`text-[11px] font-mono font-semibold uppercase tracking-wider ${
                     isLight ? "text-slate-500" : "text-slate-400"
                   }`}>
                     Tutor
                   </span>
-                  <span className="size-1.5 rounded-full bg-emerald-500"></span>
                 </div>
 
                 <div
-                  className={`w-full p-5 sm:p-6 rounded-2xl border rounded-bl-sm shadow-xl transition-colors ${
+                  className={`w-full rounded-xl rounded-bl-sm border p-5 transition-colors sm:p-6 ${
                     isLight
-                      ? "bg-white border-slate-200 text-slate-800 shadow-slate-200/50"
-                      : "bg-slate-900/90 border-slate-800 text-slate-100 shadow-black/40"
+                      ? "bg-white border-slate-200 text-slate-800"
+                      : "bg-slate-900/90 border-slate-800 text-slate-100"
                   }`}
                 >
-                  <TypewriterStreamdown
-                    content={item.message.content}
-                    animate={item.isLatest}
-                    onUpdate={scrollToBottom}
-                  />
+                  <div className="prose dark:prose-invert max-w-none text-sm space-y-2">
+                    <Streamdown>{item.message.content}</Streamdown>
+                  </div>
 
                   {/* Quick Action Buttons */}
-                  <div
-                    className={`mt-4 pt-3 border-t flex flex-wrap items-center gap-2 ${
-                      isLight ? "border-slate-100" : "border-slate-800/80"
-                    }`}
-                  >
-                    <span className="text-[10px] font-mono uppercase font-semibold text-slate-400 mr-1">
-                      Acciones rápidas:
-                    </span>
-                    {onOpenMindMap && (
+                  {index === groupedItems.length - 1 && (
+                    <div
+                      className={`mt-4 flex flex-wrap items-center gap-2 border-t pt-3 ${
+                        isLight ? "border-slate-100" : "border-slate-800/80"
+                      }`}
+                    >
+                      <span className="mr-1 text-[11px] font-medium text-slate-400">Continuar con</span>
+                      {onOpenMindMap && (
+                        <button
+                          type="button"
+                          onClick={() => onOpenMindMap()}
+                          className={`flex min-h-9 items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold shadow-sm transition ${
+                            isLight
+                              ? "border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100"
+                              : "border-indigo-800/50 bg-indigo-950/60 text-indigo-300 hover:bg-indigo-900/60"
+                          }`}
+                        >
+                          <span className="material-symbols-outlined text-xs" aria-hidden="true">schema</span>
+                          <span>Ver esquema</span>
+                        </button>
+                      )}
                       <button
                         type="button"
-                        onClick={() => onOpenMindMap()}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold shadow-sm transition ${
+                        onClick={() => void submit("Genera un quiz de 5 preguntas basado en esta explicación.")}
+                        className={`flex min-h-9 items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition ${
                           isLight
-                            ? "bg-indigo-50 border-indigo-200 text-indigo-700 hover:bg-indigo-100"
-                            : "bg-indigo-950/60 border-indigo-800/50 text-indigo-300 hover:bg-indigo-900/60"
+                            ? "border-slate-200 bg-slate-100 text-slate-700 hover:bg-slate-200"
+                            : "border-slate-700/60 bg-slate-800/80 text-slate-200 hover:bg-slate-800"
                         }`}
                       >
-                        <span className="material-symbols-outlined text-xs">schema</span>
-                        <span>🗺️ Ver Esquema Mental</span>
+                        <span className="material-symbols-outlined text-xs" aria-hidden="true">quiz</span>
+                        <span>Crear quiz</span>
                       </button>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => void submit("Genera un test evaluable de 5 preguntas tipo test basado en esta explicación.")}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-medium transition ${
-                        isLight
-                          ? "bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200"
-                          : "bg-slate-800/80 border-slate-700/60 text-slate-200 hover:bg-slate-800"
-                      }`}
-                    >
-                      <span className="material-symbols-outlined text-xs">quiz</span>
-                      <span>🎯 Crear Test (5 preg)</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => void submit("Crea una nota de estudio estructurada con este contenido.")}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-medium transition ${
-                        isLight
-                          ? "bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200"
-                          : "bg-slate-800/80 border-slate-700/60 text-slate-200 hover:bg-slate-800"
-                      }`}
-                    >
-                      <span className="material-symbols-outlined text-xs">edit_note</span>
-                      <span>📝 Guardar Nota</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => void submit("[Modo Socrático] Hazme una pregunta de razonamiento sobre este tema para comprobar mi nivel.")}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-medium transition ${
-                        isLight
-                          ? "bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200"
-                          : "bg-slate-800/80 border-slate-700/60 text-slate-200 hover:bg-slate-800"
-                      }`}
-                    >
-                      <span className="material-symbols-outlined text-xs">psychology</span>
-                      <span>🧠 Pregunta de Repaso</span>
-                    </button>
-                  </div>
+                    </div>
+                  )}
                 </div>
               </article>
             );
@@ -449,7 +408,7 @@ export function Chat({
         )}
 
         {isSending && groupedItems.length > 0 && groupedItems.at(-1)?.kind !== "tools" && (
-          <div className={`flex items-center gap-2.5 text-xs p-3.5 rounded-2xl border max-w-xs animate-pulse ${
+          <div className={`ui-enter flex max-w-xs items-center gap-2.5 rounded-xl border p-3.5 text-xs ${
             isLight
               ? "bg-indigo-50 border-indigo-200 text-indigo-700"
               : "bg-indigo-950/40 border-indigo-800/40 text-indigo-300"
@@ -463,7 +422,15 @@ export function Chat({
       </section>
 
       {error !== undefined && (
-        <div className="mx-4 mb-2 p-3 rounded-xl border border-red-900 bg-red-950/40 text-red-200 text-xs">
+        <div
+          role="alert"
+          aria-live="assertive"
+          className={`mx-4 mb-2 rounded-lg border p-3 text-xs ${
+            isLight
+              ? "border-red-200 bg-red-50 text-red-700"
+              : "border-red-900 bg-red-950/40 text-red-200"
+          }`}
+        >
           {error}
         </div>
       )}
@@ -475,7 +442,7 @@ export function Chat({
         }`}
       >
         <form
-          className={`flex flex-col gap-2 rounded-2xl border p-2 focus-within:border-indigo-500/60 focus-within:ring-1 focus-within:ring-indigo-500/30 transition ${
+          className={`flex flex-col gap-2 rounded-xl border p-2 transition focus-within:border-indigo-500/60 focus-within:ring-1 focus-within:ring-indigo-500/30 ${
             isLight
               ? "border-slate-300 bg-slate-50 text-slate-900"
               : "border-slate-800 bg-slate-900 text-slate-100"
@@ -513,7 +480,7 @@ export function Chat({
               Enter para enviar · Shift+Enter nueva línea
             </span>
             <button
-              className="flex items-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-1.5 font-semibold text-xs text-white hover:bg-indigo-500 shadow-md shadow-indigo-600/20 disabled:cursor-not-allowed disabled:opacity-40 transition"
+              className="flex min-h-9 items-center gap-1.5 rounded-lg bg-indigo-600 px-4 py-1.5 text-xs font-semibold text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-40"
               type="submit"
               disabled={isSending || input.trim().length === 0}
             >
@@ -523,13 +490,11 @@ export function Chat({
           </div>
         </form>
       </footer>
-    </main>
+    </section>
   );
 }
 
-/**
- * Friendly reasoning box grouping all tool steps with clean, human-like activity labels
- */
+/** Groups tool activity into a concise, user-facing progress summary. */
 function ReasoningFlowBox({
   items,
   isThinking,
@@ -540,9 +505,7 @@ function ReasoningFlowBox({
   readonly isLight?: boolean | undefined;
 }) {
   const [isOpen, setIsOpen] = useState(false);
-  const [showJson, setShowJson] = useState(false);
 
-  // Group into logical steps (call + result)
   const steps = useMemo(() => {
     const result: Array<{
       id: string;
@@ -551,8 +514,6 @@ function ReasoningFlowBox({
       subtitle?: string | undefined;
       isDone: boolean;
       isFailure?: boolean | undefined;
-      rawCall?: AgentMessage | undefined;
-      rawResult?: AgentMessage | undefined;
     }> = [];
 
     for (const msg of items) {
@@ -563,15 +524,13 @@ function ReasoningFlowBox({
           icon: friendly.icon,
           title: friendly.title,
           subtitle: friendly.subtitle,
-          isDone: false,
-          rawCall: msg
+          isDone: false
         });
       } else if (msg.role === "tool-result") {
         const lastStep = result.at(-1);
         if (lastStep) {
           lastStep.isDone = true;
           lastStep.isFailure = msg.isFailure;
-          lastStep.rawResult = msg;
         }
       }
     }
@@ -582,18 +541,19 @@ function ReasoningFlowBox({
   const activeStep = steps.find((s) => !s.isDone) ?? steps.at(-1);
 
   return (
-    <div className="w-full max-w-3xl my-1">
+    <div className="ui-enter w-full max-w-3xl my-1">
       <div
-        className={`rounded-2xl border p-3 text-xs shadow-sm backdrop-blur transition ${
+        className={`rounded-xl border p-3 text-xs shadow-sm backdrop-blur transition ${
           isLight
             ? "border-indigo-200 bg-white/90 text-slate-700 shadow-slate-100"
             : "border-indigo-950/80 bg-slate-950/60 text-slate-300"
         }`}
       >
-        {/* Summary Header */}
-        <div
-          onClick={() => setIsOpen(!isOpen)}
-          className="flex items-center justify-between cursor-pointer select-none group"
+        <button
+          type="button"
+          onClick={() => setIsOpen((current) => !current)}
+          className="group flex w-full items-center justify-between gap-3 text-left"
+          aria-expanded={isOpen}
         >
           <div className="flex items-center gap-2.5">
             <span
@@ -603,8 +563,8 @@ function ReasoningFlowBox({
                   : "bg-indigo-600/20 text-indigo-400"
               }`}
             >
-              <span className="material-symbols-outlined text-sm">
-                {isThinking ? "psychology" : "check_circle"}
+              <span className="material-symbols-outlined text-sm" aria-hidden="true">
+                {isThinking ? "progress_activity" : "check_circle"}
               </span>
             </span>
             <div>
@@ -614,8 +574,8 @@ function ReasoningFlowBox({
                 }`}
               >
                 {isThinking
-                  ? activeStep?.title ?? "Razonando y analizando apuntes…"
-                  : `Proceso de razonamiento y consulta (${steps.length} pasos)`}
+                  ? activeStep?.title ?? "Consultando tus materiales…"
+                  : `Actividad del tutor · ${steps.length} ${steps.length === 1 ? "paso" : "pasos"}`}
               </span>
               {activeStep?.subtitle && (
                 <p
@@ -631,7 +591,7 @@ function ReasoningFlowBox({
 
           <div className="flex items-center gap-2">
             <span
-              className={`text-[11px] font-mono transition ${
+              className={`text-[11px] transition ${
                 isLight
                   ? "text-slate-500 group-hover:text-indigo-600"
                   : "text-slate-400 group-hover:text-indigo-300"
@@ -643,21 +603,21 @@ function ReasoningFlowBox({
               className={`material-symbols-outlined text-xs transition-transform ${
                 isLight ? "text-slate-400" : "text-slate-400"
               } ${isOpen ? "rotate-180" : ""}`}
+              aria-hidden="true"
             >
               expand_more
             </span>
           </div>
-        </div>
+        </button>
 
-        {/* Expanded Steps List */}
         {isOpen && (
-          <div
+          <ol
             className={`mt-3 pt-3 border-t space-y-2 ${
               isLight ? "border-slate-200" : "border-slate-800/70"
             }`}
           >
             {steps.map((step) => (
-              <div
+              <li
                 key={step.id}
                 className={`flex items-start gap-2.5 p-2 rounded-xl border text-xs ${
                   isLight
@@ -665,7 +625,7 @@ function ReasoningFlowBox({
                     : "bg-slate-900/50 border-slate-800/50 text-slate-300"
                 }`}
               >
-                <span className="material-symbols-outlined text-sm text-indigo-500 mt-0.5">
+                <span className="material-symbols-outlined text-sm text-indigo-500 mt-0.5" aria-hidden="true">
                   {step.icon}
                 </span>
                 <div className="flex-1">
@@ -688,9 +648,10 @@ function ReasoningFlowBox({
                             ? "bg-emerald-100 text-emerald-700"
                             : "bg-emerald-950 text-emerald-300"
                           : isLight
-                          ? "bg-indigo-100 text-indigo-700 animate-pulse"
-                          : "bg-indigo-950 text-indigo-300 animate-pulse"
+                          ? "bg-indigo-100 text-indigo-700"
+                          : "bg-indigo-950 text-indigo-300"
                       }`}
+                      aria-live="polite"
                     >
                       {step.isDone
                         ? step.isFailure
@@ -709,94 +670,11 @@ function ReasoningFlowBox({
                     </p>
                   )}
                 </div>
-              </div>
+              </li>
             ))}
-
-            {/* Technical JSON Toggle */}
-            <div className="pt-2 text-right">
-              <button
-                type="button"
-                onClick={() => setShowJson(!showJson)}
-                className={`text-[10px] font-mono underline ${
-                  isLight
-                    ? "text-slate-500 hover:text-slate-700"
-                    : "text-slate-500 hover:text-slate-300"
-                }`}
-              >
-                {showJson ? "Ocultar JSON técnico" : "Ver JSON técnico (dev)"}
-              </button>
-
-              {showJson && (
-                <div className="mt-2 space-y-2 text-left">
-                  {items.map((msg, idx) => (
-                    <pre
-                      key={idx}
-                      className={`overflow-x-auto rounded-xl p-2.5 text-[10px] font-mono border ${
-                        isLight
-                          ? "bg-slate-100 text-slate-800 border-slate-200"
-                          : "bg-slate-950 text-slate-400 border-slate-800"
-                      }`}
-                    >
-                      {JSON.stringify(msg, null, 2)}
-                    </pre>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
+          </ol>
         )}
       </div>
-    </div>
-  );
-}
-
-/**
- * Typewriter effect component that progressively streams text token by token
- */
-function TypewriterStreamdown({
-  content,
-  animate,
-  onUpdate
-}: {
-  readonly content: string;
-  readonly animate: boolean;
-  readonly onUpdate?: () => void;
-}) {
-  const [displayedLength, setDisplayedLength] = useState<number>(animate ? 0 : content.length);
-  const isComplete = displayedLength >= content.length;
-
-  useEffect(() => {
-    if (!animate) {
-      setDisplayedLength(content.length);
-      return;
-    }
-
-    setDisplayedLength(0);
-    const total = content.length;
-    let current = 0;
-
-    // Fast and smooth token streaming rhythm (~15-25 chars per tick)
-    const interval = setInterval(() => {
-      current = Math.min(total, current + 18);
-      setDisplayedLength(current);
-      onUpdate?.();
-
-      if (current >= total) {
-        clearInterval(interval);
-      }
-    }, 16);
-
-    return () => clearInterval(interval);
-  }, [content, animate]);
-
-  const displayedContent = content.slice(0, displayedLength);
-
-  return (
-    <div className="prose prose-invert max-w-none text-sm space-y-2 relative">
-      <Streamdown>{displayedContent}</Streamdown>
-      {!isComplete && (
-        <span className="inline-block w-1.5 h-4 bg-indigo-400 ml-1 animate-pulse align-middle rounded-sm" />
-      )}
     </div>
   );
 }
@@ -818,21 +696,20 @@ function getFriendlyToolCallLabel(message: AgentMessage): {
       if (skillName.includes("material")) {
         return {
           icon: "menu_book",
-          title: "Activando módulo de lectura de apuntes",
-          subtitle: "Preparando herramientas de inspección visual de PDF"
+          title: "Preparando tus materiales",
+          subtitle: "Organizando los documentos que necesita la respuesta"
         };
       }
       if (skillName.includes("artifact")) {
         return {
           icon: "edit_note",
-          title: "Activando generador de ejercicios y pruebas",
-          subtitle: "Preparando herramientas para crear notas, quizzes y tests"
+          title: "Preparando un recurso de estudio",
+          subtitle: "Organizando el contenido solicitado"
         };
       }
       return {
         icon: "psychology",
-        title: "Consultando guía pedagógica",
-        subtitle: skillName
+        title: "Preparando el enfoque de estudio"
       };
     }
 
@@ -844,12 +721,11 @@ function getFriendlyToolCallLabel(message: AgentMessage): {
 
       if (input.startsWith("materials view")) {
         const parts = input.split(" ");
-        const mat = parts[2] || "documento";
-        const pages = parts[3] ? `(páginas ${parts[3]})` : "";
+        const pages = parts[3];
         return {
           icon: "visibility",
-          title: `Leyendo ${mat} ${pages}`,
-          subtitle: "Analizando contenido con visión multimodal y Poppler"
+          title: pages ? `Revisando las páginas ${pages}` : "Leyendo el documento seleccionado",
+          subtitle: "Buscando la información relevante"
         };
       }
 
@@ -879,14 +755,13 @@ function getFriendlyToolCallLabel(message: AgentMessage): {
 
       return {
         icon: "memory",
-        title: "Procesando información de estudio",
-        subtitle: input
+        title: "Preparando información de estudio"
       };
     }
   }
 
   return {
-    icon: "smart_toy",
-    title: "Procesando razonamiento"
+    icon: "progress_activity",
+    title: "Preparando la respuesta"
   };
 }
