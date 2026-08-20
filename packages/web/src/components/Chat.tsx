@@ -1021,7 +1021,7 @@ export function Chat({
             <div
               ref={backdropRef}
               aria-hidden="true"
-              className="absolute inset-0 pointer-events-none whitespace-pre-wrap break-words px-2 py-1 text-sm font-sans leading-relaxed overflow-hidden select-none"
+              className="absolute inset-0 pointer-events-none whitespace-pre-wrap break-words px-2 py-1 text-sm font-sans font-semibold leading-relaxed overflow-hidden select-none"
             >
               {input ? (
                 (() => {
@@ -1032,16 +1032,16 @@ export function Chat({
                       {parts.map((part, idx) => {
                         if (part.startsWith("@")) {
                           return (
-                            <strong
+                            <span
                               key={idx}
-                              className={`font-bold rounded ${
+                              className={`rounded ${
                                 isLight
-                                  ? "text-purple-700 bg-purple-100/90"
-                                  : "text-purple-300 bg-purple-900/60"
+                                  ? "text-purple-700 bg-purple-100 underline decoration-purple-400 decoration-2 underline-offset-2"
+                                  : "text-purple-300 bg-purple-900/60 underline decoration-purple-500 decoration-2 underline-offset-2"
                               }`}
                             >
                               {part}
-                            </strong>
+                            </span>
                           );
                         }
                         return (
@@ -1058,7 +1058,7 @@ export function Chat({
                   );
                 })()
               ) : (
-                <span className="text-slate-400">
+                <span className="text-slate-400 font-normal">
                   Pregunta lo que quieras · @ para mencionar docs
                 </span>
               )}
@@ -1066,7 +1066,7 @@ export function Chat({
 
             <textarea
               ref={textareaRef}
-              className="relative z-10 w-full resize-none bg-transparent px-2 py-1 text-sm outline-none text-transparent caret-purple-600 dark:caret-purple-400 selection:bg-purple-500/25 font-sans leading-relaxed font-normal"
+              className="relative z-10 w-full resize-none bg-transparent px-2 py-1 text-sm outline-none text-transparent caret-purple-600 dark:caret-purple-400 selection:bg-purple-500/25 font-sans font-semibold leading-relaxed"
               value={input}
               onScroll={(e) => {
                 if (backdropRef.current) {
