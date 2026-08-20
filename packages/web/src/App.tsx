@@ -55,6 +55,7 @@ export function App() {
   const [activeTab, setActiveTab] = useState<ActiveTab>("workspace");
   const [chatPrompt, setChatPrompt] = useState<string | null>(null);
   const [isChatMaximized, setIsChatMaximized] = useState(false);
+  const [isChatClosing, setIsChatClosing] = useState(false);
 
   const [isLibraryOpen, setIsLibraryOpen] = useState(false);
   const [isTutorOpen, setIsTutorOpen] = useState(false);
@@ -75,16 +76,29 @@ export function App() {
   const libraryFallbackRef = useRef<HTMLButtonElement>(null);
   const tutorFallbackRef = useRef<HTMLButtonElement>(null);
 
+  const handleOpenFullscreenChat = useCallback(() => {
+    setIsChatClosing(false);
+    setIsChatMaximized(true);
+  }, []);
+
+  const handleCloseFullscreenChat = useCallback(() => {
+    setIsChatClosing(true);
+    setTimeout(() => {
+      setIsChatMaximized(false);
+      setIsChatClosing(false);
+    }, 200);
+  }, []);
+
   useEffect(() => {
     if (!isChatMaximized) return;
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
-        setIsChatMaximized(false);
+        handleCloseFullscreenChat();
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isChatMaximized]);
+  }, [isChatMaximized, handleCloseFullscreenChat]);
   const isWideLayout = useMediaQuery("(min-width: 1440px)");
   const viewportWidth = useViewportWidth();
   const layoutWidths = useMemo(
@@ -440,7 +454,7 @@ export function App() {
             </button>
             <button
               type="button"
-              onClick={() => setIsChatMaximized(true)}
+              onClick={handleOpenFullscreenChat}
               className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-semibold transition ${
                 isLight
                   ? "border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 shadow-sm"
@@ -526,34 +540,34 @@ export function App() {
           }}
           theme={theme}
           isMaximized={false}
-          onToggleMaximize={() => setIsChatMaximized(true)}
+          onToggleMaximize={handleOpenFullscreenChat}
         />
       </ResponsivePanel>
 
-      {/* Fullscreen Focus Chat Mode Overlay */}
+      {/* Fullscreen Focus Chat Mode Overlay with Smooth Expand/Collapse Animation */}
       {isChatMaximized && (
         <div
           role="dialog"
           aria-modal="true"
           aria-label="Tutor en Modo Chat Completo"
-          className={`fixed inset-0 z-50 flex flex-col h-screen w-screen overflow-hidden animate-in fade-in zoom-in-95 duration-150 ${
-            isLight ? "bg-slate-50 text-slate-900" : "bg-[#090d16] text-slate-100"
-          }`}
+          className={`fixed inset-0 z-50 flex flex-col h-screen w-screen overflow-hidden ${
+            isChatClosing ? "ui-chat-collapse" : "ui-chat-expand"
+          } ${isLight ? "bg-slate-50 text-slate-900" : "bg-[#090d16] text-slate-100"}`}
         >
           <Chat
             prefillPrompt={chatPrompt}
             onClearPrefill={() => setChatPrompt(null)}
             onSelectArtifact={(id) => {
               handleSelectArtifact(id);
-              setIsChatMaximized(false);
+              handleCloseFullscreenChat();
             }}
             onOpenMindMap={() => {
               setActiveTab("mindmap");
-              setIsChatMaximized(false);
+              handleCloseFullscreenChat();
             }}
             theme={theme}
             isMaximized={true}
-            onToggleMaximize={() => setIsChatMaximized(false)}
+            onToggleMaximize={handleCloseFullscreenChat}
           />
         </div>
       )}
