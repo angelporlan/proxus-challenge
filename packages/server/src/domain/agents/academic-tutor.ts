@@ -174,5 +174,3 @@ export const academicTutorAgent = Effect.gen(function* () {
     KnowledgeLive
   ))
 );
-
-Effect.runPromise(academicTutorAgent);
