@@ -18,6 +18,20 @@ import {
 } from "../domain/sessions/storage.ts";
 import { ArtifactChatCard } from "./ArtifactChatCard.tsx";
 import { ProxoFrameAnimation } from "./ProxoFrameAnimation.tsx";
+import { ChatHistoryMenu } from "./ChatHistoryMenu.tsx";
+import { useVoiceDictation } from "../hooks/useVoiceDictation.ts";
+export {
+  findMentionRanges,
+  splitMentionParts,
+  useMentions,
+  type MentionRange,
+  type MentionPart
+} from "../hooks/useMentions.ts";
+import {
+  findMentionRanges,
+  splitMentionParts,
+  useMentions
+} from "../hooks/useMentions.ts";
 import proxoAvatar from "../assets/proxo-avatar.jpg";
 import proxoSocraticAvatar from "../assets/proxo-socratic-avatar.jpg";
 
@@ -52,9 +66,9 @@ const starterPrompts = [
   }
 ] as const;
 
-type TutorMode = "socratic" | "explanatory";
+export type TutorMode = "socratic" | "explanatory";
 
-interface ChatProps {
+export interface ChatProps {
   readonly prefillPrompt?: string | null | undefined;
   readonly prefillAttachments?: readonly { readonly id: string; readonly title: string; readonly pageCount?: number | undefined }[] | undefined;
   readonly onClearPrefill?: (() => void) | undefined;
@@ -86,111 +100,6 @@ interface ParsedUserDoc {
   readonly id?: string | undefined;
   readonly title: string;
   readonly pageCount?: number | undefined;
-}
-
-interface MentionPart {
-  readonly kind: "text" | "mention";
-  readonly value: string;
-}
-
-export interface MentionRange {
-  readonly start: number;
-  readonly end: number;
-  readonly token: string;
-  readonly title: string;
-  readonly materialId?: string | undefined;
-}
-
-export function findMentionRanges(
-  value: string,
-  materials: readonly { readonly id?: string | undefined; readonly title: string }[]
-): readonly MentionRange[] {
-  const sortedMaterials = [...materials].sort(
-    (left, right) => right.title.trim().length - left.title.trim().length
-  );
-  const ranges: MentionRange[] = [];
-  let cursor = 0;
-
-  while (cursor < value.length) {
-    if (value[cursor] !== "@" || (cursor > 0 && !/\s/.test(value[cursor - 1] ?? ""))) {
-      cursor += 1;
-      continue;
-    }
-
-    const matchedMaterial = sortedMaterials.find((candidate) => {
-      const start = cursor + 1;
-      const end = start + candidate.title.length;
-      const following = value[end];
-      return (
-        value.slice(start, end).toLocaleLowerCase() === candidate.title.toLocaleLowerCase() &&
-        (following === undefined || /\s|[.,!?;:()[\]{}"«»]/.test(following))
-      );
-    });
-
-    let token = "";
-    let title = "";
-    let materialId: string | undefined = undefined;
-
-    if (matchedMaterial) {
-      token = `@${matchedMaterial.title}`;
-      title = matchedMaterial.title;
-      materialId = matchedMaterial.id;
-    } else {
-      const match = /^@[a-zA-Z0-9_.-]+/.exec(value.slice(cursor));
-      if (match) {
-        token = match[0];
-        title = token.slice(1);
-      }
-    }
-
-    if (!token) {
-      cursor += 1;
-      continue;
-    }
-
-    ranges.push({
-      start: cursor,
-      end: cursor + token.length,
-      token,
-      title,
-      materialId
-    });
-
-    cursor += token.length;
-  }
-
-  return ranges;
-}
-
-/**
- * Splits mentions using the real document titles instead of treating a title
- * with spaces as several independent words ("@document 1" -> one mention).
- */
-export function splitMentionParts(
-  value: string,
-  materials: readonly { readonly id?: string | undefined; readonly title: string }[]
-): readonly MentionPart[] {
-  const ranges = findMentionRanges(value, materials);
-  if (ranges.length === 0) {
-    return value ? [{ kind: "text", value }] : [];
-  }
-
-  const parts: MentionPart[] = [];
-  let textStart = 0;
-
-  for (const r of ranges) {
-    if (r.start > textStart) {
-      parts.push({ kind: "text", value: value.slice(textStart, r.start) });
-    }
-    parts.push({ kind: "mention", value: r.token });
-    textStart = r.end;
-  }
-
-  if (textStart < value.length) {
-    parts.push({ kind: "text", value: value.slice(textStart) });
-  }
-
-  return parts;
 }
 
 function parseUserContent(
@@ -301,18 +210,23 @@ export function Chat({
   onClose
 }: ChatProps = {}) {
   const isLight = theme === "light";
-  const [messages, setMessages] = useState<readonly AgentMessage[]>([]);
-  const [input, setInput] = useState("");
-  const [isSending, setIsSending] = useState(false);
-  const [assistantReveal, setAssistantReveal] = useState<AssistantReveal | null>(null);
-  const [error, setError] = useState<string | undefined>();
-  const [tutorMode, setTutorMode] = useState<TutorMode>("explanatory");
-
   // Conversation history and sessions state
   const [sessions, setSessions] = useState<readonly ChatSession[]>(() => loadSavedSessions());
   const [currentSessionId, setCurrentSessionId] = useState<string>(() => {
     const saved = loadSavedSessions();
     return saved[0]?.id ?? makeNewSessionId();
+  });
+  const [messages, setMessages] = useState<readonly AgentMessage[]>(() => {
+    const saved = loadSavedSessions();
+    return saved[0]?.messages ?? [];
+  });
+  const [input, setInput] = useState("");
+  const [isSending, setIsSending] = useState(false);
+  const [assistantReveal, setAssistantReveal] = useState<AssistantReveal | null>(null);
+  const [error, setError] = useState<string | undefined>();
+  const [tutorMode, setTutorMode] = useState<TutorMode>(() => {
+    const saved = loadSavedSessions();
+    return saved[0]?.mode ?? "explanatory";
   });
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const historyMenuRef = useRef<HTMLDivElement>(null);
@@ -328,19 +242,65 @@ export function Chat({
     }
   }, [messages, currentSessionId, tutorMode]);
 
-  // Click outside to close history dropdown
-  useEffect(() => {
-    if (!isHistoryOpen) return;
-    const handleClickOutside = (e: MouseEvent) => {
-      if (historyMenuRef.current && !historyMenuRef.current.contains(e.target as Node)) {
-        setIsHistoryOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [isHistoryOpen]);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const magIaRef = useRef<HTMLDivElement>(null);
+  const mentionRef = useRef<HTMLDivElement>(null);
+  const backdropRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const assistantRevealIdRef = useRef(0);
+  const pendingInvalidations = useRef<Array<ReturnType<typeof invalidationsForToolCall>>>([]);
+
+  const [attachedDocs, setAttachedDocs] = useState<
+    Array<{ readonly id: string; readonly title: string; readonly pageCount?: number | undefined }>
+  >([]);
+  const [isUploading, setIsUploading] = useState(false);
+  const [isMagIaOpen, setIsMagIaOpen] = useState(false);
+
+  const materialsResult = useAtomValue(materialsQuery);
+  const availableMaterials = AsyncResult.match(materialsResult, {
+    onInitial: () => [],
+    onFailure: () => [],
+    onSuccess: ({ value }) => value.materials
+  });
+
+  const refreshArtifacts = useAtomRefresh(artifactsQuery);
+  const refreshMaterials = useAtomRefresh(materialsQuery);
+  const refreshKnowledge = useAtomRefresh(knowledgeProfileQuery);
+  const uploadMaterial = useAtomSet(uploadMaterialAction, { mode: "promise" });
+
+  const {
+    isListening,
+    audioLevels,
+    toggleListening,
+    stopListening
+  } = useVoiceDictation((text) => setInput(text));
+
+  const {
+    isMentionOpen,
+    setIsMentionOpen,
+    mentionQuery,
+    setMentionQuery,
+    selectedMentionIndex,
+    setSelectedMentionIndex,
+    filteredMentionMaterials,
+    handleSelectMentionDoc,
+    handleRemoveAttachedDoc
+  } = useMentions(
+    input,
+    setInput,
+    attachedDocs,
+    setAttachedDocs,
+    availableMaterials,
+    textareaRef
+  );
 
   const handleNewChat = useCallback(() => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
     const newId = makeNewSessionId();
     setCurrentSessionId(newId);
     setMessages([]);
@@ -349,6 +309,10 @@ export function Chat({
   }, []);
 
   const handleSelectSession = useCallback((session: ChatSession) => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
     setCurrentSessionId(session.id);
     setMessages(session.messages);
     if (session.mode) {
@@ -375,120 +339,6 @@ export function Chat({
     });
   }, []);
 
-  // Attached & Mentioned documents state
-  const [attachedDocs, setAttachedDocs] = useState<
-    Array<{ readonly id: string; readonly title: string; readonly pageCount?: number | undefined }>
-  >([]);
-  const [isUploading, setIsUploading] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  const assistantRevealIdRef = useRef(0);
-  const refreshArtifacts = useAtomRefresh(artifactsQuery);
-  const refreshMaterials = useAtomRefresh(materialsQuery);
-  const refreshKnowledge = useAtomRefresh(knowledgeProfileQuery);
-  const uploadMaterial = useAtomSet(uploadMaterialAction, { mode: "promise" });
-  const pendingInvalidations = useRef<Array<ReturnType<typeof invalidationsForToolCall>>>([]);
-
-  // Speech Recognition & Web Audio Waveform state
-  const [isListening, setIsListening] = useState(false);
-  const [audioLevels, setAudioLevels] = useState<number[]>([20, 35, 60, 80, 60, 35, 20, 28]);
-  const [isMagIaOpen, setIsMagIaOpen] = useState(false);
-  const [isMentionOpen, setIsMentionOpen] = useState(false);
-  const [mentionQuery, setMentionQuery] = useState<string | null>(null);
-  const [selectedMentionIndex, setSelectedMentionIndex] = useState(0);
-
-  const materialsResult = useAtomValue(materialsQuery);
-  const availableMaterials = AsyncResult.match(materialsResult, {
-    onInitial: () => [],
-    onFailure: () => [],
-    onSuccess: ({ value }) => value.materials
-  });
-
-  const filteredMentionMaterials = useMemo(() => {
-    if (mentionQuery === null) return [];
-    if (!mentionQuery) return availableMaterials;
-    const q = mentionQuery.toLowerCase().replace(/[-_]/g, " ").trim();
-    const qSlug = mentionQuery.toLowerCase().replace(/\s+/g, "-").trim();
-    return availableMaterials.filter((m) => {
-      const mId = m.id.toLowerCase();
-      const mTitle = m.title.toLowerCase().replace(/[-_]/g, " ");
-      return mId.includes(qSlug) || mTitle.includes(q);
-    });
-  }, [mentionQuery, availableMaterials]);
-
-  const handleSelectMentionDoc = (mat: { readonly id: string; readonly title: string; readonly pageCount?: number | undefined }) => {
-    setAttachedDocs((prev) =>
-      prev.some((d) => d.id === mat.id)
-        ? prev
-        : [...prev, { id: mat.id, title: mat.title, pageCount: mat.pageCount }]
-    );
-
-    const textarea = textareaRef.current;
-    const cursorPos = textarea ? textarea.selectionStart : input.length;
-    const beforeCursor = input.slice(0, cursorPos);
-    const afterCursor = input.slice(cursorPos);
-
-    // Replace the '@query' immediately before the cursor
-    const match = /(?:^|\s)@[a-zA-Z0-9_\-.]*$/.exec(beforeCursor);
-    let newCursorPos = 0;
-    let nextText = "";
-
-    if (match) {
-      const matchStart = beforeCursor.lastIndexOf("@");
-      const prefix = beforeCursor.slice(0, matchStart);
-      const inserted = `@${mat.title} `;
-      nextText = `${prefix}${inserted}${afterCursor}`;
-      newCursorPos = prefix.length + inserted.length;
-    } else {
-      const inserted = `@${mat.title} `;
-      nextText = `${beforeCursor}${inserted}${afterCursor}`;
-      newCursorPos = beforeCursor.length + inserted.length;
-    }
-
-    setInput(nextText);
-    setMentionQuery(null);
-    setIsMentionOpen(false);
-
-    requestAnimationFrame(() => {
-      if (textareaRef.current) {
-        textareaRef.current.focus();
-        textareaRef.current.setSelectionRange(newCursorPos, newCursorPos);
-      }
-    });
-  };
-
-  const handleRemoveAttachedDoc = (docId: string, docTitle: string) => {
-    setAttachedDocs((prev) => prev.filter((d) => d.id !== docId));
-    setInput((prev) => {
-      const docsList = [...availableMaterials, ...attachedDocs];
-      const ranges = findMentionRanges(prev, docsList);
-      const matching = ranges.filter(
-        (r) => r.materialId === docId || r.title.toLowerCase() === docTitle.toLowerCase()
-      );
-      if (matching.length === 0) return prev;
-      let nextText = prev;
-      for (let i = matching.length - 1; i >= 0; i--) {
-        const r = matching[i]!;
-        const endWithSpace = nextText[r.end] === " " ? r.end + 1 : r.end;
-        nextText = nextText.slice(0, r.start) + nextText.slice(endWithSpace);
-      }
-      return nextText;
-    });
-  };
-
-  const recognitionRef = useRef<any>(null);
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const analyserRef = useRef<AnalyserNode | null>(null);
-  const mediaStreamRef = useRef<MediaStream | null>(null);
-  const animationFrameRef = useRef<number | null>(null);
-  const baseInputRef = useRef<string>("");
-  const simIntervalRef = useRef<any>(null);
-  const magIaRef = useRef<HTMLDivElement>(null);
-  const mentionRef = useRef<HTMLDivElement>(null);
-  const backdropRef = useRef<HTMLDivElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-
   // Close menus on click outside
   useEffect(() => {
     const handleOutsideClick = (e: MouseEvent) => {
@@ -498,146 +348,17 @@ export function Chat({
       if (mentionRef.current && !mentionRef.current.contains(e.target as Node)) {
         setIsMentionOpen(false);
       }
+      if (historyMenuRef.current && !historyMenuRef.current.contains(e.target as Node)) {
+        setIsHistoryOpen(false);
+      }
     };
     window.addEventListener("mousedown", handleOutsideClick);
     return () => window.removeEventListener("mousedown", handleOutsideClick);
+  }, [setIsMentionOpen]);
+
+  useEffect(() => () => {
+    abortControllerRef.current?.abort();
   }, []);
-
-  const stopListening = useCallback(() => {
-    if (recognitionRef.current) {
-      try {
-        recognitionRef.current.stop();
-      } catch {}
-      recognitionRef.current = null;
-    }
-    if (mediaStreamRef.current) {
-      mediaStreamRef.current.getTracks().forEach((track) => track.stop());
-      mediaStreamRef.current = null;
-    }
-    if (audioContextRef.current) {
-      try {
-        audioContextRef.current.close();
-      } catch {}
-      audioContextRef.current = null;
-    }
-    if (animationFrameRef.current) {
-      cancelAnimationFrame(animationFrameRef.current);
-      animationFrameRef.current = null;
-    }
-    if (simIntervalRef.current) {
-      clearInterval(simIntervalRef.current);
-      simIntervalRef.current = null;
-    }
-    setIsListening(false);
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      stopListening();
-    };
-  }, [stopListening]);
-
-  const toggleListening = async () => {
-    if (isListening) {
-      stopListening();
-      return;
-    }
-
-    baseInputRef.current = input;
-
-    // Start Web Speech Recognition
-    const SpeechRecognition =
-      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-
-    if (SpeechRecognition) {
-      try {
-        const recognition = new SpeechRecognition();
-        recognition.continuous = true;
-        recognition.interimResults = true;
-        recognition.lang = "es-ES";
-
-        recognition.onresult = (event: any) => {
-          let interimTranscript = "";
-          let finalTranscript = "";
-
-          for (let i = 0; i < event.results.length; ++i) {
-            if (event.results[i].isFinal) {
-              finalTranscript += event.results[i][0].transcript + " ";
-            } else {
-              interimTranscript += event.results[i][0].transcript;
-            }
-          }
-
-          const base = baseInputRef.current ? baseInputRef.current.trim() + " " : "";
-          const newText = base + finalTranscript + interimTranscript;
-          setInput(newText);
-        };
-
-        recognition.onerror = (err: any) => {
-          console.warn("Speech recognition error:", err);
-        };
-
-        recognition.onend = () => {
-          // Keep alive or clean
-        };
-
-        recognition.start();
-        recognitionRef.current = recognition;
-      } catch (e) {
-        console.warn("Speech recognition start failed:", e);
-      }
-    }
-
-    // Start Web Audio API Analyser for real-time waveform sync
-    try {
-      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        mediaStreamRef.current = stream;
-
-        const AudioContextClass =
-          window.AudioContext || (window as any).webkitAudioContext;
-        const audioCtx = new AudioContextClass();
-        audioContextRef.current = audioCtx;
-
-        const source = audioCtx.createMediaStreamSource(stream);
-        const analyser = audioCtx.createAnalyser();
-        analyser.fftSize = 64;
-        source.connect(analyser);
-        analyserRef.current = analyser;
-
-        const bufferLength = analyser.frequencyBinCount;
-        const dataArray = new Uint8Array(bufferLength);
-
-        const updateWaveform = () => {
-          if (!analyserRef.current) return;
-          analyserRef.current.getByteFrequencyData(dataArray);
-
-          const bars: number[] = [];
-          const numBars = 8;
-          const step = Math.max(1, Math.floor(bufferLength / numBars));
-          for (let i = 0; i < numBars; i++) {
-            const val = dataArray[i * step] || 0;
-            const percent = Math.max(16, Math.min(100, Math.round((val / 255) * 100 * 1.5)));
-            bars.push(percent);
-          }
-          setAudioLevels(bars);
-          animationFrameRef.current = requestAnimationFrame(updateWaveform);
-        };
-
-        updateWaveform();
-        setIsListening(true);
-        return;
-      }
-    } catch (err) {
-      console.warn("Audio Context setup fallback:", err);
-    }
-
-    // Fallback animated waveform if browser restricts getUserMedia in some contexts
-    setIsListening(true);
-    simIntervalRef.current = setInterval(() => {
-      setAudioLevels(Array.from({ length: 8 }, () => Math.floor(Math.random() * 65) + 25));
-    }, 75);
-  };
 
   const handleDirectFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -676,10 +397,7 @@ export function Chat({
         setIsUploading(false);
       }
     } else {
-      setAttachedDocs((prev) => [
-        ...prev,
-        { id: `file-${Date.now()}`, title: file.name }
-      ]);
+      setError("Solo se pueden adjuntar documentos en formato PDF.");
     }
     event.target.value = "";
   };
@@ -753,6 +471,12 @@ export function Chat({
       return;
     }
 
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     const finalPrompt = trimmed || "Explícame los conceptos clave de este documento.";
     const activeMaterialIds = attachedDocs.map((d) => d.id);
     const documentReferences = attachedDocs.map((d) => d.title);
@@ -766,14 +490,17 @@ export function Chat({
     pendingInvalidations.current = [];
 
     try {
-      for await (const event of streamTutorMessage({
-        input: finalPrompt,
-        messages,
-        mode: tutorMode,
-        activeMaterialIds,
-        documentReferences,
-        maxSteps: 14
-      })) {
+      for await (const event of streamTutorMessage(
+        {
+          input: finalPrompt,
+          messages,
+          mode: tutorMode,
+          activeMaterialIds,
+          documentReferences,
+          maxSteps: 14
+        },
+        controller.signal
+      )) {
         if (event.type === "done") {
           continue;
         }
@@ -812,7 +539,13 @@ export function Chat({
       }
 
       setInput("");
-    } catch {
+    } catch (err: unknown) {
+      if (err instanceof DOMException && err.name === "AbortError") {
+        return;
+      }
+      if (typeof err === "object" && err !== null && "name" in err && err.name === "AbortError") {
+        return;
+      }
       setError("No se pudo completar la respuesta. Comprueba la conexión e inténtalo de nuevo.");
     } finally {
       setIsSending(false);
@@ -892,119 +625,18 @@ export function Chat({
         {/* Right Side: History & Maximize */}
         <div className="flex items-center gap-2">
 
-          {/* History Popover / Drawer Button */}
-          <div className="relative" ref={historyMenuRef}>
-            <button
-              type="button"
-              onClick={() => setIsHistoryOpen((v) => !v)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold transition-all duration-150 active:scale-95 ${
-                isHistoryOpen
-                  ? "bg-indigo-600 text-white border-indigo-500 shadow-xs"
-                  : isLight
-                  ? "border-slate-200 bg-white hover:bg-slate-100 text-slate-700 shadow-2xs"
-                  : "border-slate-800 bg-slate-900/90 hover:bg-slate-800 text-slate-200 shadow-2xs"
-              }`}
-              title="Historial de conversaciones con Proxo"
-              aria-label="Historial de conversaciones"
-            >
-              <span className="material-symbols-outlined text-[16px]">history</span>
-              <span>Historial</span>
-              {sessions.length > 0 && (
-                <span
-                  className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
-                    isHistoryOpen
-                      ? "bg-white/25 text-white"
-                      : "bg-indigo-500/15 text-indigo-600 dark:text-indigo-400"
-                  }`}
-                >
-                  {sessions.length}
-                </span>
-              )}
-            </button>
-
-            {/* History Dropdown Menu - aligned cleanly within panel bounds */}
-            {isHistoryOpen && (
-              <div
-                className={`absolute right-0 top-full mt-2 w-72 sm:w-80 max-w-[calc(100vw-2.5rem)] rounded-2xl border shadow-2xl z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-150 ${
-                  isLight ? "bg-white border-slate-200 text-slate-900 shadow-slate-300/50" : "bg-[#0d121d] border-slate-800 text-slate-100 shadow-black/80"
-                }`}
-              >
-                <div
-                  className={`p-3 border-b flex items-center justify-between ${
-                    isLight ? "bg-slate-50/80 border-slate-200" : "bg-slate-900/80 border-slate-800"
-                  }`}
-                >
-                  <div className="flex items-center gap-2">
-                    <span className="material-symbols-outlined text-indigo-500 text-base">chat</span>
-                    <strong className="text-xs font-bold">Historial de chats</strong>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleNewChat}
-                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-semibold transition active:scale-95"
-                    title="Crear un nuevo chat"
-                  >
-                    <span className="material-symbols-outlined text-[14px]">add</span>
-                    <span>Nuevo</span>
-                  </button>
-                </div>
-
-                <div className="max-h-64 overflow-y-auto p-2 space-y-1">
-                  {sessions.length === 0 ? (
-                    <div className="p-5 text-center text-xs text-slate-500 dark:text-slate-400">
-                      <span className="material-symbols-outlined text-2xl mb-1 text-slate-400">history_toggle_off</span>
-                      <p className="font-semibold">No hay chats guardados</p>
-                      <p className="text-[11px] mt-0.5">Tus conversaciones con Proxo se guardarán automáticamente aquí.</p>
-                    </div>
-                  ) : (
-                    sessions.map((sess) => {
-                      const isActive = sess.id === currentSessionId;
-                      const userMsgCount = sess.messages.filter((m) => m.role === "user").length;
-                      return (
-                        <div
-                          key={sess.id}
-                          onClick={() => handleSelectSession(sess)}
-                          className={`group flex items-center justify-between gap-2 p-2 rounded-xl cursor-pointer transition text-xs ${
-                            isActive
-                              ? "bg-indigo-500/15 border border-indigo-500/30 text-indigo-600 dark:text-indigo-300 font-semibold"
-                              : isLight
-                              ? "hover:bg-slate-100 text-slate-700"
-                              : "hover:bg-slate-900 text-slate-300"
-                          }`}
-                        >
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-1.5">
-                              <span className="material-symbols-outlined text-[14px] shrink-0 text-slate-400">
-                                {sess.mode === "socratic" ? "school" : "chat_bubble"}
-                              </span>
-                              <p className="truncate text-xs font-medium">{sess.title}</p>
-                            </div>
-                            <div className="flex items-center gap-1.5 mt-0.5 text-[10px] text-slate-500 dark:text-slate-400">
-                              <span>{userMsgCount} {userMsgCount === 1 ? "mensaje" : "mensajes"}</span>
-                              <span>·</span>
-                              <span>{new Date(sess.updatedAt).toLocaleDateString()}</span>
-                              {sess.mode === "socratic" && (
-                                <span className="text-[9px] px-1 rounded bg-purple-500/15 text-purple-500 font-medium">Socrático</span>
-                              )}
-                            </div>
-                          </div>
-
-                          <button
-                            type="button"
-                            onClick={(e) => handleDeleteSession(sess.id, e)}
-                            className="opacity-0 group-hover:opacity-100 size-6 grid place-items-center rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 transition shrink-0"
-                            title="Eliminar este chat del historial"
-                          >
-                            <span className="material-symbols-outlined text-[14px]">delete</span>
-                          </button>
-                        </div>
-                      );
-                    })
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
+          {/* History Popover / Drawer Component */}
+          <ChatHistoryMenu
+            sessions={sessions}
+            currentSessionId={currentSessionId}
+            isOpen={isHistoryOpen}
+            isLight={isLight}
+            menuRef={historyMenuRef}
+            onToggleOpen={() => setIsHistoryOpen((v) => !v)}
+            onNewChat={handleNewChat}
+            onSelectSession={handleSelectSession}
+            onDeleteSession={handleDeleteSession}
+          />
 
           {onToggleMaximize && (
             <button

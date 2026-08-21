@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { getDeletedMaterialNavigation } from "./App.tsx";
-import { findMentionRanges, splitMentionParts } from "./components/Chat.tsx";
+import { findMentionRanges, splitMentionParts } from "./hooks/useMentions.ts";
 
 describe("material deletion navigation", () => {
   it("clears the selected PDF and returns to Estudio when that PDF is deleted", () => {

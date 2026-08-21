@@ -3,7 +3,6 @@ import type { PdfMaterial } from "@proxus/shared";
 import * as AsyncResult from "effect/unstable/reactivity/AsyncResult";
 import {
   type KeyboardEvent as ReactKeyboardEvent,
-  type PointerEvent as ReactPointerEvent,
   type RefObject,
   type ReactNode,
   lazy,
@@ -20,20 +19,7 @@ import { MaterialDeleteDialog } from "./components/MaterialDeleteDialog.tsx";
 import { ArtifactDeleteDialog } from "./components/ArtifactDeleteDialog.tsx";
 import { OnboardingUpload } from "./components/OnboardingUpload.tsx";
 import { Sidebar } from "./components/Sidebar.tsx";
-
-const ArtifactWorkspace = lazy(() => import("./components/ArtifactWorkspace.tsx").then(m => ({ default: m.ArtifactWorkspace })));
-const KnowledgeGapsPanel = lazy(() => import("./components/KnowledgeGapsPanel.tsx").then(m => ({ default: m.KnowledgeGapsPanel })));
-const MindMapViewer = lazy(() => import("./components/MindMapViewer.tsx").then(m => ({ default: m.MindMapViewer })));
-const PdfSplitViewer = lazy(() => import("./components/PdfSplitViewer.tsx").then(m => ({ default: m.PdfSplitViewer })));
-
-function LazyFallback() {
-  return (
-    <div className="flex h-full items-center justify-center gap-3 text-slate-400">
-      <span className="ui-spinner" />
-      <p className="text-sm">Cargando…</p>
-    </div>
-  );
-}
+import { useResizablePanels, clamp } from "./hooks/useResizablePanels.ts";
 import { IconButton } from "./components/ui/IconButton.tsx";
 import { useToast } from "./components/ui/Toast.tsx";
 import {
@@ -59,6 +45,20 @@ import { clearAllStoredSessions } from "./domain/sessions/storage.ts";
 import { ConversationalOnboarding } from "./components/ConversationalOnboarding.tsx";
 import { UserProfileModal } from "./components/UserProfileModal.tsx";
 
+const ArtifactWorkspace = lazy(() => import("./components/ArtifactWorkspace.tsx").then(m => ({ default: m.ArtifactWorkspace })));
+const KnowledgeGapsPanel = lazy(() => import("./components/KnowledgeGapsPanel.tsx").then(m => ({ default: m.KnowledgeGapsPanel })));
+const MindMapViewer = lazy(() => import("./components/MindMapViewer.tsx").then(m => ({ default: m.MindMapViewer })));
+const PdfSplitViewer = lazy(() => import("./components/PdfSplitViewer.tsx").then(m => ({ default: m.PdfSplitViewer })));
+
+function LazyFallback() {
+  return (
+    <div className="flex h-full items-center justify-center gap-3 text-slate-400">
+      <span className="ui-spinner" />
+      <p className="text-sm">Cargando…</p>
+    </div>
+  );
+}
+
 type ActiveTab = "workspace" | "mindmap" | "pdf" | "gaps";
 type Theme = "dark" | "light";
 
@@ -69,16 +69,21 @@ export function App() {
     const saved = localStorage.getItem("proxus_theme");
     return saved === "light" ? "light" : "dark";
   });
-  const [sidebarWidth, setSidebarWidth] = useState<number>(() => {
-    const saved = Number(localStorage.getItem("proxus_sidebar_width"));
-    return Number.isFinite(saved) && saved > 0 ? clamp(saved, 240, 360) : 280;
-  });
-  const [chatWidth, setChatWidth] = useState<number>(() => {
-    const saved = Number(localStorage.getItem("proxus_chat_width"));
-    return Number.isFinite(saved) && saved > 0 ? clamp(saved, 360, 520) : 400;
-  });
-  const [isResizingLeft, setIsResizingLeft] = useState(false);
-  const [isResizingRight, setIsResizingRight] = useState(false);
+
+  const {
+    setSidebarWidth,
+    setChatWidth,
+    viewportWidth,
+    layoutWidths,
+    isWideLayout,
+    isResizingLeft,
+    isResizingRight,
+    beginSidebarResize,
+    updateSidebarResize,
+    beginTutorResize,
+    updateTutorResize,
+    finishResize
+  } = useResizablePanels();
 
   const [selectedArtifactId, setSelectedArtifactId] = useState<string | null>(null);
   const [selectedMaterialId, setSelectedMaterialId] = useState<string | null>(null);
@@ -147,12 +152,7 @@ export function App() {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isChatMaximized, handleCloseFullscreenChat]);
-  const isWideLayout = useMediaQuery("(min-width: 1440px)");
-  const viewportWidth = useViewportWidth();
-  const layoutWidths = useMemo(
-    () => constrainPanelWidths(sidebarWidth, chatWidth, viewportWidth),
-    [chatWidth, sidebarWidth, viewportWidth]
-  );
+
   const profileResult = useAtomValue(knowledgeProfileQuery);
   const activeGapsCount = AsyncResult.match(profileResult, {
     onInitial: () => 0,
@@ -214,45 +214,6 @@ export function App() {
   useEffect(() => () => document.body.classList.remove("is-resizing"), []);
 
   const toggleTheme = () => setTheme((current) => (current === "dark" ? "light" : "dark"));
-
-  const beginSidebarResize = (event: ReactPointerEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    event.currentTarget.setPointerCapture(event.pointerId);
-    document.body.classList.add("is-resizing");
-    setIsResizingLeft(true);
-  };
-
-  const updateSidebarResize = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (!isResizingLeft) return;
-    const available = window.innerWidth - layoutWidths.chat - 640 - 12;
-    const nextWidth = clamp(event.clientX, 240, Math.min(360, available));
-    setSidebarWidth(nextWidth);
-    localStorage.setItem("proxus_sidebar_width", String(nextWidth));
-  };
-
-  const beginTutorResize = (event: ReactPointerEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    event.currentTarget.setPointerCapture(event.pointerId);
-    document.body.classList.add("is-resizing");
-    setIsResizingRight(true);
-  };
-
-  const updateTutorResize = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (!isResizingRight) return;
-    const available = window.innerWidth - layoutWidths.sidebar - 640 - 12;
-    const nextWidth = clamp(window.innerWidth - event.clientX, 360, Math.min(520, available));
-    setChatWidth(nextWidth);
-    localStorage.setItem("proxus_chat_width", String(nextWidth));
-  };
-
-  const finishResize = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-      event.currentTarget.releasePointerCapture(event.pointerId);
-    }
-    setIsResizingLeft(false);
-    setIsResizingRight(false);
-    document.body.classList.remove("is-resizing");
-  };
 
   const closeLibrary = useCallback(() => setIsLibraryOpen(false), []);
   const closeTutor = useCallback(() => {
@@ -768,7 +729,19 @@ export function App() {
         />
       )}
 
-      <ResponsivePanel side="right" label="Tutor de estudio" open={isTutorOpen} onClose={closeTutor} width={layoutWidths.chat} laptopWidth={480} isWide={isWideLayout} returnFocusRef={tutorTriggerRef} fallbackFocusRef={tutorFallbackRef}>
+      <ResponsivePanel
+        side="right"
+        label="Tutor de estudio"
+        open={isTutorOpen || isChatMaximized}
+        onClose={isChatMaximized ? handleCloseFullscreenChat : closeTutor}
+        width={layoutWidths.chat}
+        laptopWidth={480}
+        isWide={isWideLayout}
+        returnFocusRef={tutorTriggerRef}
+        fallbackFocusRef={tutorFallbackRef}
+        isFullscreen={isChatMaximized}
+        isClosing={isChatClosing}
+      >
         <Chat
           prefillPrompt={chatPrompt}
           prefillAttachments={chatAttachments}
@@ -778,65 +751,21 @@ export function App() {
           }}
           onSelectArtifact={(id) => {
             handleSelectArtifact(id);
-            if (!isWideLayout) setIsTutorOpen(false);
+            if (isChatMaximized) handleCloseFullscreenChat();
+            else if (!isWideLayout) setIsTutorOpen(false);
           }}
           onOpenMindMap={() => {
             setActiveTab("mindmap");
-            if (!isWideLayout) setIsTutorOpen(false);
+            if (isChatMaximized) handleCloseFullscreenChat();
+            else if (!isWideLayout) setIsTutorOpen(false);
           }}
-          onClose={closeTutor}
+          onClose={isChatMaximized ? handleCloseFullscreenChat : closeTutor}
           theme={theme}
-          isMaximized={false}
-          onToggleMaximize={handleOpenFullscreenChat}
+          isMaximized={isChatMaximized}
+          onToggleMaximize={isChatMaximized ? handleCloseFullscreenChat : handleOpenFullscreenChat}
           onOpenProfile={() => setIsUserProfileModalOpen(true)}
         />
       </ResponsivePanel>
-
-      {/* Fullscreen Focus Chat Mode Overlay with Smooth Expand/Collapse Animation */}
-      {isChatMaximized && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-label="Tutor en Modo Chat Completo"
-          className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden"
-        >
-          {/* Dimmed Backdrop with fade transition */}
-          <div
-            className={`absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity duration-300 ${
-              isChatClosing ? "opacity-0" : "opacity-100"
-            }`}
-            onClick={handleCloseFullscreenChat}
-          />
-
-          {/* Animated Fullscreen Chat Container */}
-          <div
-            className={`relative z-10 flex flex-col h-full w-full overflow-hidden shadow-2xl ${
-              isChatClosing ? "ui-chat-collapse" : "ui-chat-expand"
-            } ${isLight ? "bg-slate-50 text-slate-900" : "bg-[#090d16] text-slate-100"}`}
-          >
-            <Chat
-              prefillPrompt={chatPrompt}
-              prefillAttachments={chatAttachments}
-              onClearPrefill={() => {
-                setChatPrompt(null);
-                setChatAttachments(undefined);
-              }}
-              onSelectArtifact={(id) => {
-                handleSelectArtifact(id);
-                handleCloseFullscreenChat();
-              }}
-              onOpenMindMap={() => {
-                setActiveTab("mindmap");
-                handleCloseFullscreenChat();
-              }}
-              theme={theme}
-              isMaximized={true}
-              onToggleMaximize={handleCloseFullscreenChat}
-              onOpenProfile={() => setIsUserProfileModalOpen(true)}
-            />
-          </div>
-        </div>
-      )}
 
       {/* Conversational Onboarding for New Students */}
       {shouldShowOnboarding && (
@@ -986,7 +915,7 @@ function NoPdfSelected({ recentMaterial, onOpenRecent, onUpload }: {
   );
 }
 
-function ResponsivePanel({ side, label, open, onClose, width, laptopWidth, isWide, returnFocusRef, fallbackFocusRef, children }: {
+function ResponsivePanel({ side, label, open, onClose, width, laptopWidth, isWide, returnFocusRef, fallbackFocusRef, isFullscreen, isClosing, children }: {
   readonly side: "left" | "right";
   readonly label: string;
   readonly open: boolean;
@@ -996,12 +925,14 @@ function ResponsivePanel({ side, label, open, onClose, width, laptopWidth, isWid
   readonly isWide: boolean;
   readonly returnFocusRef: RefObject<HTMLElement | null>;
   readonly fallbackFocusRef: RefObject<HTMLElement | null>;
+  readonly isFullscreen?: boolean | undefined;
+  readonly isClosing?: boolean | undefined;
   readonly children: ReactNode;
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (isWide || !open) return;
+    if ((isWide && !isFullscreen) || !open) return;
     const panel = panelRef.current;
     if (!panel) return;
     const previousFocus = returnFocusRef.current
@@ -1050,10 +981,36 @@ function ResponsivePanel({ side, label, open, onClose, width, laptopWidth, isWid
         (canRestorePrevious ? previousFocus : fallbackFocusRef.current)?.focus();
       });
     };
-  }, [fallbackFocusRef, isWide, onClose, open, returnFocusRef]);
+  }, [fallbackFocusRef, isFullscreen, isWide, onClose, open, returnFocusRef]);
 
-  if (isWide && side === "right" && !open) {
+  if (isWide && side === "right" && !open && !isFullscreen) {
     return null;
+  }
+
+  if (isFullscreen) {
+    return (
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={label}
+        className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden"
+      >
+        <div
+          className={`absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity duration-300 ${
+            isClosing ? "opacity-0" : "opacity-100"
+          }`}
+          onClick={onClose}
+        />
+        <div
+          ref={panelRef}
+          className={`relative z-10 flex flex-col h-full w-full overflow-hidden shadow-2xl ${
+            isClosing ? "ui-chat-collapse" : "ui-chat-expand"
+          }`}
+        >
+          {children}
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -1116,52 +1073,6 @@ function LoadError({ onRetry }: { readonly onRetry: () => void }) {
   );
 }
 
-function useMediaQuery(query: string) {
-  const [matches, setMatches] = useState(() => window.matchMedia(query).matches);
-  useEffect(() => {
-    const media = window.matchMedia(query);
-    const update = () => setMatches(media.matches);
-    update();
-    media.addEventListener("change", update);
-    return () => media.removeEventListener("change", update);
-  }, [query]);
-  return matches;
-}
-
-function useViewportWidth() {
-  const [width, setWidth] = useState(() => window.innerWidth);
-
-  useEffect(() => {
-    let frame = 0;
-    const update = () => {
-      cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(() => setWidth(window.innerWidth));
-    };
-    window.addEventListener("resize", update);
-    return () => {
-      cancelAnimationFrame(frame);
-      window.removeEventListener("resize", update);
-    };
-  }, []);
-
-  return width;
-}
-
-function constrainPanelWidths(sidebar: number, chat: number, viewport: number) {
-  let nextSidebar = clamp(sidebar, 240, 360);
-  let nextChat = clamp(chat, 360, 520);
-  const available = Math.max(600, viewport - 640 - 12);
-  let excess = Math.max(0, nextSidebar + nextChat - available);
-  const reduceChat = Math.min(excess, nextChat - 360);
-  nextChat -= reduceChat;
-  excess -= reduceChat;
-  nextSidebar -= Math.min(excess, nextSidebar - 240);
-  return { sidebar: Math.round(nextSidebar), chat: Math.round(nextChat) };
-}
-
-function clamp(value: number, minimum: number, maximum: number) {
-  return Math.min(Math.max(value, minimum), Math.max(minimum, maximum));
-}
 
 export function getDeletedMaterialNavigation(
   selectedMaterialId: string | null,

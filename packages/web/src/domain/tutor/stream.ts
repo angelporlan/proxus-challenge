@@ -5,14 +5,18 @@ import { apiClientConfig } from "../../api-client/config.ts";
 const TutorChatStreamEventFromJsonString = Schema.fromJsonString(TutorChatStreamEvent);
 const decodeEvent = Schema.decodeUnknownSync(TutorChatStreamEventFromJsonString);
 
-export async function* streamTutorMessage(input: TutorChatRequest): AsyncGenerator<TutorChatStreamEventType> {
+export async function* streamTutorMessage(
+  input: TutorChatRequest,
+  signal?: AbortSignal
+): AsyncGenerator<TutorChatStreamEventType> {
   const response = await fetch(`${apiClientConfig.apiUrl}/api/tutor/chat/stream`, {
     method: "POST",
     headers: {
       "content-type": "application/json",
       "accept": "application/x-ndjson"
     },
-    body: JSON.stringify(input)
+    body: JSON.stringify(input),
+    ...(signal !== undefined ? { signal } : {})
   });
 
   if (!response.ok) {
