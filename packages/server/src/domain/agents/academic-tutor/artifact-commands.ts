@@ -52,7 +52,7 @@ const renderSerializationError = (reason: unknown) => {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
-const optionId = (text: string) => text
+export const optionId = (text: string) => text
   .trim()
   .toLocaleLowerCase()
   .normalize("NFD")
@@ -60,7 +60,7 @@ const optionId = (text: string) => text
   .replace(/[^a-z0-9]+/g, "-")
   .replace(/^-|-$/g, "") || "option";
 
-const normalizeMultipleChoiceQuestion = (question: Record<string, unknown>) => {
+export const normalizeMultipleChoiceQuestion = (question: Record<string, unknown>) => {
   const options = Array.isArray(question.options)
     ? question.options.map((option) => typeof option === "string"
         ? { id: optionId(option), text: option }

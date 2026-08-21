@@ -44,6 +44,10 @@ importers:
       effect:
         specifier: 4.0.0-beta.83
         version: 4.0.0-beta.83
+    devDependencies:
+      vitest:
+        specifier: ^4.1.11
+        version: 4.1.11(@types/node@25.9.3)(jsdom@30.0.1)(vite@8.0.16(@types/node@25.9.3)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
 
   packages/shared:
     dependencies:

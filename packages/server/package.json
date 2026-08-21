@@ -10,6 +10,10 @@
     "agent:tutor": "node --env-file=../../.env --import tsx src/domain/agents/academic-tutor.ts",
     "dev": "node --env-file=../../.env --import tsx --watch src/index.ts",
     "eval:tutor:artifact-authoring": "node --env-file=../../.env --import tsx src/domain/agents/academic-tutor/evals/artifact-authoring.eval.ts",
+    "eval:tutor:knowledge-gap": "node --env-file=../../.env --import tsx src/domain/agents/academic-tutor/evals/knowledge-gap-integration.eval.ts",
+    "eval:tutor:socratic": "node --env-file=../../.env --import tsx src/domain/agents/academic-tutor/evals/socratic-mode.eval.ts",
+    "eval:tutor:search": "node --env-file=../../.env --import tsx src/domain/agents/academic-tutor/evals/search-then-view.eval.ts",
+    "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
@@ -17,5 +21,8 @@
     "@effect/platform-node": "4.0.0-beta.83",
     "@proxus/shared": "workspace:*",
     "effect": "4.0.0-beta.83"
+  },
+  "devDependencies": {
+    "vitest": "^4.1.11"
   }
 }
