@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import type { UserProfile, UpdateUserProfileInput } from "@proxus/shared";
 import { ONBOARDING_STEPS, type OnboardingStep, type StepOption } from "../domain/user-profile/stepsConfig.ts";
-import proxoAvatar from "../assets/proxo-avatar.jpg";
+import { ProxoFrameAnimation } from "./ProxoFrameAnimation.tsx";
 
 interface ConversationalOnboardingProps {
   readonly currentProfile?: UserProfile | null | undefined;
@@ -224,10 +224,11 @@ export function ConversationalOnboarding({
           }`}
         >
           <div className="flex items-center gap-2.5">
-            <img
-              src={proxoAvatar}
-              alt="Proxo"
-              className="size-8 rounded-xl object-cover shadow-xs border border-indigo-500/30"
+            <ProxoFrameAnimation
+              mode="explanatory"
+              state={isQuestionWriting ? "talking" : isQuestionThinking ? "thinking" : "idle"}
+              size="sm"
+              isLight={isLight}
             />
             <div>
               <div className="flex items-center gap-1.5">
@@ -279,10 +280,12 @@ export function ConversationalOnboarding({
         >
           {/* Welcome Message */}
           <div className="flex items-start gap-3 max-w-[85%] animate-in fade-in slide-in-from-bottom-2 duration-300">
-            <img
-              src={proxoAvatar}
-              alt="Proxo"
-              className="size-7 rounded-lg object-cover shrink-0 mt-0.5 shadow-2xs border border-indigo-500/20"
+            <ProxoFrameAnimation
+              mode="explanatory"
+              state="idle"
+              size="sm"
+              isLight={isLight}
+              className="shrink-0 mt-0.5"
             />
             <div
               className={`rounded-2xl rounded-tl-xs p-3.5 border ${
@@ -304,10 +307,12 @@ export function ConversationalOnboarding({
             <React.Fragment key={idx}>
               {/* Question bubble */}
               <div className="flex items-start gap-3 max-w-[85%] animate-in fade-in duration-200">
-                <img
-                  src={proxoAvatar}
-                  alt="Proxo"
-                  className="size-7 rounded-lg object-cover shrink-0 mt-0.5 shadow-2xs border border-indigo-500/20"
+                <ProxoFrameAnimation
+                  mode="explanatory"
+                  state="idle"
+                  size="sm"
+                  isLight={isLight}
+                  className="shrink-0 mt-0.5"
                 />
                 <div
                   className={`rounded-2xl rounded-tl-xs p-3.5 border ${
@@ -332,10 +337,12 @@ export function ConversationalOnboarding({
           {/* Current Question Bubble */}
           {!isFinished && step && !isQuestionThinking && (
             <div className="flex items-start gap-3 max-w-[85%] animate-in fade-in slide-in-from-bottom-2 duration-300">
-              <img
-                src={proxoAvatar}
-                alt="Proxo"
-                className="size-7 rounded-lg object-cover shrink-0 mt-0.5 shadow-2xs border border-indigo-500/20"
+              <ProxoFrameAnimation
+                mode="explanatory"
+                state={isQuestionWriting ? "talking" : "idle"}
+                size="sm"
+                isLight={isLight}
+                className="shrink-0 mt-0.5"
               />
               <div
                 className={`rounded-2xl rounded-tl-xs p-3.5 border ${
@@ -370,10 +377,12 @@ export function ConversationalOnboarding({
           {/* Final Summary Card when Finished */}
           {isFinished && (
             <div className="flex items-start gap-3 max-w-[90%] animate-in fade-in zoom-in-95 duration-300">
-              <img
-                src={proxoAvatar}
-                alt="Proxo"
-                className="size-7 rounded-lg object-cover shrink-0 mt-0.5 shadow-2xs border border-indigo-500/20"
+              <ProxoFrameAnimation
+                mode="explanatory"
+                state="idle"
+                size="sm"
+                isLight={isLight}
+                className="shrink-0 mt-0.5"
               />
               <div
                 className={`rounded-2xl rounded-tl-xs p-4 border space-y-3 ${
@@ -532,10 +541,12 @@ export function ConversationalOnboarding({
 function OnboardingThinkingBubble({ isLight }: { readonly isLight: boolean }) {
   return (
     <div className="ui-enter flex items-start gap-3 max-w-[85%]" role="status" aria-label="Proxo está pensando">
-      <img
-        src={proxoAvatar}
-        alt="Proxo"
-        className="size-7 rounded-lg object-cover shrink-0 mt-0.5 shadow-2xs border border-indigo-500/20 animate-pulse"
+      <ProxoFrameAnimation
+        mode="explanatory"
+        state="thinking"
+        size="sm"
+        isLight={isLight}
+        className="shrink-0 mt-0.5"
       />
       <div
         className={`rounded-2xl rounded-tl-xs p-3.5 border text-xs ${

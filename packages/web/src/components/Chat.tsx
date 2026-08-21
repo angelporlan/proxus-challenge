@@ -10,10 +10,9 @@ import { materialsQuery, uploadMaterialAction } from "../domain/materials/atoms.
 import { applyInvalidations, invalidationsForToolCall } from "../domain/tutor/invalidation.ts";
 import { streamTutorMessage } from "../domain/tutor/stream.ts";
 import { ArtifactChatCard } from "./ArtifactChatCard.tsx";
+import { ProxoFrameAnimation } from "./ProxoFrameAnimation.tsx";
 import proxoAvatar from "../assets/proxo-avatar.jpg";
-import proxoFoxTransparent from "../assets/proxo-fox-transparent.png";
 import proxoSocraticAvatar from "../assets/proxo-socratic-avatar.jpg";
-import proxoSocraticTransparent from "../assets/proxo-socratic-transparent.png";
 
 const starterPrompts = [
   {
@@ -292,8 +291,6 @@ export function Chat({
   const [assistantReveal, setAssistantReveal] = useState<AssistantReveal | null>(null);
   const [error, setError] = useState<string | undefined>();
   const [tutorMode, setTutorMode] = useState<TutorMode>("explanatory");
-  const currentProxoAvatar = tutorMode === "socratic" ? proxoSocraticAvatar : proxoAvatar;
-  const currentProxoHero = tutorMode === "socratic" ? proxoSocraticTransparent : proxoFoxTransparent;
 
   // Attached & Mentioned documents state
   const [attachedDocs, setAttachedDocs] = useState<
@@ -793,14 +790,11 @@ export function Chat({
       >
         <div className="flex items-center gap-3">
           <div className="relative">
-            <img
-              src={currentProxoAvatar}
-              alt={`Proxo (${tutorMode === "socratic" ? "Modo Socrático" : "Modo Explicativo"})`}
-              className={`size-9 rounded-xl object-cover border shadow-xs transition-all duration-300 ${
-                tutorMode === "socratic"
-                  ? "border-purple-500/40 ring-2 ring-purple-500/20"
-                  : "border-indigo-500/40 ring-2 ring-indigo-500/20"
-              }`}
+            <ProxoFrameAnimation
+              mode={tutorMode}
+              state={isTutorWriting ? "talking" : isSending ? "thinking" : "idle"}
+              size="sm"
+              isLight={isLight}
             />
             <span
               className={`absolute -bottom-0.5 -right-0.5 size-2.5 rounded-full border-2 ${
@@ -946,10 +940,13 @@ export function Chat({
         {messages.length === 0 ? (
           <div className="m-auto w-full max-w-2xl text-center py-6">
             <div className="relative mx-auto mb-3 inline-block">
-              <img
-                src={currentProxoHero}
-                alt={tutorMode === "socratic" ? "Proxo (Modo Socrático)" : "Proxo (Modo Explicativo)"}
-                className="size-28 sm:size-32 object-contain drop-shadow-md mx-auto transform hover:scale-105 transition-all duration-300"
+              <ProxoFrameAnimation
+                mode={tutorMode}
+                state="idle"
+                variant="transparent"
+                size="xl"
+                interactive={true}
+                isLight={isLight}
               />
             </div>
             <h2
@@ -1070,12 +1067,12 @@ export function Chat({
 
             return (
               <article key={index} className="ui-enter flex max-w-3xl self-start items-start gap-2.5">
-                <img
-                  src={currentProxoAvatar}
-                  alt={tutorMode === "socratic" ? "Proxo (Socrático)" : "Proxo"}
-                  className={`mt-1 size-8 shrink-0 rounded-xl object-cover border shadow-xs transition-all duration-200 ${
-                    tutorMode === "socratic" ? "border-purple-500/40 ring-1 ring-purple-500/20" : "border-indigo-500/30 ring-1 ring-indigo-500/20"
-                  }`}
+                <ProxoFrameAnimation
+                  mode={tutorMode}
+                  state={isCurrentlyWriting ? "talking" : "idle"}
+                  size="sm"
+                  isLight={isLight}
+                  className="mt-1 shrink-0"
                 />
 
                 <div className="min-w-0 flex-1">
@@ -1200,7 +1197,7 @@ export function Chat({
         )}
 
         {isSending && !isTutorWriting && groupedItems.at(-1)?.kind !== "tools" && (
-          <TutorThinkingBubble isLight={isLight} avatar={currentProxoAvatar} />
+          <TutorThinkingBubble isLight={isLight} mode={tutorMode} />
         )}
 
         <div ref={messagesEndRef} />
@@ -1866,17 +1863,19 @@ export function Chat({
 
 function TutorThinkingBubble({
   isLight,
-  avatar = proxoAvatar
+  mode = "explanatory"
 }: {
   readonly isLight: boolean;
-  readonly avatar?: string | undefined;
+  readonly mode?: TutorMode | undefined;
 }) {
   return (
     <div className="ui-enter flex items-start gap-2.5" aria-label="Proxo está pensando" role="status">
-      <img
-        src={avatar}
-        alt="Proxo"
-        className="mt-1 size-8 shrink-0 rounded-xl object-cover border border-indigo-500/30 shadow-xs animate-pulse"
+      <ProxoFrameAnimation
+        mode={mode}
+        state="thinking"
+        size="sm"
+        isLight={isLight}
+        className="mt-1 shrink-0"
       />
       <div
         className={`rounded-2xl rounded-bl-sm border px-4 py-3 text-xs ${
@@ -1887,7 +1886,9 @@ function TutorThinkingBubble({
       >
         <div className="flex items-center gap-2">
           <span className="font-semibold text-indigo-600 dark:text-indigo-400">Proxo</span>
-          <span className="text-slate-500 dark:text-slate-400">está pensando</span>
+          <span className="text-slate-500 dark:text-slate-400">
+            {mode === "socratic" ? "está formulando una pregunta" : "está pensando"}
+          </span>
           <span className="flex items-center gap-1" aria-hidden="true">
             <span className="ui-thinking-dot" />
             <span className="ui-thinking-dot ui-thinking-dot--2" />
