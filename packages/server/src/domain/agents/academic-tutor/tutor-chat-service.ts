@@ -116,10 +116,7 @@ export const TutorChatServiceLive = Layer.effect(
           : ""
       ].filter(Boolean).join("\n\n");
 
-      const activeMaterialIds = [
-        ...(input.activeMaterialIds ?? []),
-        ...(input.documentReferences ?? [])
-      ];
+      const activeMaterialIds = input.activeMaterialIds ?? [];
 
       const harness = makeAcademicTutorHarness(materialRepository, artifactRepository, knowledgeRepository, {
         mode: input.mode,

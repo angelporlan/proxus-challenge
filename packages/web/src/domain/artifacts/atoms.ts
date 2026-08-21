@@ -45,7 +45,7 @@ export const submitArtifactAttemptAction = apiRuntime.fn(
             payload: input
           })
     ).pipe(Effect.withSpan("artifacts.submit", { kind: "client" })),
-  { reactivityKeys: ["artifacts"] }
+  { reactivityKeys: ["artifacts", "knowledge"] }
 );
 
 export const deleteArtifactAction = apiRuntime.fn(

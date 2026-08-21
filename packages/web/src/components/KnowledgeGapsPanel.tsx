@@ -61,7 +61,8 @@ export function KnowledgeGapsPanel({
   };
 
   const totalGaps = profile.gaps.length;
-  const masteryPercentage = totalGaps === 0 ? 100 : Math.round((masteredGaps.length / totalGaps) * 100);
+  const hasEvaluations = profile.totalAttempts > 0;
+  const masteryPercentage = totalGaps === 0 ? (hasEvaluations ? 100 : 0) : Math.round((masteredGaps.length / totalGaps) * 100);
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
@@ -181,12 +182,16 @@ export function KnowledgeGapsPanel({
               <span className="material-symbols-outlined text-2xl">verified</span>
             </div>
             <h3 className={`font-display font-semibold text-base mb-1 ${isLight ? "text-slate-800" : "text-slate-200"}`}>
-              {filter === "active"
+              {profile.totalAttempts === 0
+                ? "¡Aún no hay evaluaciones realizadas!"
+                : filter === "active"
                 ? "¡Sin lagunas activas pendientes!"
                 : "No hay conceptos en esta sección"}
             </h3>
             <p className={`text-xs max-w-xs mx-auto leading-relaxed ${isLight ? "text-slate-500" : "text-slate-400"}`}>
-              {filter === "active"
+              {profile.totalAttempts === 0
+                ? "Resuelve quizzes o exámenes desde tus materiales para poner a prueba tus conocimientos y detectar lagunas."
+                : filter === "active"
                 ? "Resuelve más quizzes y exámenes desde tus materiales para poner a prueba tu retención."
                 : "Cambia de filtro para revisar otros estados de aprendizaje."}
             </p>

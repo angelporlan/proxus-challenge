@@ -54,8 +54,10 @@ function extractKnowledgeGaps(artifact: ArtifactType, graded: ArtifactAttemptTyp
       expl = correction.explanation;
     } else if (correction.questionType === "short-answer") {
       isIncorrect = correction.score < correction.maxScore;
-      studentAns = "Respuesta enviada";
-      correctAns = "Ver feedback";
+      const studentSub = graded.answers.find((a) => a.questionId === correction.questionId && a.questionType === "short-answer");
+      studentAns = studentSub && "answer" in studentSub ? String(studentSub.answer) : "Respuesta enviada";
+      const q = artifact.questions.find((item) => item.id === correction.questionId && item.type === "short-answer");
+      correctAns = q && "expectedAnswer" in q ? String(q.expectedAnswer) : "Respuesta esperada";
       expl = correction.feedback;
     }
 
@@ -130,13 +132,19 @@ export const FileArtifactRepository = {
 
     const writeArtifactFile = (artifact: ArtifactType) => Effect.gen(function* () {
       yield* ensureDirectories();
-      const text = JSON.stringify(Schema.encodeSync(Artifact)(artifact), null, 2);
+      const encoded = yield* Schema.encodeUnknownEffect(Artifact)(artifact).pipe(
+        Effect.mapError(mapSerializationError)
+      );
+      const text = JSON.stringify(encoded, null, 2);
       yield* fs.writeFileString(artifactPath(artifact.id), text).pipe(Effect.mapError(mapStorageError));
     });
 
     const writeAttemptFile = (attempt: ArtifactAttemptType) => Effect.gen(function* () {
       yield* ensureDirectories();
-      const text = JSON.stringify(Schema.encodeSync(ArtifactAttempt)(attempt), null, 2);
+      const encoded = yield* Schema.encodeUnknownEffect(ArtifactAttempt)(attempt).pipe(
+        Effect.mapError(mapSerializationError)
+      );
+      const text = JSON.stringify(encoded, null, 2);
       yield* fs.writeFileString(attemptPath(attempt.id), text).pipe(Effect.mapError(mapStorageError));
     });
 

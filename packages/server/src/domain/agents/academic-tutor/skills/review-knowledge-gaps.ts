@@ -13,7 +13,7 @@ export const ReviewKnowledgeGapsSkill = AgentSkill.make({
     "",
     "Available CLI commands:",
     "- `knowledge gaps`: list active knowledge gaps with questions and explanations.",
-    "- `knowledge gaps summary`: get a concise overview of weak topics.",
+    "- `knowledge summary`: get a concise overview of weak topics.",
     "- `knowledge review <gapId>`: mark a gap as currently reviewing.",
     "- `knowledge master <gapId>`: mark a gap as mastered after the student demonstrates understanding.",
     "",

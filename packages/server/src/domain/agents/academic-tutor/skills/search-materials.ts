@@ -11,7 +11,7 @@ export const SearchMaterialsSkill = AgentSkill.make({
     "- You need to quickly identify which page contains an article, keyword, or theorem without guessing.",
     "",
     "Available CLI commands:",
-    "- `materials search <materialId> <query>`: search text across all pages of a material and return ranked pages with matching snippets.",
+    "- `materials search <materialId> \"<query>\"`: search text across all pages of a material (use quotes for multi-word queries) and return ranked pages with matching snippets.",
     "",
     "Workflow:",
     "1. When the student asks about a specific term or article (e.g. 'Habeas Corpus', 'Art. 17', 'prescripción'), call `materials search <materialId> <query>`.",

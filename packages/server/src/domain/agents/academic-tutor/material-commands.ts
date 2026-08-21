@@ -41,8 +41,8 @@ export const makeMaterialCommands = (repository: MaterialRepository) => {
   );
 
   const search = AgentCli.Command.withExamples([
-    { command: "materials search tema-1-constitucion habeas corpus", description: "Search for 'habeas corpus' in document" },
-    { command: "materials search tema-1-constitucion art 17", description: "Search for 'art 17' in document" }
+    { command: "materials search tema-1-constitucion 'habeas corpus'", description: "Search for 'habeas corpus' in document" },
+    { command: "materials search tema-1-constitucion 'art 17'", description: "Search for 'art 17' in document" }
   ])(
     AgentCli.Command.withDescription("Search text across all pages of a PDF material to find matching page numbers and excerpts")(
       AgentCli.Command.exec("search", {
