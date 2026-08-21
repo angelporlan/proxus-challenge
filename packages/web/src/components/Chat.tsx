@@ -1,5 +1,5 @@
 import { useAtomRefresh, useAtomSet, useAtomValue } from "@effect/atom-react";
-import type { AgentMessage } from "@proxus/shared";
+import type { AgentMessage, ChatSession } from "@proxus/shared";
 import * as AsyncResult from "effect/unstable/reactivity/AsyncResult";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Streamdown } from "streamdown";
@@ -9,6 +9,13 @@ import { knowledgeProfileQuery } from "../domain/knowledge/atoms.ts";
 import { materialsQuery, uploadMaterialAction } from "../domain/materials/atoms.ts";
 import { applyInvalidations, invalidationsForToolCall } from "../domain/tutor/invalidation.ts";
 import { streamTutorMessage } from "../domain/tutor/stream.ts";
+import {
+  loadSavedSessions,
+  saveSessions,
+  createOrUpdateSession,
+  deleteStoredSession,
+  makeNewSessionId
+} from "../domain/sessions/storage.ts";
 import { ArtifactChatCard } from "./ArtifactChatCard.tsx";
 import { ProxoFrameAnimation } from "./ProxoFrameAnimation.tsx";
 import proxoAvatar from "../assets/proxo-avatar.jpg";
@@ -291,6 +298,73 @@ export function Chat({
   const [assistantReveal, setAssistantReveal] = useState<AssistantReveal | null>(null);
   const [error, setError] = useState<string | undefined>();
   const [tutorMode, setTutorMode] = useState<TutorMode>("explanatory");
+
+  // Conversation history and sessions state
+  const [sessions, setSessions] = useState<readonly ChatSession[]>(() => loadSavedSessions());
+  const [currentSessionId, setCurrentSessionId] = useState<string>(() => {
+    const saved = loadSavedSessions();
+    return saved[0]?.id ?? makeNewSessionId();
+  });
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const historyMenuRef = useRef<HTMLDivElement>(null);
+
+  // Auto-sync messages to current session
+  useEffect(() => {
+    if (messages.length > 0) {
+      setSessions((prev) => {
+        const next = createOrUpdateSession(prev, currentSessionId, messages, tutorMode);
+        saveSessions(next);
+        return next;
+      });
+    }
+  }, [messages, currentSessionId, tutorMode]);
+
+  // Click outside to close history dropdown
+  useEffect(() => {
+    if (!isHistoryOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (historyMenuRef.current && !historyMenuRef.current.contains(e.target as Node)) {
+        setIsHistoryOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [isHistoryOpen]);
+
+  const handleNewChat = useCallback(() => {
+    const newId = makeNewSessionId();
+    setCurrentSessionId(newId);
+    setMessages([]);
+    setAssistantReveal(null);
+    setIsHistoryOpen(false);
+  }, []);
+
+  const handleSelectSession = useCallback((session: ChatSession) => {
+    setCurrentSessionId(session.id);
+    setMessages(session.messages);
+    if (session.mode) {
+      setTutorMode(session.mode);
+    }
+    setAssistantReveal(null);
+    setIsHistoryOpen(false);
+  }, []);
+
+  const handleDeleteSession = useCallback((sessionId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSessions((prev) => {
+      const next = deleteStoredSession(prev, sessionId);
+      saveSessions(next);
+      return next;
+    });
+    setCurrentSessionId((curr) => {
+      if (curr === sessionId) {
+        setMessages([]);
+        setAssistantReveal(null);
+        return makeNewSessionId();
+      }
+      return curr;
+    });
+  }, []);
 
   // Attached & Mentioned documents state
   const [attachedDocs, setAttachedDocs] = useState<
@@ -784,86 +858,150 @@ export function Chat({
     >
       {/* Header */}
       <header
-        className={`flex flex-wrap items-center justify-between gap-3 border-b px-5 py-4 pr-14 backdrop-blur z-10 transition-colors min-[1440px]:pr-5 ${
+        className={`flex items-center justify-between gap-2 border-b px-4 py-3 pr-14 backdrop-blur z-10 transition-colors min-[1440px]:pr-4 ${
           isLight ? "border-slate-200 bg-white/90" : "border-slate-800 bg-slate-950/80"
         }`}
       >
-        <div className="flex items-center gap-3">
-          <div className="relative">
-            <ProxoFrameAnimation
-              mode={tutorMode}
-              state={isTutorWriting ? "talking" : isSending ? "thinking" : "idle"}
-              size="sm"
-              isLight={isLight}
-            />
-            <span
-              className={`absolute -bottom-0.5 -right-0.5 size-2.5 rounded-full border-2 ${
-                isLight ? "border-white" : "border-slate-950"
-              } ${isTutorWriting || isSending ? "animate-pulse bg-indigo-500" : "bg-emerald-500"}`}
-              title={isTutorWriting ? "Escribiendo…" : isSending ? "Pensando…" : "En línea"}
-            />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1
-                className={`font-display font-bold text-base sm:text-lg leading-none ${
-                  isLight ? "text-slate-900" : "text-slate-100"
-                }`}
-              >
-                Proxo
-              </h1>
-              <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold transition-colors ${
-                tutorMode === "socratic"
-                  ? "border-purple-500/20 bg-purple-500/10 text-purple-500 dark:text-purple-400"
-                  : "border-indigo-500/20 bg-indigo-500/10 text-indigo-500"
-              }`}>
-                {tutorMode === "socratic" ? "Socrático" : "Tutor IA"}
-              </span>
-            </div>
-            <div className="mt-1 flex items-center gap-2">
-              <p className={`text-[11px] ${isLight ? "text-slate-500" : "text-slate-400"}`}>
-                {tutorMode === "socratic"
-                  ? "Modo Socrático activo · Razonamiento guiado"
-                  : "Tu tutor académico inteligente"}
-              </p>
-              <span
-                className={`hidden items-center gap-1 text-[10px] sm:flex ${
-                  isTutorWriting || isSending
-                    ? "text-indigo-500"
-                    : isLight
-                      ? "text-emerald-600"
-                      : "text-emerald-400"
-                }`}
-              >
-                <span className={`size-1.5 rounded-full ${isTutorWriting || isSending ? "animate-pulse bg-indigo-500" : "bg-emerald-500"}`} />
-                {isTutorWriting ? "Escribiendo" : isSending ? "Pensando" : "En línea"}
-              </span>
-            </div>
-          </div>
+        {/* Left Side: New Chat */}
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={handleNewChat}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold transition-all duration-150 active:scale-95 ${
+              isLight
+                ? "border-slate-200 bg-white hover:bg-slate-100 text-slate-700 shadow-2xs"
+                : "border-slate-800 bg-slate-900/90 hover:bg-slate-800 text-slate-200 shadow-2xs"
+            }`}
+            title="Iniciar un nuevo chat limpio con Proxo"
+            aria-label="Nuevo chat"
+          >
+            <span className="material-symbols-outlined text-[16px] text-indigo-500">add</span>
+            <span>Nuevo chat</span>
+          </button>
         </div>
 
-        <div className="flex items-center gap-1.5">
-          {onOpenProfile && (
+        {/* Right Side: History & Maximize */}
+        <div className="flex items-center gap-2">
+
+          {/* History Popover / Drawer Button */}
+          <div className="relative" ref={historyMenuRef}>
             <button
               type="button"
-              onClick={onOpenProfile}
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl border text-xs font-semibold transition-all duration-150 active:scale-95 ${
-                isLight
-                  ? "border-purple-200 bg-purple-50 hover:bg-purple-100/80 text-purple-700 shadow-2xs"
-                  : "border-purple-800/60 bg-purple-950/40 hover:bg-purple-900/50 text-purple-300 shadow-2xs"
+              onClick={() => setIsHistoryOpen((v) => !v)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold transition-all duration-150 active:scale-95 ${
+                isHistoryOpen
+                  ? "bg-indigo-600 text-white border-indigo-500 shadow-xs"
+                  : isLight
+                  ? "border-slate-200 bg-white hover:bg-slate-100 text-slate-700 shadow-2xs"
+                  : "border-slate-800 bg-slate-900/90 hover:bg-slate-800 text-slate-200 shadow-2xs"
               }`}
-              title="Personalización: ver o editar lo que el tutor sabe de ti"
+              title="Historial de conversaciones con Proxo"
+              aria-label="Historial de conversaciones"
             >
-              <span className="material-symbols-outlined text-[15px] text-purple-500">psychology</span>
-              <span className="hidden sm:inline">Personalizado</span>
+              <span className="material-symbols-outlined text-[16px]">history</span>
+              <span>Historial</span>
+              {sessions.length > 0 && (
+                <span
+                  className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
+                    isHistoryOpen
+                      ? "bg-white/25 text-white"
+                      : "bg-indigo-500/15 text-indigo-600 dark:text-indigo-400"
+                  }`}
+                >
+                  {sessions.length}
+                </span>
+              )}
             </button>
-          )}
+
+            {/* History Dropdown Menu - aligned cleanly within panel bounds */}
+            {isHistoryOpen && (
+              <div
+                className={`absolute right-0 top-full mt-2 w-72 sm:w-80 max-w-[calc(100vw-2.5rem)] rounded-2xl border shadow-2xl z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-150 ${
+                  isLight ? "bg-white border-slate-200 text-slate-900 shadow-slate-300/50" : "bg-[#0d121d] border-slate-800 text-slate-100 shadow-black/80"
+                }`}
+              >
+                <div
+                  className={`p-3 border-b flex items-center justify-between ${
+                    isLight ? "bg-slate-50/80 border-slate-200" : "bg-slate-900/80 border-slate-800"
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="material-symbols-outlined text-indigo-500 text-base">chat</span>
+                    <strong className="text-xs font-bold">Historial de chats</strong>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleNewChat}
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-semibold transition active:scale-95"
+                    title="Crear un nuevo chat"
+                  >
+                    <span className="material-symbols-outlined text-[14px]">add</span>
+                    <span>Nuevo</span>
+                  </button>
+                </div>
+
+                <div className="max-h-64 overflow-y-auto p-2 space-y-1">
+                  {sessions.length === 0 ? (
+                    <div className="p-5 text-center text-xs text-slate-500 dark:text-slate-400">
+                      <span className="material-symbols-outlined text-2xl mb-1 text-slate-400">history_toggle_off</span>
+                      <p className="font-semibold">No hay chats guardados</p>
+                      <p className="text-[11px] mt-0.5">Tus conversaciones con Proxo se guardarán automáticamente aquí.</p>
+                    </div>
+                  ) : (
+                    sessions.map((sess) => {
+                      const isActive = sess.id === currentSessionId;
+                      const userMsgCount = sess.messages.filter((m) => m.role === "user").length;
+                      return (
+                        <div
+                          key={sess.id}
+                          onClick={() => handleSelectSession(sess)}
+                          className={`group flex items-center justify-between gap-2 p-2 rounded-xl cursor-pointer transition text-xs ${
+                            isActive
+                              ? "bg-indigo-500/15 border border-indigo-500/30 text-indigo-600 dark:text-indigo-300 font-semibold"
+                              : isLight
+                              ? "hover:bg-slate-100 text-slate-700"
+                              : "hover:bg-slate-900 text-slate-300"
+                          }`}
+                        >
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5">
+                              <span className="material-symbols-outlined text-[14px] shrink-0 text-slate-400">
+                                {sess.mode === "socratic" ? "school" : "chat_bubble"}
+                              </span>
+                              <p className="truncate text-xs font-medium">{sess.title}</p>
+                            </div>
+                            <div className="flex items-center gap-1.5 mt-0.5 text-[10px] text-slate-500 dark:text-slate-400">
+                              <span>{userMsgCount} {userMsgCount === 1 ? "mensaje" : "mensajes"}</span>
+                              <span>·</span>
+                              <span>{new Date(sess.updatedAt).toLocaleDateString()}</span>
+                              {sess.mode === "socratic" && (
+                                <span className="text-[9px] px-1 rounded bg-purple-500/15 text-purple-500 font-medium">Socrático</span>
+                              )}
+                            </div>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={(e) => handleDeleteSession(sess.id, e)}
+                            className="opacity-0 group-hover:opacity-100 size-6 grid place-items-center rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 transition shrink-0"
+                            title="Eliminar este chat del historial"
+                          >
+                            <span className="material-symbols-outlined text-[14px]">delete</span>
+                          </button>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
 
           {onToggleMaximize && (
             <button
               type="button"
               onClick={onToggleMaximize}
-              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-semibold transition ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold transition ${
                 isMaximized
                   ? "bg-indigo-600 text-white border-indigo-500 shadow-md shadow-indigo-600/20"
                   : isLight
@@ -886,44 +1024,6 @@ export function Chat({
               </span>
               <span className="hidden sm:inline">
                 {isMaximized ? "Restaurar" : "Modo Chat"}
-              </span>
-            </button>
-          )}
-
-          <button
-            className={`p-1.5 rounded-xl border transition ${
-              isLight
-                ? "border-slate-200 text-slate-500 hover:text-slate-800 hover:bg-slate-100"
-                : "border-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-900"
-            } disabled:opacity-30 disabled:cursor-not-allowed`}
-            type="button"
-            onClick={() => {
-              setMessages([]);
-              setAssistantReveal(null);
-            }}
-            disabled={messages.length === 0}
-            title="Limpiar conversación"
-            aria-label="Limpiar conversación"
-          >
-            <span className="material-symbols-outlined text-base" aria-hidden="true">
-              restart_alt
-            </span>
-          </button>
-
-          {onClose && !isMaximized && (
-            <button
-              className={`p-1.5 rounded-xl border transition ${
-                isLight
-                  ? "border-slate-200 text-slate-500 hover:text-slate-800 hover:bg-slate-100"
-                  : "border-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-900"
-              }`}
-              type="button"
-              onClick={onClose}
-              title="Ocultar Tutor de estudio"
-              aria-label="Ocultar Tutor de estudio"
-            >
-              <span className="material-symbols-outlined text-[17px]" aria-hidden="true">
-                dock_to_right
               </span>
             </button>
           )}

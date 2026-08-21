@@ -25,6 +25,8 @@ export const FileMaterialRepository = {
     const mapError = (reason: unknown) => new MaterialRepositoryError({ reason });
 
     const pdfPath = (fileName: string) => path.join(directory, fileName);
+    const metaPath = (fileName: string) =>
+      path.join(directory, `${path.basename(fileName, ".pdf")}.meta.json`);
 
     const sanitizeFileName = (rawName: string) => {
       const base = path.basename(rawName).trim();
@@ -36,6 +38,17 @@ export const FileMaterialRepository = {
     const hasPdfHeader = (bytes: Uint8Array) => {
       if (bytes.length < 4) return false;
       return bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46;
+    };
+
+    const parseTitleFromMetaJson = (content: string): string | undefined => {
+      try {
+        const parsed = JSON.parse(content);
+        return typeof parsed?.title === "string" && parsed.title.trim().length > 0
+          ? parsed.title.trim()
+          : undefined;
+      } catch {
+        return undefined;
+      }
     };
 
     const listFiles = (): Effect.Effect<readonly PdfFile[], MaterialRepositoryError> => Effect.gen(function* () {
@@ -51,12 +64,25 @@ export const FileMaterialRepository = {
         entries.filter((entry) => path.extname(entry).toLowerCase() === ".pdf").sort(),
         (fileName): Effect.Effect<PdfFile, MaterialRepositoryError> => Effect.gen(function* () {
           const fullPath = pdfPath(fileName);
+          const metaFilePath = metaPath(fileName);
           const stat = yield* fs.stat(fullPath).pipe(
             Effect.mapError(mapError)
           );
+          const materialId = path.basename(fileName, ".pdf");
+
+          let title = materialId;
+          const metaExists = yield* fs.exists(metaFilePath).pipe(Effect.mapError(mapError));
+          if (metaExists) {
+            const metaContent = yield* fs.readFileString(metaFilePath).pipe(Effect.catch(() => Effect.succeed("")));
+            const parsedTitle = parseTitleFromMetaJson(metaContent);
+            if (parsedTitle !== undefined) {
+              title = parsedTitle;
+            }
+          }
+
           const material: PdfMaterial = {
-            id: path.basename(fileName, ".pdf"),
-            title: path.basename(fileName, ".pdf"),
+            id: materialId,
+            title,
             fileName,
             pageCount: yield* pdf.pageCount(fullPath).pipe(Effect.mapError(mapError)),
             uploadedAt: Option.getOrElse(stat.mtime, () => new Date(0)).toISOString()
@@ -99,6 +125,7 @@ export const FileMaterialRepository = {
 
       const fileName = sanitizeFileName(payload.fileName);
       const fullPath = pdfPath(fileName);
+      const metaFilePath = metaPath(fileName);
 
       yield* fs.writeFile(fullPath, payload.content).pipe(
         Effect.mapError(mapError)
@@ -123,9 +150,17 @@ export const FileMaterialRepository = {
       const stat = yield* fs.stat(fullPath).pipe(Effect.mapError(mapError));
       const materialId = path.basename(fileName, ".pdf");
 
+      let title = materialId;
+      if (payload.title !== undefined && payload.title.trim().length > 0) {
+        title = payload.title.trim();
+        yield* fs.writeFileString(metaFilePath, JSON.stringify({ title }, null, 2)).pipe(
+          Effect.mapError(mapError)
+        );
+      }
+
       return {
         id: materialId,
-        title: (payload.title !== undefined && payload.title.trim().length > 0) ? payload.title.trim() : materialId,
+        title,
         fileName,
         pageCount: pageCountResult.count,
         uploadedAt: Option.getOrElse(stat.mtime, () => new Date()).toISOString()
@@ -136,6 +171,10 @@ export const FileMaterialRepository = {
       const file = yield* getFile(id);
       yield* fs.remove(file.path, { force: true }).pipe(
         Effect.mapError(mapError)
+      );
+      const metaFilePath = metaPath(file.material.fileName);
+      yield* fs.remove(metaFilePath, { force: true }).pipe(
+        Effect.catch(() => Effect.void)
       );
     });
 

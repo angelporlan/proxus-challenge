@@ -9,4 +9,5 @@ export * from "./schemas/artifact.ts";
 export * from "./schemas/knowledge.ts";
 export * from "./schemas/material.ts";
 export * from "./schemas/user-profile.ts";
+export * from "./schemas/chat-session.ts";
 

@@ -55,6 +55,7 @@ import {
   saveUserProfileAction,
   userProfileQuery
 } from "./domain/user-profile/atoms.ts";
+import { clearAllStoredSessions } from "./domain/sessions/storage.ts";
 import { ConversationalOnboarding } from "./components/ConversationalOnboarding.tsx";
 import { UserProfileModal } from "./components/UserProfileModal.tsx";
 
@@ -457,11 +458,14 @@ export function App() {
       console.error("Error clearing knowledge profile", err);
     }
 
-    // 4. Reset workspace selection
+    // 4. Clear all stored chat conversations
+    clearAllStoredSessions();
+
+    // 5. Reset workspace selection
     setSelectedMaterialId(null);
     setSelectedArtifactId(null);
     setActiveTab("workspace");
-    notify({ tone: "neutral", title: "Todos los materiales, exámenes y lagunas han sido eliminados" });
+    notify({ tone: "neutral", title: "Todos los materiales, exámenes, lagunas y chats han sido eliminados" });
   };
 
   const handleAskAboutMistake = (context: {
