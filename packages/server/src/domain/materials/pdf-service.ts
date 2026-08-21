@@ -5,6 +5,11 @@ export class PdfServiceError extends Data.TaggedError("PdfServiceError")<{
   readonly reason: unknown;
 }> {}
 
+export interface TextPage {
+  readonly page: number;
+  readonly text: string;
+}
+
 export interface PdfService {
   readonly pageCount: (path: string) => Effect.Effect<number, PdfServiceError>;
   readonly renderPage: (input: {
@@ -12,6 +17,7 @@ export interface PdfService {
     readonly page: number;
     readonly dpi?: number;
   }) => Effect.Effect<PageImage, PdfServiceError>;
+  readonly extractDocumentText: (path: string) => Effect.Effect<readonly TextPage[], PdfServiceError>;
 }
 
 export const PdfService = Context.Service<PdfService>(

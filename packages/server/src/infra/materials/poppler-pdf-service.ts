@@ -12,12 +12,12 @@ const make = (): Effect.Effect<PdfServiceType, PdfServiceError, ChildProcessSpaw
     ChildProcess.make(command, ["-v"])
   ).pipe(
     Effect.mapError((reason) => new PdfServiceError({
-      reason: `Missing required Poppler command "${command}". Install Poppler so pdfinfo and pdftoppm are available on PATH. Cause: ${String(reason)}`
+      reason: `Missing required Poppler command "${command}". Install Poppler so pdfinfo, pdftoppm, and pdftotext are available on PATH. Cause: ${String(reason)}`
     })),
     Effect.flatMap((exitCode) => exitCode === 0
       ? Effect.void
       : Effect.fail(new PdfServiceError({
-          reason: `Missing required Poppler command "${command}". Install Poppler so pdfinfo and pdftoppm are available on PATH. Exit code: ${exitCode}`
+          reason: `Missing required Poppler command "${command}". Install Poppler so pdfinfo, pdftoppm, and pdftotext are available on PATH. Exit code: ${exitCode}`
         }))
     )
   );
@@ -105,6 +105,23 @@ const make = (): Effect.Effect<PdfServiceType, PdfServiceError, ChildProcessSpaw
       )
     );
 
+  const extractDocumentText = (pdfPath: string) =>
+    spawner.string(
+      ChildProcess.make("pdftotext", [pdfPath, "-"])
+    ).pipe(
+      Effect.map((fullText) => {
+        const rawPages = fullText.split("\f");
+        if (rawPages.length > 0 && rawPages[rawPages.length - 1]!.trim().length === 0) {
+          rawPages.pop();
+        }
+        return rawPages.map((text, idx) => ({
+          page: idx + 1,
+          text: text.trim()
+        }));
+      }),
+      Effect.mapError((reason) => new PdfServiceError({ reason }))
+    );
+
   const renderPage: PdfServiceType["renderPage"] = ({ path: pdfPath, page, dpi = 144 }) => Effect.gen(function* () {
     const tempDirectory = yield* fs.makeTempDirectory({ prefix: "proxus-material-" }).pipe(
       Effect.mapError((reason) => new PdfServiceError({ reason }))
@@ -148,7 +165,7 @@ const make = (): Effect.Effect<PdfServiceType, PdfServiceError, ChildProcessSpaw
     };
   });
 
-  return { pageCount, renderPage };
+  return { pageCount, renderPage, extractDocumentText };
 });
 
 export const PopplerPdfService = {

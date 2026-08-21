@@ -50,6 +50,12 @@ export interface UploadMaterialPayload {
   readonly title?: string | undefined;
 }
 
+export interface TextSearchResult {
+  readonly page: number;
+  readonly snippet: string;
+  readonly score: number;
+}
+
 export class InvalidMaterialError extends Data.TaggedError("InvalidMaterialError")<{
   readonly reason: string;
 }> {}
@@ -83,6 +89,10 @@ export interface MaterialRepository {
   readonly getFilePath: (
     id: string
   ) => Effect.Effect<string, MaterialNotFound | MaterialRepositoryError>;
+  readonly searchText: (
+    id: string,
+    query: string
+  ) => Effect.Effect<readonly TextSearchResult[], MaterialNotFound | MaterialRepositoryError>;
 }
 
 export const MaterialRepository = Context.Service<MaterialRepository>(

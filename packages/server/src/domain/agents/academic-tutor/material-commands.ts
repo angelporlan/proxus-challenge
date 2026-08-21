@@ -40,6 +40,35 @@ export const makeMaterialCommands = (repository: MaterialRepository) => {
     )
   );
 
+  const search = AgentCli.Command.withExamples([
+    { command: "materials search tema-1-constitucion habeas corpus", description: "Search for 'habeas corpus' in document" },
+    { command: "materials search tema-1-constitucion art 17", description: "Search for 'art 17' in document" }
+  ])(
+    AgentCli.Command.withDescription("Search text across all pages of a PDF material to find matching page numbers and excerpts")(
+      AgentCli.Command.exec("search", {
+        materialId: AgentCli.Argument.string("materialId").pipe(
+          AgentCli.Argument.withDescription("Material id from `materials list`")
+        ),
+        query: AgentCli.Argument.string("query").pipe(
+          AgentCli.Argument.withDescription("Text or concept to search for")
+        )
+      }, ({ materialId, query }) =>
+        repository.searchText(materialId, query).pipe(
+          Effect.map((results) => {
+            if (results.length === 0) {
+              return `No text matches found for "${query}" in material "${materialId}".`;
+            }
+
+            const topMatches = results.slice(0, 5);
+            return `Found ${results.length} matching page(s) for "${query}":\n` +
+              topMatches.map((res) => `- Page ${res.page} (score: ${res.score}):\n  "${res.snippet}"`).join("\n");
+          }),
+          Effect.catch((error) => Effect.succeed(renderMaterialError(error)))
+        )
+      )
+    )
+  );
+
   const view = AgentCli.Command.withExamples([
     { command: "materials view algebra-notes 10", description: "Render page 10 as an image" },
     { command: "materials view algebra-notes 13-20", description: "Render pages 13 through 20 as images" },
@@ -81,7 +110,7 @@ export const makeMaterialCommands = (repository: MaterialRepository) => {
     )
   );
 
-  return AgentCli.Command.group("materials", [list, view, remove] as const).pipe(
+  return AgentCli.Command.group("materials", [list, search, view, remove] as const).pipe(
     AgentCli.Command.withDescription("Uploaded PDF material commands")
   );
 };

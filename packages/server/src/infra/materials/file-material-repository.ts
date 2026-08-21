@@ -7,6 +7,7 @@ import {
   type MaterialPageImages,
   type MaterialRepository as MaterialRepositoryType,
   type PdfMaterial,
+  type TextSearchResult,
   type UploadMaterialPayload
 } from "../../domain/materials/material.ts";
 import { PdfService } from "../../domain/materials/pdf-service.ts";
@@ -164,8 +165,52 @@ export const FileMaterialRepository = {
     const getFilePath = (id: string): Effect.Effect<string, MaterialNotFound | MaterialRepositoryError> =>
       getFile(id).pipe(Effect.map((file) => file.path));
 
-    return { list, get, upload, delete: remove, renderPages, getFilePath };
+    const searchText = (id: string, query: string): Effect.Effect<readonly TextSearchResult[], MaterialNotFound | MaterialRepositoryError> => Effect.gen(function* () {
+      const file = yield* getFile(id);
+      const pages = yield* pdf.extractDocumentText(file.path).pipe(Effect.mapError(mapError));
+      const cleanQuery = query.trim().toLowerCase();
+      if (cleanQuery.length === 0) {
+        return [];
+      }
+
+      const queryTerms = cleanQuery.split(/\s+/).filter((t) => t.length > 0);
+      const results: TextSearchResult[] = [];
+
+      for (const item of pages) {
+        const lowerText = item.text.toLowerCase();
+        let matchCount = 0;
+        let firstIndex = -1;
+
+        for (const term of queryTerms) {
+          let idx = lowerText.indexOf(term);
+          while (idx !== -1) {
+            matchCount++;
+            if (firstIndex === -1 || idx < firstIndex) {
+              firstIndex = idx;
+            }
+            idx = lowerText.indexOf(term, idx + term.length);
+          }
+        }
+
+        if (matchCount > 0 && firstIndex !== -1) {
+          const start = Math.max(0, firstIndex - 60);
+          const end = Math.min(item.text.length, firstIndex + 140);
+          let snippet = item.text.slice(start, end).replace(/\s+/g, " ").trim();
+          if (start > 0) snippet = `...${snippet}`;
+          if (end < item.text.length) snippet = `${snippet}...`;
+
+          results.push({
+            page: item.page,
+            snippet,
+            score: matchCount
+          });
+        }
+      }
+
+      return results.sort((a, b) => b.score - a.score);
+    });
+
+    return { list, get, upload, delete: remove, renderPages, getFilePath, searchText };
   }),
   layer: (directory: string) => Layer.effect(MaterialRepository)(FileMaterialRepository.make(directory))
 };
-
