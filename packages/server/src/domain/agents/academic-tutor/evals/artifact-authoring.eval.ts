@@ -289,7 +289,22 @@ const makeMaterialRepository = (materials: readonly MaterialFixture[]) => Materi
       pages: renderedPages
     });
   },
-  getFilePath: (id) => Effect.succeed(`/mock/path/${id}.pdf`)
+  getFilePath: (id) => Effect.succeed(`/mock/path/${id}.pdf`),
+  searchText: (id, query) => {
+    const material = materials.find((candidate) => candidate.id === id);
+    if (material === undefined) {
+      return Effect.fail(new MaterialNotFound({ materialId: id }));
+    }
+    const qLower = query.toLowerCase();
+    const results = material.pages
+      .filter((p) => p.text.toLowerCase().includes(qLower))
+      .map((p) => ({
+        page: p.page,
+        snippet: p.text.slice(0, 100),
+        score: 1
+      }));
+    return Effect.succeed(results);
+  }
 });
 
 const toPdfMaterial = (material: MaterialFixture): PdfMaterial => ({
@@ -483,6 +498,4 @@ export const artifactAuthoringEval = runDataset(dataset).pipe(
   )
 );
 
-if (import.meta.main) {
-  Effect.runPromise(artifactAuthoringEval);
-}
+Effect.runPromise(artifactAuthoringEval);

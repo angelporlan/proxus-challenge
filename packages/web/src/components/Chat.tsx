@@ -5,6 +5,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Streamdown } from "streamdown";
 import "streamdown/styles.css";
 import { artifactsQuery } from "../domain/artifacts/atoms.ts";
+import { knowledgeProfileQuery } from "../domain/knowledge/atoms.ts";
 import { materialsQuery, uploadMaterialAction } from "../domain/materials/atoms.ts";
 import { applyInvalidations, invalidationsForToolCall } from "../domain/tutor/invalidation.ts";
 import { streamTutorMessage } from "../domain/tutor/stream.ts";
@@ -271,6 +272,7 @@ export function Chat({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const refreshArtifacts = useAtomRefresh(artifactsQuery);
   const refreshMaterials = useAtomRefresh(materialsQuery);
+  const refreshKnowledge = useAtomRefresh(knowledgeProfileQuery);
   const uploadMaterial = useAtomSet(uploadMaterialAction, { mode: "promise" });
   const pendingInvalidations = useRef<Array<ReturnType<typeof invalidationsForToolCall>>>([]);
 
@@ -307,24 +309,37 @@ export function Chat({
         ? prev
         : [...prev, { id: mat.id, title: mat.title, pageCount: mat.pageCount }]
     );
+
+    const textarea = textareaRef.current;
+    const cursorPos = textarea ? textarea.selectionStart : input.length;
+    const beforeCursor = input.slice(0, cursorPos);
+    const afterCursor = input.slice(cursorPos);
+
+    // Replace the '@query' immediately before the cursor
+    const match = /(?:^|\s)@[a-zA-Z0-9_\-.]*$/.exec(beforeCursor);
+    let newCursorPos = 0;
     let nextText = "";
-    setInput((prev) => {
-      const mentionPattern = /(?:^|\s)@[a-zA-Z0-9_\-.]*$/;
-      if (mentionPattern.test(prev)) {
-        nextText = prev.replace(/(^|\s)@[a-zA-Z0-9_\-.]*$/, `$1@${mat.title} `);
-      } else {
-        nextText = `${prev ? prev.trim() + " " : ""}@${mat.title} `;
-      }
-      return nextText;
-    });
+
+    if (match) {
+      const matchStart = beforeCursor.lastIndexOf("@");
+      const prefix = beforeCursor.slice(0, matchStart);
+      const inserted = `@${mat.title} `;
+      nextText = `${prefix}${inserted}${afterCursor}`;
+      newCursorPos = prefix.length + inserted.length;
+    } else {
+      const inserted = `@${mat.title} `;
+      nextText = `${beforeCursor}${inserted}${afterCursor}`;
+      newCursorPos = beforeCursor.length + inserted.length;
+    }
+
+    setInput(nextText);
     setMentionQuery(null);
     setIsMentionOpen(false);
 
     requestAnimationFrame(() => {
       if (textareaRef.current) {
         textareaRef.current.focus();
-        const endPos = textareaRef.current.value.length;
-        textareaRef.current.setSelectionRange(endPos, endPos);
+        textareaRef.current.setSelectionRange(newCursorPos, newCursorPos);
       }
     });
   };
@@ -573,6 +588,17 @@ export function Chat({
     }
   }, [prefillPrompt, prefillAttachments, isSending, onClearPrefill]);
 
+  useEffect(() => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    textarea.style.height = "auto";
+    const minH = 40;
+    const maxH = 104; // ~3-4 lines limit before scroll
+    const nextH = Math.min(Math.max(textarea.scrollHeight, minH), maxH);
+    textarea.style.height = `${nextH}px`;
+    textarea.style.overflowY = textarea.scrollHeight > maxH ? "auto" : "hidden";
+  }, [input]);
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "auto" });
   };
@@ -587,15 +613,9 @@ export function Chat({
       return;
     }
 
-    let finalPrompt = trimmed || "Explícame los conceptos clave de este documento.";
-    if (attachedDocs.length > 0) {
-      const docHeader = `[Documentos de referencia: ${attachedDocs.map((d) => d.title).join(", ")}]`;
-      finalPrompt = `${docHeader}\n\n${finalPrompt}`;
-    }
-
-    if (tutorMode === "socratic" && !trimmed.toLowerCase().includes("socrátic")) {
-      finalPrompt = `[Enfoque pedagógico: Tutor Socrático. Guíame con preguntas paso a paso para que razone por mí mismo sin darme la respuesta de inmediato]\n\n${finalPrompt}`;
-    }
+    const finalPrompt = trimmed || "Explícame los conceptos clave de este documento.";
+    const activeMaterialIds = attachedDocs.map((d) => d.id);
+    const documentReferences = attachedDocs.map((d) => d.title);
 
     setAttachedDocs([]);
     setInput("");
@@ -607,6 +627,9 @@ export function Chat({
       for await (const event of streamTutorMessage({
         input: finalPrompt,
         messages,
+        mode: tutorMode,
+        activeMaterialIds,
+        documentReferences,
         maxSteps: 14
       })) {
         if (event.type === "done") {
@@ -625,7 +648,8 @@ export function Chat({
           if (!message.isFailure) {
             applyInvalidations(keys, {
               refreshArtifacts,
-              refreshMaterials
+              refreshMaterials,
+              refreshKnowledge
             });
           }
         }
@@ -1194,16 +1218,16 @@ export function Chat({
                 <>
                   {splitMentionParts(input, [...availableMaterials, ...attachedDocs]).map((part, idx) =>
                     part.kind === "mention" ? (
-                      <strong
+                      <span
                         key={idx}
-                        className={`rounded font-bold ${
+                        className={`rounded-xs ${
                           isLight
-                            ? "bg-purple-100/80 text-purple-700"
+                            ? "bg-purple-100/90 text-purple-700"
                             : "bg-purple-900/60 text-purple-300"
                         }`}
                       >
                         {part.value}
-                      </strong>
+                      </span>
                     ) : (
                       <span key={idx} className={isLight ? "text-slate-900" : "text-slate-100"}>
                         {part.value}
@@ -1255,7 +1279,8 @@ export function Chat({
                   })
                 );
 
-                const mentionMatch = /(?:^|\s)@([a-zA-Z0-9_-]*)$/.exec(val);
+                const beforeCursor = val.slice(0, event.currentTarget.selectionStart ?? val.length);
+                const mentionMatch = /(?:^|\s)@([a-zA-Z0-9_-]*)$/.exec(beforeCursor);
                 if (mentionMatch) {
                   setMentionQuery(mentionMatch[1] ?? "");
                   setSelectedMentionIndex(0);
@@ -1440,11 +1465,10 @@ export function Chat({
                   void submit(input);
                 }
               }}
-              rows={2}
             />
           </div>
 
-          <div className="mt-2 flex items-center justify-between gap-2 pt-1 border-t border-slate-100 dark:border-slate-800/50">
+          <div className="mt-2 flex items-center justify-between gap-2 pt-1">
             {/* Left: MagIA Dropdown */}
             <div className="relative" ref={magIaRef}>
               <button

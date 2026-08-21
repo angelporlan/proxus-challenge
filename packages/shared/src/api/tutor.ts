@@ -5,6 +5,12 @@ import { AgentMessage } from "../schemas/agent-message.ts";
 export const TutorChatRequest = Schema.Struct({
   messages: Schema.Array(AgentMessage),
   input: Schema.String,
+  mode: Schema.optional(Schema.Union([
+    Schema.Literal("socratic"),
+    Schema.Literal("explanatory")
+  ])),
+  activeMaterialIds: Schema.optional(Schema.Array(Schema.String)),
+  documentReferences: Schema.optional(Schema.Array(Schema.String)),
   maxSteps: Schema.optional(Schema.Number)
 });
 export type TutorChatRequest = typeof TutorChatRequest.Type;

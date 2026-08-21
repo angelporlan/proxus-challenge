@@ -8,6 +8,7 @@ import { ProxusApi, TutorChatRequest, TutorChatStreamEvent } from "@proxus/share
 import { GeminiModel } from "../../domain/agents/gemini.ts";
 import { TutorChatService, TutorChatServiceLive } from "../../domain/agents/academic-tutor/tutor-chat-service.ts";
 import { FileArtifactRepository } from "../../infra/artifacts/file-artifact-repository.ts";
+import { FileKnowledgeRepository } from "../../infra/knowledge/file-knowledge-repository.ts";
 import { FileMaterialRepository } from "../../infra/materials/file-material-repository.ts";
 import { MaterialRepository } from "../../domain/materials/material.ts";
 import { PopplerPdfService } from "../../infra/materials/poppler-pdf-service.ts";
@@ -75,11 +76,16 @@ const DomainLive = Layer.mergeAll(
   GeminiModel
 );
 
+const KnowledgeLayer = FileKnowledgeRepository.layer(".data/knowledge");
+
 const InfraLive = Layer.mergeAll(
   FileMaterialRepository.layer(".data/materials/pdfs").pipe(
     Layer.provide(PopplerPdfService.layer)
   ),
-  FileArtifactRepository.layer(".data/artifacts")
+  FileArtifactRepository.layer(".data/artifacts").pipe(
+    Layer.provide(KnowledgeLayer)
+  ),
+  KnowledgeLayer
 );
 
 export const HttpServerLive = HttpRouter.serve(Routes).pipe(

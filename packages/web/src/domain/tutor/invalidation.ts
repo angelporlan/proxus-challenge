@@ -1,10 +1,11 @@
 import type { AgentMessage } from "@proxus/shared";
 
-type ResourceKey = "artifacts" | "materials";
+type ResourceKey = "artifacts" | "materials" | "knowledge";
 
 export interface InvalidationHandlers {
   readonly refreshArtifacts: () => void;
   readonly refreshMaterials: () => void;
+  readonly refreshKnowledge?: (() => void) | undefined;
 }
 
 export const invalidationsForToolCall = (message: AgentMessage): readonly ResourceKey[] => {
@@ -17,15 +18,22 @@ export const invalidationsForToolCall = (message: AgentMessage): readonly Resour
     return [];
   }
 
+  const keys: ResourceKey[] = [];
+
   if (isArtifactMutation(input)) {
-    return ["artifacts"];
+    keys.push("artifacts");
+    keys.push("knowledge");
   }
 
   if (isMaterialMutation(input)) {
-    return ["materials"];
+    keys.push("materials");
   }
 
-  return [];
+  if (isKnowledgeMutation(input)) {
+    keys.push("knowledge");
+  }
+
+  return keys;
 };
 
 export const applyInvalidations = (
@@ -38,6 +46,10 @@ export const applyInvalidations = (
 
   if (keys.includes("materials")) {
     handlers.refreshMaterials();
+  }
+
+  if (keys.includes("knowledge") && handlers.refreshKnowledge) {
+    handlers.refreshKnowledge();
   }
 };
 
@@ -59,3 +71,8 @@ const isMaterialMutation = (input: string) =>
   input.startsWith("materials import ") ||
   input.startsWith("materials delete ") ||
   input.startsWith("materials index ");
+
+const isKnowledgeMutation = (input: string) =>
+  input.startsWith("knowledge review ") ||
+  input.startsWith("knowledge master ") ||
+  input.startsWith("knowledge clear");
