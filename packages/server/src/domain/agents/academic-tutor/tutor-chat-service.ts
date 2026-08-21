@@ -32,6 +32,8 @@ export const TutorChatServiceLive = Layer.effect(
     const buildSession = (input: TutorChatRequest) => Effect.gen(function* () {
       const activeGaps = yield* knowledgeRepository.listActiveGaps().pipe(Effect.catch(() => Effect.succeed([])));
       const userProfile: UserProfile = yield* userProfileRepository.getProfile().pipe(Effect.catch(() => Effect.succeed<UserProfile>({ onboardingCompleted: false })));
+      const materialsList = yield* materialRepository.list().pipe(Effect.catch(() => Effect.succeed([])));
+      const totalMaterialsCount = materialsList.length;
 
       let userProfileContext = "";
       if (userProfile && (userProfile.onboardingCompleted || userProfile.educationLevel || userProfile.study || userProfile.mainDifficulty || userProfile.mainBlocker || userProfile.goal)) {
@@ -106,7 +108,8 @@ export const TutorChatServiceLive = Layer.effect(
       const harness = makeAcademicTutorHarness(materialRepository, artifactRepository, knowledgeRepository, {
         mode: input.mode,
         activeMaterialIds,
-        knowledgeProfileContext
+        knowledgeProfileContext,
+        totalMaterialsCount
       });
 
       const session = AgentSession.make(harness);

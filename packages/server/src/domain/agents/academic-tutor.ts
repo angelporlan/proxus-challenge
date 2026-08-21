@@ -20,6 +20,7 @@ export interface AcademicTutorHarnessOptions {
   readonly mode?: "socratic" | "explanatory" | undefined;
   readonly activeMaterialIds?: readonly string[] | undefined;
   readonly knowledgeProfileContext?: string | undefined;
+  readonly totalMaterialsCount?: number | undefined;
 }
 
 export const makeAcademicTutorHarness = (
@@ -34,6 +35,12 @@ export const makeAcademicTutorHarness = (
 
   const activeMaterialsContext = options.activeMaterialIds && options.activeMaterialIds.length > 0
     ? `\n\n=== ACTIVE DOCUMENT CONTEXT ===\nThe student is actively focusing on the following material(s): ${options.activeMaterialIds.join(", ")}.\nWhen answering or searching, prioritize these documents.`
+    : "";
+
+  const libraryStatusContext = options.totalMaterialsCount === 0
+    ? `\n\n=== LIBRARY STATUS: NO MATERIALS UPLOADED YET ===\nThe student has not uploaded any study PDF materials to their library yet.\n- Explain concepts, answer theoretical questions, and teach effectively without requiring materials.\n- In your opening greeting or when the student asks for practice, exam questions, or syllabus-specific study help, warmly and naturally remind them that they can upload their PDFs (lecture slides, notes, syllabus) using the clip button (📎) or sidebar so you can cite their exact pages and generate tailor-made quizzes for their specific course.\n- Do NOT repeat this upload reminder in every single response if the student is already engaged in a concept discussion; keep it helpful, friendly, and non-intrusive.`
+    : options.totalMaterialsCount !== undefined && options.totalMaterialsCount > 0
+    ? `\n\n=== LIBRARY STATUS: MATERIALS AVAILABLE (${options.totalMaterialsCount}) ===\nThe student has ${options.totalMaterialsCount} study material(s) in their library. You can autonomously search and cite pages from these materials at any time using 'materials search' and 'materials view' even if not attached to the current message.`
     : "";
 
   const knowledgeContext = options.knowledgeProfileContext
@@ -54,7 +61,7 @@ Core Capabilities & Workflow:
 3. Reviewing Knowledge Gaps & Student Errors:
    - Load 'review-knowledge-gaps' to inspect past quiz errors with 'knowledge gaps' and proactively help the student master their weak points.
    - When the student understands a previously failed concept, mark it resolved with 'knowledge master <gapId>'.
-4. Conclude every turn with a rich, formatted, natural language explanation.${pedagogicalModeInstruction}${activeMaterialsContext}${knowledgeContext}`;
+4. Conclude every turn with a rich, formatted, natural language explanation.${pedagogicalModeInstruction}${activeMaterialsContext}${libraryStatusContext}${knowledgeContext}`;
 
   const commands = [
     makeMaterialCommands(materialRepository),
