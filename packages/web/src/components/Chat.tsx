@@ -15,12 +15,30 @@ const starterPrompts = [
   {
     icon: "quiz",
     label: "Crear un quiz",
-    prompt: "Crea un quiz de 3 preguntas de opción múltiple basado en mis materiales subidos."
+    description: "Crea un quiz de 3 preguntas tipo test con feedback",
+    prompt: "Crea un quiz de 3 preguntas tipo test de mis materiales subidos con retroalimentación.",
+    mode: undefined as TutorMode | undefined
   },
   {
-    icon: "psychology",
-    label: "Repasar un tema",
-    prompt: "Explícame el concepto más difícil de mis materiales de forma socrática, haciéndome preguntas para que lo deduzca."
+    icon: "lightbulb",
+    label: "Explicación con ejemplos",
+    description: "Desglosa los puntos difíciles con claridad",
+    prompt: "Explícame los conceptos más difíciles de mis apuntes de forma clara y con ejemplos prácticos.",
+    mode: "explanatory" as TutorMode | undefined
+  },
+  {
+    icon: "school",
+    label: "Tutor Socrático",
+    description: "Aprende deduciendo con preguntas guía",
+    prompt: "Guíame con preguntas socráticas paso a paso para que razone por mí mismo este tema.",
+    mode: "socratic" as TutorMode | undefined
+  },
+  {
+    icon: "schema",
+    label: "Esquema conceptual",
+    description: "Estructura jerárquica con ideas clave",
+    prompt: "Genera un esquema estructurado con las ideas principales y secundarias de este tema.",
+    mode: undefined as TutorMode | undefined
   }
 ] as const;
 
@@ -759,31 +777,33 @@ export function Chat({
               type="button"
               onClick={() => setTutorMode("explanatory")}
               aria-pressed={tutorMode === "explanatory"}
-              className={`min-h-9 px-2.5 py-1 rounded-lg font-medium transition ${
+              className={`flex items-center gap-1.5 min-h-8 px-2.5 py-1 rounded-lg font-medium text-xs transition-all duration-150 ${
                 tutorMode === "explanatory"
-                  ? "bg-indigo-600 text-white shadow-sm"
+                  ? "bg-indigo-600 text-white shadow-xs"
                   : isLight
-                  ? "text-slate-600 hover:text-slate-900"
-                  : "text-slate-400 hover:text-slate-200"
+                  ? "text-slate-600 hover:text-slate-900 hover:bg-white/60"
+                  : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60"
               }`}
-              title="Explicaciones claras y directas con ejemplos"
+              title="Modo Explicativo: explicaciones claras y directas con ejemplos"
             >
-              Explicativo
+              <span className="material-symbols-outlined text-[15px]">menu_book</span>
+              <span>Explicativo</span>
             </button>
             <button
               type="button"
               onClick={() => setTutorMode("socratic")}
               aria-pressed={tutorMode === "socratic"}
-              className={`min-h-9 px-2.5 py-1 rounded-lg font-medium transition ${
+              className={`flex items-center gap-1.5 min-h-8 px-2.5 py-1 rounded-lg font-medium text-xs transition-all duration-150 ${
                 tutorMode === "socratic"
-                  ? "bg-indigo-600 text-white shadow-sm"
+                  ? "bg-purple-600 text-white shadow-xs"
                   : isLight
-                  ? "text-slate-600 hover:text-slate-900"
-                  : "text-slate-400 hover:text-slate-200"
+                  ? "text-slate-600 hover:text-slate-900 hover:bg-white/60"
+                  : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60"
               }`}
-              title="Guía socrática para que deduzcas los conceptos"
+              title="Modo Socrático: guía socrática con pistas para deducir conceptos"
             >
-              Socrático
+              <span className="material-symbols-outlined text-[15px]">school</span>
+              <span>Socrático</span>
             </button>
           </div>
 
@@ -882,29 +902,34 @@ export function Chat({
               {starterPrompts.map((item, idx) => (
                 <button
                   key={idx}
-                  className={`group flex items-start gap-3 rounded-xl border p-3.5 transition ${
+                  className={`group flex items-start gap-3 rounded-xl border p-3.5 transition-all duration-200 active:scale-[0.98] ${
                     isLight
-                      ? "border-slate-200 bg-white hover:border-indigo-400 hover:bg-indigo-50/40 text-slate-800 shadow-sm"
+                      ? "border-slate-200 bg-white hover:border-indigo-400 hover:bg-indigo-50/40 text-slate-800 shadow-xs hover:shadow-sm"
                       : "border-slate-800/80 bg-slate-900/60 hover:border-indigo-500/50 hover:bg-slate-900 text-slate-200"
                   }`}
                   type="button"
-                  onClick={() => void submit(item.prompt)}
+                  onClick={() => {
+                    if (item.mode) {
+                      setTutorMode(item.mode);
+                    }
+                    void submit(item.prompt);
+                  }}
                 >
-                  <span className="material-symbols-outlined text-indigo-500 text-lg" aria-hidden="true">
+                  <span className="material-symbols-outlined text-indigo-500 text-xl shrink-0 mt-0.5 group-hover:scale-110 transition-transform" aria-hidden="true">
                     {item.icon}
                   </span>
-                  <div>
+                  <div className="min-w-0 flex-1">
                     <strong
-                      className={`block text-xs font-semibold group-hover:text-indigo-600 ${
+                      className={`block text-xs font-semibold group-hover:text-indigo-600 transition-colors ${
                         isLight ? "text-slate-900" : "text-slate-200"
                       }`}
                     >
                       {item.label}
                     </strong>
-                    <span className={`text-[11px] line-clamp-1 mt-0.5 ${
+                    <span className={`block text-[11px] line-clamp-1 mt-0.5 ${
                       isLight ? "text-slate-500" : "text-slate-400"
                     }`}>
-                      {item.prompt}
+                      {item.description}
                     </span>
                   </div>
                 </button>
@@ -1238,7 +1263,9 @@ export function Chat({
                 </>
               ) : (
                 <span className="text-slate-400 font-normal">
-                  Pregunta lo que quieras · @ para mencionar docs
+                  {tutorMode === "socratic"
+                    ? "Plantea una duda para deducirla paso a paso · @ para docs"
+                    : "Pregunta lo que quieras · @ para mencionar docs"}
                 </span>
               )}
             </div>
@@ -1469,7 +1496,7 @@ export function Chat({
           </div>
 
           <div className="mt-2 flex items-center justify-between gap-2 pt-1">
-            {/* Left: MagIA Dropdown */}
+            {/* Left: MagIA Dropdown with Mode Switcher & Presets */}
             <div className="relative" ref={magIaRef}>
               <button
                 type="button"
@@ -1477,92 +1504,136 @@ export function Chat({
                   setIsMagIaOpen(!isMagIaOpen);
                   setIsMentionOpen(false);
                 }}
-                className="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-bold text-[#8b5cf6] hover:bg-[#8b5cf6]/10 transition active:scale-95"
+                className={`group flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold border transition-all duration-200 active:scale-95 ${
+                  isMagIaOpen
+                    ? "bg-purple-600/15 border-purple-500/50 text-purple-600 dark:text-purple-300 ring-2 ring-purple-500/20"
+                    : isLight
+                    ? "bg-purple-50 hover:bg-purple-100/80 border-purple-200/80 text-purple-700 hover:border-purple-300"
+                    : "bg-purple-950/30 hover:bg-purple-900/40 border-purple-800/50 text-purple-300 hover:border-purple-700/60"
+                }`}
+                title={`MagIA: Modo ${tutorMode === "socratic" ? "Socrático" : "Explicativo"} activo (clic para cambiar)`}
+                aria-expanded={isMagIaOpen}
+                aria-haspopup="true"
               >
-                <span className="material-symbols-outlined text-[17px] text-[#8b5cf6]" aria-hidden="true">
+                <span className="material-symbols-outlined text-[17px] text-purple-500 transition-transform duration-300 group-hover:rotate-12" aria-hidden="true">
                   auto_awesome
                 </span>
-                <span className="font-semibold text-sm tracking-tight">MagIA</span>
-                <span className="material-symbols-outlined text-xs text-[#8b5cf6]" aria-hidden="true">
+                <span className="font-bold tracking-tight">MagIA</span>
+                <span className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10.5px] font-semibold transition-colors ${
+                  tutorMode === "socratic"
+                    ? "bg-purple-500/15 text-purple-600 dark:text-purple-300 border border-purple-500/25"
+                    : "bg-indigo-500/15 text-indigo-600 dark:text-indigo-300 border border-indigo-500/25"
+                }`}>
+                  <span className="material-symbols-outlined text-[12px]">
+                    {tutorMode === "socratic" ? "school" : "menu_book"}
+                  </span>
+                  <span>{tutorMode === "socratic" ? "Socrático" : "Explicativo"}</span>
+                </span>
+                <span
+                  className={`material-symbols-outlined text-xs text-purple-500 transition-transform duration-200 ${
+                    isMagIaOpen ? "rotate-180" : ""
+                  }`}
+                  aria-hidden="true"
+                >
                   expand_more
                 </span>
               </button>
 
-              {/* MagIA Quick Presets Menu */}
+              {/* MagIA Quick Presets & Pedagogical Mode Popover Menu */}
               {isMagIaOpen && (
                 <div
-                  className={`absolute bottom-full left-0 mb-2 w-72 rounded-2xl border p-2 shadow-2xl z-30 ui-scale-in ${
-                    isLight ? "bg-white border-slate-200 text-slate-800" : "bg-slate-900 border-slate-800 text-slate-100"
+                  className={`absolute bottom-full left-0 mb-2.5 w-80 max-w-[calc(100vw-2rem)] rounded-2xl border p-2.5 shadow-2xl z-30 ui-popover-enter backdrop-blur-xl ${
+                    isLight
+                      ? "bg-white/95 border-purple-200/90 text-slate-800 shadow-purple-950/10"
+                      : "bg-slate-900/95 border-purple-900/40 text-slate-100 shadow-black/60"
                   }`}
                 >
-                  <div className="px-2 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-purple-600 dark:text-purple-400 flex items-center gap-1">
-                    <span className="material-symbols-outlined text-[14px]">auto_awesome</span>
-                    <span>Acciones Rápidas MagIA</span>
+                  {/* Mode Selection Header */}
+                  <div className="px-2 pt-1 pb-1.5 flex items-center justify-between text-[10.5px] font-bold uppercase tracking-wider text-purple-600 dark:text-purple-400">
+                    <span className="flex items-center gap-1.5">
+                      <span className="material-symbols-outlined text-[14px]">tune</span>
+                      <span>Modo Pedagógico</span>
+                    </span>
+                    <span className="text-[9.5px] font-normal text-slate-400 normal-case">¿Cómo responde el tutor?</span>
                   </div>
-                  <div className="flex flex-col gap-1 mt-1">
+
+                  {/* Mode Selection Cards */}
+                  <div className="flex flex-col gap-1.5 mt-0.5">
+                    {/* Explicativo Card */}
                     <button
                       type="button"
                       onClick={() => {
-                        setInput("Explícame los conceptos más difíciles de mis apuntes de forma clara y con ejemplos prácticos.");
+                        setTutorMode("explanatory");
                         setIsMagIaOpen(false);
                       }}
-                      className={`flex items-center gap-2.5 rounded-xl px-2.5 py-2 text-xs text-left transition ${
-                        isLight ? "hover:bg-purple-50 text-slate-700" : "hover:bg-purple-950/40 text-slate-300"
+                      className={`flex items-start gap-2.5 rounded-xl p-2 text-xs text-left transition-all duration-150 border ${
+                        tutorMode === "explanatory"
+                          ? isLight
+                            ? "bg-indigo-50/90 border-indigo-300 shadow-xs ring-1 ring-indigo-400/30"
+                            : "bg-indigo-950/60 border-indigo-500/60 shadow-xs ring-1 ring-indigo-500/30"
+                          : isLight
+                          ? "border-transparent hover:bg-slate-100/80 text-slate-700"
+                          : "border-transparent hover:bg-slate-800/60 text-slate-300"
                       }`}
                     >
-                      <span className="material-symbols-outlined text-purple-500 text-base">psychology</span>
-                      <div>
-                        <p className="font-semibold">Explicación con ejemplos</p>
-                        <p className="text-[10px] text-slate-500">Desglosa los puntos difíciles</p>
+                      <div className={`p-1.5 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
+                        tutorMode === "explanatory"
+                          ? "bg-indigo-600 text-white shadow-xs"
+                          : isLight ? "bg-slate-200/80 text-slate-600" : "bg-slate-800 text-slate-400"
+                      }`}>
+                        <span className="material-symbols-outlined text-[16px]">menu_book</span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-1">
+                          <p className="font-bold text-xs text-slate-900 dark:text-slate-100">Modo Explicativo</p>
+                          {tutorMode === "explanatory" && (
+                            <span className="material-symbols-outlined text-[15px] text-indigo-500 font-bold ui-scale-in">
+                              check_circle
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">
+                          Respuestas claras, directas, con definiciones y ejemplos directos.
+                        </p>
                       </div>
                     </button>
+
+                    {/* Socrático Card */}
                     <button
                       type="button"
                       onClick={() => {
                         setTutorMode("socratic");
-                        setInput("Guíame con preguntas socráticas paso a paso para que razone por mí mismo.");
                         setIsMagIaOpen(false);
                       }}
-                      className={`flex items-center gap-2.5 rounded-xl px-2.5 py-2 text-xs text-left transition ${
-                        isLight ? "hover:bg-purple-50 text-slate-700" : "hover:bg-purple-950/40 text-slate-300"
+                      className={`flex items-start gap-2.5 rounded-xl p-2 text-xs text-left transition-all duration-150 border ${
+                        tutorMode === "socratic"
+                          ? isLight
+                            ? "bg-purple-50/90 border-purple-300 shadow-xs ring-1 ring-purple-400/30"
+                            : "bg-purple-950/60 border-purple-500/60 shadow-xs ring-1 ring-purple-500/30"
+                          : isLight
+                          ? "border-transparent hover:bg-slate-100/80 text-slate-700"
+                          : "border-transparent hover:bg-slate-800/60 text-slate-300"
                       }`}
                     >
-                      <span className="material-symbols-outlined text-purple-500 text-base">school</span>
-                      <div>
-                        <p className="font-semibold">Tutor Socrático</p>
-                        <p className="text-[10px] text-slate-500">Aprende deduciendo conceptos</p>
+                      <div className={`p-1.5 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
+                        tutorMode === "socratic"
+                          ? "bg-purple-600 text-white shadow-xs"
+                          : isLight ? "bg-slate-200/80 text-slate-600" : "bg-slate-800 text-slate-400"
+                      }`}>
+                        <span className="material-symbols-outlined text-[16px]">school</span>
                       </div>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setInput("Crea un quiz de 3 preguntas tipo test de mis materiales subidos con retroalimentación.");
-                        setIsMagIaOpen(false);
-                      }}
-                      className={`flex items-center gap-2.5 rounded-xl px-2.5 py-2 text-xs text-left transition ${
-                        isLight ? "hover:bg-purple-50 text-slate-700" : "hover:bg-purple-950/40 text-slate-300"
-                      }`}
-                    >
-                      <span className="material-symbols-outlined text-purple-500 text-base">quiz</span>
-                      <div>
-                        <p className="font-semibold">Crear quiz de 3 preguntas</p>
-                        <p className="text-[10px] text-slate-500">Ponte a prueba de inmediato</p>
-                      </div>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setInput("Genera un esquema estructurado con las ideas principales y secundarias de este tema.");
-                        setIsMagIaOpen(false);
-                      }}
-                      className={`flex items-center gap-2.5 rounded-xl px-2.5 py-2 text-xs text-left transition ${
-                        isLight ? "hover:bg-purple-50 text-slate-700" : "hover:bg-purple-950/40 text-slate-300"
-                      }`}
-                    >
-                      <span className="material-symbols-outlined text-purple-500 text-base">schema</span>
-                      <div>
-                        <p className="font-semibold">Esquema conceptual</p>
-                        <p className="text-[10px] text-slate-500">Estructura jerárquica clave</p>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-1">
+                          <p className="font-bold text-xs text-slate-900 dark:text-slate-100">Modo Socrático</p>
+                          {tutorMode === "socratic" && (
+                            <span className="material-symbols-outlined text-[15px] text-purple-500 font-bold ui-scale-in">
+                              check_circle
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">
+                          Guía paso a paso con pistas y preguntas para que deduzcas el concepto.
+                        </p>
                       </div>
                     </button>
                   </div>
