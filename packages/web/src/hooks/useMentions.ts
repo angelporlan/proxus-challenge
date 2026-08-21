@@ -107,6 +107,93 @@ export function splitMentionParts(
   return parts;
 }
 
+export function mentionQueryAtCursor(value: string, cursor: number): string | null {
+  const beforeCursor = value.slice(0, cursor);
+  const mentionMatch = /(?:^|\s)@([a-zA-Z0-9_-]*)$/.exec(beforeCursor);
+  return mentionMatch ? (mentionMatch[1] ?? "") : null;
+}
+
+export function attachedDocsAfterTextChange<TDoc extends AttachedDoc>(
+  prevInput: string,
+  nextInput: string,
+  attachedDocs: readonly TDoc[],
+  materials: readonly { readonly id?: string | undefined; readonly title: string }[]
+): TDoc[] {
+  const docsList = [...materials, ...attachedDocs];
+  const prevRanges = findMentionRanges(prevInput, docsList);
+  const nextRanges = findMentionRanges(nextInput, docsList);
+  return attachedDocs.filter((doc) => {
+    const wasMentioned = prevRanges.some(
+      (range) =>
+        range.title.toLowerCase() === doc.title.toLowerCase() ||
+        (doc.id && range.materialId === doc.id)
+    );
+    if (!wasMentioned) return true;
+    return nextRanges.some(
+      (range) =>
+        range.title.toLowerCase() === doc.title.toLowerCase() ||
+        (doc.id && range.materialId === doc.id)
+    );
+  });
+}
+
+export function applyAtomicMentionDeletion(
+  key: "Backspace" | "Delete",
+  input: string,
+  selectionStart: number,
+  selectionEnd: number,
+  materials: readonly { readonly id?: string | undefined; readonly title: string }[]
+): {
+  readonly nextInput: string;
+  readonly cursor: number;
+  readonly removed: readonly MentionRange[];
+} | null {
+  if (selectionStart !== selectionEnd) return null;
+
+  const ranges = findMentionRanges(input, materials);
+  const pos = selectionStart;
+  const targetRange =
+    key === "Backspace"
+      ? ranges.find((range) => {
+          const hasTrailingSpace = input[range.end] === " ";
+          const isRightAfterSpace = hasTrailingSpace && pos === range.end + 1;
+          const isInsideOrEnd = pos > range.start && pos <= range.end;
+          return isInsideOrEnd || isRightAfterSpace;
+        })
+      : ranges.find((range) => pos >= range.start && pos < range.end);
+
+  if (!targetRange) return null;
+
+  const hasTrailingSpace = input[targetRange.end] === " ";
+  const deleteEnd = hasTrailingSpace ? targetRange.end + 1 : targetRange.end;
+  const nextInput = input.slice(0, targetRange.start) + input.slice(deleteEnd);
+  const remainingRanges = findMentionRanges(nextInput, materials);
+  const stillReferenced = remainingRanges.some(
+    (range) =>
+      (targetRange.materialId && range.materialId === targetRange.materialId) ||
+      range.title.toLowerCase() === targetRange.title.toLowerCase()
+  );
+
+  return {
+    nextInput,
+    cursor: targetRange.start,
+    removed: stillReferenced ? [] : [targetRange]
+  };
+}
+
+export function dropDocsMatchingRanges<TDoc extends AttachedDoc>(
+  attachedDocs: readonly TDoc[],
+  ranges: readonly MentionRange[]
+): TDoc[] {
+  return attachedDocs.filter((doc) =>
+    !ranges.some(
+      (range) =>
+        (range.materialId ? doc.id === range.materialId : false) ||
+        doc.title.toLowerCase() === range.title.toLowerCase()
+    )
+  );
+}
+
 export function useMentions<TDoc extends AttachedDoc = AttachedDoc>(
   input: string,
   setInput: (value: string | ((prev: string) => string)) => void,

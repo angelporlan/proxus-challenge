@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { getDeletedMaterialNavigation } from "./App.tsx";
-import { findMentionRanges, splitMentionParts } from "./hooks/useMentions.ts";
+import {
+  applyAtomicMentionDeletion,
+  attachedDocsAfterTextChange,
+  findMentionRanges,
+  mentionQueryAtCursor,
+  splitMentionParts
+} from "./hooks/useMentions.ts";
 
 describe("material deletion navigation", () => {
   it("clears the selected PDF and returns to Estudio when that PDF is deleted", () => {
@@ -51,6 +57,32 @@ describe("Chat mention utilities", () => {
       { kind: "mention", value: "@document-1" },
       { kind: "text", value: " ¿De qué trata?" }
     ]);
+  });
+});
+
+describe("mention editor helpers", () => {
+  const materials = [{ id: "doc-1", title: "Tema 4" }];
+
+  it("detects an in-progress @query at the cursor", () => {
+    expect(mentionQueryAtCursor("lee @tem", 8)).toBe("tem");
+    expect(mentionQueryAtCursor("lee tema", 8)).toBeNull();
+  });
+
+  it("deletes a mention atomically with Backspace", () => {
+    const result = applyAtomicMentionDeletion("Backspace", "Lee @Tema 4 ahora", 11, 11, materials);
+    expect(result).not.toBeNull();
+    expect(result?.nextInput).toBe("Lee ahora");
+    expect(result?.removed[0]?.title).toBe("Tema 4");
+  });
+
+  it("drops attached docs whose mention was removed from the text", () => {
+    const next = attachedDocsAfterTextChange(
+      "Lee @Tema 4",
+      "Lee ",
+      [{ id: "doc-1", title: "Tema 4" }],
+      materials
+    );
+    expect(next).toEqual([]);
   });
 });
 
