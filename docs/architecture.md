@@ -23,26 +23,32 @@ flowchart LR
       Harness["Agent Harness"]
       Materials["Materials Domain"]
       Artifacts["Artifacts Domain"]
+      Knowledge["Knowledge Gaps Domain"]
+      UserProfile["User Profile Domain"]
     end
 
     subgraph Infra["Infrastructure adapters"]
       GeminiAdapter["Gemini adapter"]
-      PopplerService["PopplerPdfService"]
+      PopplerService["PopplerPdfService (pdftoppm, pdftotext)"]
       FileMaterials["FileMaterialRepository"]
       FileArtifacts["FileArtifactRepository"]
+      FileKnowledge["FileKnowledgeRepository"]
+      FileUserProfile["FileUserProfileRepository"]
       FileSessions["FileSessionRepository"]
     end
   end
 
   subgraph External["External"]
     Gemini["Google Gemini"]
-    Poppler["Poppler CLI"]
+    Poppler["Poppler CLI (pdfinfo, pdftoppm, pdftotext)"]
   end
 
   subgraph Storage["Local .data"]
     PDFs["materials/pdfs/*.pdf"]
     ArtifactJson["artifacts/*.json"]
     Attempts["attempts/*.json"]
+    KnowledgeJson["knowledge/profile.json"]
+    ProfileJson["user_profile.json"]
     Sessions["agent-sessions/*.json"]
   end
 
@@ -54,14 +60,20 @@ flowchart LR
   Handlers --> Tutor
   Handlers --> Materials
   Handlers --> Artifacts
+  Handlers --> Knowledge
+  Handlers --> UserProfile
   Tutor --> Harness
   Harness --> Materials
   Harness --> Artifacts
+  Harness --> Knowledge
 
   Harness --> GeminiAdapter
   Materials --> FileMaterials
   Materials --> PopplerService
   Artifacts --> FileArtifacts
+  FileArtifacts --> Knowledge
+  Knowledge --> FileKnowledge
+  UserProfile --> FileUserProfile
   Harness --> FileSessions
 
   GeminiAdapter --> Gemini
@@ -69,14 +81,16 @@ flowchart LR
   FileMaterials --> PDFs
   FileArtifacts --> ArtifactJson
   FileArtifacts --> Attempts
+  FileKnowledge --> KnowledgeJson
+  FileUserProfile --> ProfileJson
   FileSessions --> Sessions
 ```
 
 El repo está organizado como monorepo `pnpm`:
 
-- `packages/shared`: contratos de API y schemas compartidos.
+- `packages/shared`: contratos de API y schemas compartidos (Materials, Artifacts, Knowledge, UserProfile, Tutor).
 - `packages/server`: dominio, infraestructura y transporte HTTP.
-- `packages/web`: UI React y estado cliente.
+- `packages/web`: UI React, componentes de estudio y estado reactivo.
 - `packages/ai-google`: integración local de Google AI para Effect.
 
 ## Dirección de dependencias
@@ -91,27 +105,27 @@ flowchart TD
   Shared -. "no depende de" .-> Server
 ```
 
-`shared` no debería depender de `server` ni de `web`. Es la capa que evita que el contrato HTTP se duplique manualmente en ambos lados.
+`shared` no depende de `server` ni de `web`. Es la capa que evita que el contrato HTTP se duplique manualmente en ambos lados.
 
 ## Shared: contratos y schemas
 
 Archivos principales:
 
-- `packages/shared/src/api/Api.ts`
-- `packages/shared/src/api/tutor.ts`
-- `packages/shared/src/api/materials.ts`
-- `packages/shared/src/api/artifacts.ts`
-- `packages/shared/src/schemas/*`
-
-Aquí se definen endpoints con Effect HTTP API y schemas con `Schema`. El server los implementa y la web los consume.
+- `packages/shared/src/api/Api.ts`: Definición agregada de `ProxusApi`.
+- `packages/shared/src/api/tutor.ts`: Contrato de chat con modos pedagógicos (`socratic`, `explanatory`).
+- `packages/shared/src/api/materials.ts`: Ingesta, renderizado de páginas, eliminación y metadatos.
+- `packages/shared/src/api/artifacts.ts`: Creación, listado y envío de intentos (`submit`).
+- `packages/shared/src/api/knowledge.ts`: Consulta y actualización de lagunas de conocimiento (`KnowledgeGap`).
+- `packages/shared/src/api/user-profile.ts`: Consulta y guardado de perfil de estudio y preferencias.
+- `packages/shared/src/schemas/*`: Definición estricta de esquemas Effect `Schema`.
 
 ## Server: transporte, dominio e infraestructura
 
-El backend intenta separar tres responsabilidades:
+El backend separa limpiamente tres responsabilidades:
 
-- **Transporte**: HTTP, streaming, OpenAPI y adaptación request/response.
-- **Dominio**: reglas de negocio, contratos internos, agente, artifacts y materiales.
-- **Infraestructura**: implementaciones concretas contra filesystem, Poppler, Node y proveedores externos.
+- **Transporte**: HTTP, streaming NDJSON, OpenAPI y adaptación request/response.
+- **Dominio**: reglas de negocio, contratos internos, tutor, lagunas, perfil de usuario, artefactos y materiales.
+- **Infraestructura**: implementaciones concretas contra filesystem (`.data/`), Poppler (`pdftoppm`, `pdftotext`), Node y Gemini.
 
 ```mermaid
 flowchart TB
@@ -128,20 +142,24 @@ flowchart TB
     Harness["domain/agents/harness\nAgentSession / tools / skills"]
     MaterialsDomain["domain/materials\nMaterialRepository / PdfService ports"]
     ArtifactsDomain["domain/artifacts\nArtifactRepository / grading"]
+    KnowledgeDomain["domain/knowledge\nKnowledgeRepository / gap tracking"]
+    UserProfileDomain["domain/user-profile\nUserProfileRepository"]
   end
 
   subgraph Infra["Infrastructure layer"]
     Gemini["domain/agents/gemini.ts\nGemini LanguageModel adapter"]
     FileMaterials["infra/materials\nFileMaterialRepository"]
-    Poppler["infra/materials\nPopplerPdfService"]
+    Poppler["infra/materials\nPopplerPdfService (pdftotext, pdftoppm)"]
     FileArtifacts["infra/artifacts\nFileArtifactRepository"]
+    FileKnowledge["infra/knowledge\nFileKnowledgeRepository"]
+    FileUserProfile["infra/user-profile\nFileUserProfileRepository"]
     FileSessions["infra/agents\nFileSessionRepository"]
     NodePlatform["@effect/platform-node"]
   end
 
   subgraph External["External systems"]
     Google["Google Gemini API"]
-    PopplerCli["pdfinfo / pdftoppm"]
+    PopplerCli["pdfinfo / pdftoppm / pdftotext"]
     Data["packages/server/.data"]
   end
 
@@ -152,16 +170,22 @@ flowchart TB
   Handlers --> TutorService
   Handlers --> MaterialsDomain
   Handlers --> ArtifactsDomain
+  Handlers --> KnowledgeDomain
+  Handlers --> UserProfileDomain
   StreamRoute --> TutorService
   TutorService --> Harness
   Harness --> MaterialsDomain
   Harness --> ArtifactsDomain
+  Harness --> KnowledgeDomain
 
   Gemini --> Google
   FileMaterials --> Data
   FileMaterials --> Poppler
   Poppler --> PopplerCli
   FileArtifacts --> Data
+  FileArtifacts --> KnowledgeDomain
+  FileKnowledge --> Data
+  FileUserProfile --> Data
   FileSessions --> Data
   Infra --> NodePlatform
 ```
@@ -174,88 +198,35 @@ Archivos principales:
 - `packages/server/src/transport/http/server.ts`: compone rutas, docs, stream NDJSON y layers.
 - `packages/server/src/transport/http/handlers.ts`: implementa los endpoints definidos en `packages/shared`.
 
-Esta capa debería saber de HTTP, schemas compartidos y serialización, pero no debería contener reglas de negocio complejas.
-
 ### Dominio
 
 Archivos principales:
 
-- `packages/server/src/domain/agents/*`
-- `packages/server/src/domain/agents/harness/*`
-- `packages/server/src/domain/artifacts/*`
-- `packages/server/src/domain/materials/*`
-
-Aquí viven los conceptos del producto: tutor, sesiones, skills, commands, materials, artifacts, attempts y grading. También se definen puertos como `MaterialRepository`, `ArtifactRepository` o `PdfService`.
-
-El dominio debería depender de interfaces/servicios, no de detalles como filesystem, Poppler o HTTP.
+- `packages/server/src/domain/agents/*`: orquestación de tutor, skills y comandos.
+- `packages/server/src/domain/agents/harness/*`: motor de ejecución de tools y sesiones.
+- `packages/server/src/domain/artifacts/*`: ciclo de vida de artefactos (`note`, `quiz`, `test`) y motor de corrección (`gradeAttempt`).
+- `packages/server/src/domain/knowledge/*`: modelo de lagunas de conocimiento (`KnowledgeGap`) y seguimiento de debilidades.
+- `packages/server/src/domain/user-profile/*`: perfil de aprendizaje del alumno.
+- `packages/server/src/domain/materials/*`: gestión de PDFs y búsqueda léxica.
 
 ### Infraestructura
 
 Archivos principales:
 
-- `packages/server/src/infra/agents/file-session-repository.ts`
-- `packages/server/src/infra/artifacts/file-artifact-repository.ts`
-- `packages/server/src/infra/materials/file-material-repository.ts`
-- `packages/server/src/infra/materials/poppler-pdf-service.ts`
-- `packages/server/src/domain/agents/gemini.ts`
-
-Esta capa implementa los puertos del dominio usando tecnología concreta: archivos JSON, PDFs locales, comandos Poppler, Gemini y servicios de Node.
-
-Nota: `gemini.ts` está bajo `domain/agents` por cercanía al agente, pero conceptualmente actúa como adapter de infraestructura para `LanguageModel`. Es una de las zonas que un candidato podría reorganizar si quiere dejar las capas más limpias.
-
-### Regla práctica
-
-```txt
-transport -> domain <- infra
-```
-
-- Transporte llama al dominio.
-- Infraestructura implementa puertos que el dominio necesita.
-- El dominio no debería importar transporte ni implementaciones concretas de infraestructura.
-
-La composición de dependencias vive principalmente en `transport/http/server.ts`, usando `Layer` de Effect y `@effect/platform-node`.
+- `packages/server/src/infra/agents/file-session-repository.ts`: sesiones en `.data/agent-sessions`.
+- `packages/server/src/infra/artifacts/file-artifact-repository.ts`: almacenamiento de notas, quizzes, tests e intentos. Extrae automáticamente lagunas de conocimiento hacia `KnowledgeRepository`.
+- `packages/server/src/infra/knowledge/file-knowledge-repository.ts`: persistencia de lagunas y progreso en `.data/knowledge/profile.json`.
+- `packages/server/src/infra/user-profile/file-user-profile-repository.ts`: configuración del alumno en `.data/user_profile.json`.
+- `packages/server/src/infra/materials/file-material-repository.ts`: documentos PDF en `.data/materials/pdfs/` y búsqueda textual con `pdftotext`.
+- `packages/server/src/infra/materials/poppler-pdf-service.ts`: servicio Poppler para extracción de coordenadas vectoriales de texto y renderizado de imágenes a 144 DPI.
+- `packages/server/src/domain/agents/gemini.ts`: adaptador REST resiliente contra la API de Gemini.
 
 ## Tutor agent
 
 El tutor está implementado como un harness de agente con herramientas públicas:
 
-- `load_skill`: carga instrucciones especializadas.
-- `cli`: ejecuta comandos permitidos del dominio.
-
-Las skills no se exponen como tools directas; el modelo debe cargarlas mediante `load_skill`.
-
-```mermaid
-sequenceDiagram
-  participant User
-  participant Web as React Chat
-  participant API as /api/tutor/chat/stream
-  participant Tutor as TutorChatService
-  participant Harness as AgentSession
-  participant Gemini
-  participant CLI as Domain CLI tools
-  participant Data as .data
-
-  User->>Web: asks for a quiz
-  Web->>API: POST messages
-  API->>Tutor: streamMessage(input)
-  Tutor->>Harness: continue session
-  Harness->>Gemini: prompt + available tools
-  Gemini-->>Harness: functionCall(load_skill / cli)
-  Harness->>CLI: execute command
-  CLI->>Data: read/write materials/artifacts
-  Data-->>CLI: result
-  CLI-->>Harness: tool result
-  Harness->>Gemini: continue with tool result
-  Gemini-->>Harness: final answer
-  Harness-->>API: AgentMessage events
-  API-->>Web: NDJSON message/done
-```
-
-Puntos de entrada:
-
-- `packages/server/src/domain/agents/academic-tutor.ts`
-- `packages/server/src/domain/agents/academic-tutor/tutor-chat-service.ts`
-- `packages/server/src/domain/agents/harness/session.ts`
+- `load_skill`: carga instrucciones especializadas (`use-uploaded-materials`, `search-materials`, `create-study-artifacts`, `review-knowledge-gaps`).
+- `cli`: ejecuta comandos permitidos (`materials list/search/view/delete`, `artifacts list/show/create/submit/attempts/grade`, `knowledge gaps/summary/review/master`).
 
 ## Web: estado y UI
 
@@ -265,25 +236,19 @@ Entrada:
 
 Componentes principales:
 
-- `packages/web/src/components/Sidebar.tsx`
-- `packages/web/src/components/Chat.tsx`
-- `packages/web/src/components/ArtifactWorkspace.tsx`
+- `packages/web/src/components/Sidebar.tsx`: navegación de biblioteca de PDFs, apuntes, quizzes y exámenes.
+- `packages/web/src/components/Chat.tsx`: interfaz del tutor con dictado de voz, menciones `@`, selector de modos e historial.
+- `packages/web/src/components/ArtifactWorkspace.tsx`: visor de notas y simulador interactivo de quizzes/tests con temporizador.
+- `packages/web/src/components/KnowledgeGapsPanel.tsx`: panel de control de lagunas de aprendizaje y tasa de dominio.
+- `packages/web/src/components/MindMapViewer.tsx`: esquemas y mapas mentales 100% dinámicos con zoom y pan espacial.
+- `packages/web/src/components/PdfSplitViewer.tsx`: visor de PDF con subrayado vectorial y menú contextual flotante para consultar a la IA.
+- `packages/web/src/components/ConversationalOnboarding.tsx`: onboarding guiado para personalización pedagógica.
+- `packages/web/src/components/UserProfileModal.tsx`: gestión de memoria y perfil del estudiante.
 
-Estado remoto con Effect Atom:
+Estado remoto reactivo con Effect Atom:
 
 - `packages/web/src/domain/materials/atoms.ts`
 - `packages/web/src/domain/artifacts/atoms.ts`
-- `packages/web/src/domain/tutor/atoms.ts`
-
-Streaming tutor:
-
-- `packages/web/src/domain/tutor/stream.ts`
-
-La UI mantiene estado local para cosas efímeras como input del chat, artifact seleccionado y respuestas del formulario.
-
-## Trade-offs actuales
-
-- Persistencia por filesystem: simple y fácil de inspeccionar, no orientada a concurrencia fuerte.
-- Algunas rutas usan Effect HTTP API; el stream del chat usa NDJSON manual.
-- Hay schemas de artifacts en `shared` y dominio server; hay que evitar drift si se cambian.
-- El proyecto prioriza legibilidad para challenge sobre completitud productiva.
+- `packages/web/src/domain/knowledge/atoms.ts`
+- `packages/web/src/domain/user-profile/atoms.ts`
+- `packages/web/src/domain/sessions/storage.ts`

@@ -43,5 +43,3 @@ report.*.json
 # Generated Tailwind CSS
 packages/web/src/styles.generated.css
 
-# Internal documentation / improvements changelog
-MEJORAS_IMPLEMENTADAS.md
