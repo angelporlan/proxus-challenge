@@ -12,6 +12,8 @@ import { streamTutorMessage } from "../domain/tutor/stream.ts";
 import { ArtifactChatCard } from "./ArtifactChatCard.tsx";
 import proxoAvatar from "../assets/proxo-avatar.jpg";
 import proxoFoxTransparent from "../assets/proxo-fox-transparent.png";
+import proxoSocraticAvatar from "../assets/proxo-socratic-avatar.jpg";
+import proxoSocraticTransparent from "../assets/proxo-socratic-transparent.png";
 
 const starterPrompts = [
   {
@@ -290,6 +292,8 @@ export function Chat({
   const [assistantReveal, setAssistantReveal] = useState<AssistantReveal | null>(null);
   const [error, setError] = useState<string | undefined>();
   const [tutorMode, setTutorMode] = useState<TutorMode>("explanatory");
+  const currentProxoAvatar = tutorMode === "socratic" ? proxoSocraticAvatar : proxoAvatar;
+  const currentProxoHero = tutorMode === "socratic" ? proxoSocraticTransparent : proxoFoxTransparent;
 
   // Attached & Mentioned documents state
   const [attachedDocs, setAttachedDocs] = useState<
@@ -790,9 +794,13 @@ export function Chat({
         <div className="flex items-center gap-3">
           <div className="relative">
             <img
-              src={proxoAvatar}
-              alt="Proxo"
-              className="size-9 rounded-xl object-cover border border-indigo-500/30 shadow-xs"
+              src={currentProxoAvatar}
+              alt={`Proxo (${tutorMode === "socratic" ? "Modo Socrático" : "Modo Explicativo"})`}
+              className={`size-9 rounded-xl object-cover border shadow-xs transition-all duration-300 ${
+                tutorMode === "socratic"
+                  ? "border-purple-500/40 ring-2 ring-purple-500/20"
+                  : "border-indigo-500/40 ring-2 ring-indigo-500/20"
+              }`}
             />
             <span
               className={`absolute -bottom-0.5 -right-0.5 size-2.5 rounded-full border-2 ${
@@ -810,13 +818,19 @@ export function Chat({
               >
                 Proxo
               </h1>
-              <span className="rounded-full border border-indigo-500/20 bg-indigo-500/10 px-2 py-0.5 text-[10px] font-semibold text-indigo-500">
-                Tutor IA
+              <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold transition-colors ${
+                tutorMode === "socratic"
+                  ? "border-purple-500/20 bg-purple-500/10 text-purple-500 dark:text-purple-400"
+                  : "border-indigo-500/20 bg-indigo-500/10 text-indigo-500"
+              }`}>
+                {tutorMode === "socratic" ? "Socrático" : "Tutor IA"}
               </span>
             </div>
             <div className="mt-1 flex items-center gap-2">
               <p className={`text-[11px] ${isLight ? "text-slate-500" : "text-slate-400"}`}>
-                Tu tutor académico inteligente
+                {tutorMode === "socratic"
+                  ? "Modo Socrático activo · Razonamiento guiado"
+                  : "Tu tutor académico inteligente"}
               </p>
               <span
                 className={`hidden items-center gap-1 text-[10px] sm:flex ${
@@ -933,9 +947,9 @@ export function Chat({
           <div className="m-auto w-full max-w-2xl text-center py-6">
             <div className="relative mx-auto mb-3 inline-block">
               <img
-                src={proxoFoxTransparent}
-                alt="Proxo"
-                className="size-28 sm:size-32 object-contain drop-shadow-md mx-auto transform hover:scale-105 transition-transform duration-300"
+                src={currentProxoHero}
+                alt={tutorMode === "socratic" ? "Proxo (Modo Socrático)" : "Proxo (Modo Explicativo)"}
+                className="size-28 sm:size-32 object-contain drop-shadow-md mx-auto transform hover:scale-105 transition-all duration-300"
               />
             </div>
             <h2
@@ -1057,9 +1071,11 @@ export function Chat({
             return (
               <article key={index} className="ui-enter flex max-w-3xl self-start items-start gap-2.5">
                 <img
-                  src={proxoAvatar}
-                  alt="Proxo"
-                  className="mt-1 size-8 shrink-0 rounded-xl object-cover border border-indigo-500/30 shadow-xs"
+                  src={currentProxoAvatar}
+                  alt={tutorMode === "socratic" ? "Proxo (Socrático)" : "Proxo"}
+                  className={`mt-1 size-8 shrink-0 rounded-xl object-cover border shadow-xs transition-all duration-200 ${
+                    tutorMode === "socratic" ? "border-purple-500/40 ring-1 ring-purple-500/20" : "border-indigo-500/30 ring-1 ring-indigo-500/20"
+                  }`}
                 />
 
                 <div className="min-w-0 flex-1">
@@ -1069,6 +1085,11 @@ export function Chat({
                     }`}>
                       Proxo
                     </span>
+                    {tutorMode === "socratic" && (
+                      <span className="rounded-full bg-purple-500/15 border border-purple-500/20 text-purple-600 dark:text-purple-300 px-1.5 py-0.2 text-[9px] font-semibold">
+                        Socrático
+                      </span>
+                    )}
                     {isCurrentlyWriting ? (
                       <span className="flex items-center gap-1 text-[10px] text-indigo-500">
                         <span className="size-1.5 animate-pulse rounded-full bg-indigo-500" />
@@ -1179,7 +1200,7 @@ export function Chat({
         )}
 
         {isSending && !isTutorWriting && groupedItems.at(-1)?.kind !== "tools" && (
-          <TutorThinkingBubble isLight={isLight} />
+          <TutorThinkingBubble isLight={isLight} avatar={currentProxoAvatar} />
         )}
 
         <div ref={messagesEndRef} />
@@ -1647,13 +1668,11 @@ export function Chat({
                           : "border-transparent hover:bg-slate-800/60 text-slate-300"
                       }`}
                     >
-                      <div className={`p-1.5 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
-                        tutorMode === "explanatory"
-                          ? "bg-indigo-600 text-white shadow-xs"
-                          : isLight ? "bg-slate-200/80 text-slate-600" : "bg-slate-800 text-slate-400"
-                      }`}>
-                        <span className="material-symbols-outlined text-[15px]">menu_book</span>
-                      </div>
+                      <img
+                        src={proxoAvatar}
+                        alt="Modo Explicativo"
+                        className="size-8 rounded-lg object-cover border border-indigo-500/30 shrink-0 shadow-2xs mt-0.5"
+                      />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between gap-1">
                           <p className="font-bold text-xs text-slate-900 dark:text-slate-100">Modo Explicativo</p>
@@ -1664,7 +1683,7 @@ export function Chat({
                           )}
                         </div>
                         <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">
-                          Respuestas directas y claras con ejemplos.
+                          Respuestas directas, definiciones y ejemplos paso a paso.
                         </p>
                       </div>
                     </button>
@@ -1686,13 +1705,11 @@ export function Chat({
                           : "border-transparent hover:bg-slate-800/60 text-slate-300"
                       }`}
                     >
-                      <div className={`p-1.5 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
-                        tutorMode === "socratic"
-                          ? "bg-purple-600 text-white shadow-xs"
-                          : isLight ? "bg-slate-200/80 text-slate-600" : "bg-slate-800 text-slate-400"
-                      }`}>
-                        <span className="material-symbols-outlined text-[15px]">school</span>
-                      </div>
+                      <img
+                        src={proxoSocraticAvatar}
+                        alt="Modo Socrático"
+                        className="size-8 rounded-lg object-cover border border-purple-500/30 shrink-0 shadow-2xs mt-0.5"
+                      />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between gap-1">
                           <p className="font-bold text-xs text-slate-900 dark:text-slate-100">Modo Socrático</p>
@@ -1703,7 +1720,7 @@ export function Chat({
                           )}
                         </div>
                         <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">
-                          Pistas y preguntas para deducir la solución.
+                          Preguntas reflexivas y pistas para deducir la solución.
                         </p>
                       </div>
                     </button>
@@ -1847,11 +1864,17 @@ export function Chat({
   );
 }
 
-function TutorThinkingBubble({ isLight }: { readonly isLight: boolean }) {
+function TutorThinkingBubble({
+  isLight,
+  avatar = proxoAvatar
+}: {
+  readonly isLight: boolean;
+  readonly avatar?: string | undefined;
+}) {
   return (
     <div className="ui-enter flex items-start gap-2.5" aria-label="Proxo está pensando" role="status">
       <img
-        src={proxoAvatar}
+        src={avatar}
         alt="Proxo"
         className="mt-1 size-8 shrink-0 rounded-xl object-cover border border-indigo-500/30 shadow-xs animate-pulse"
       />
