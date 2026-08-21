@@ -6,7 +6,7 @@ import { ArtifactRepository, type Artifact } from "../../domain/artifacts/artifa
 import { MaterialRepository } from "../../domain/materials/material.ts";
 import { KnowledgeRepository } from "../../domain/knowledge/knowledge-profile.ts";
 import { UserProfileRepository } from "../../domain/user-profile/user-profile.ts";
-import { failAsHttpError } from "./http-errors.ts";
+import { failAsHttpError, failAsServiceHttpError, failAsTutorHttpError } from "./http-errors.ts";
 
 export const TutorHttpHandlers = HttpApiBuilder.group(
   ProxusApi,
@@ -15,7 +15,7 @@ export const TutorHttpHandlers = HttpApiBuilder.group(
     const tutor = yield* TutorChatService;
 
     return handlers.handle("chat", ({ payload }) =>
-      tutor.sendMessage(payload).pipe(Effect.orDie)
+      tutor.sendMessage(payload).pipe(Effect.catch(failAsTutorHttpError))
     );
   })
 );
@@ -35,7 +35,7 @@ export const MaterialsHttpHandlers = HttpApiBuilder.group(
     return handlers
       .handle("list", () => materials.list().pipe(
         Effect.map((items) => ({ materials: items })),
-        Effect.orDie
+        Effect.catch(failAsServiceHttpError)
       ))
       .handle("get", ({ params }) => materials.get(params.id).pipe(
         Effect.catch(failAsHttpError)
@@ -77,7 +77,7 @@ export const ArtifactsHttpHandlers = HttpApiBuilder.group(
     return handlers
       .handle("list", ({ query }) => artifacts.listArtifacts({ kind: query.kind }).pipe(
         Effect.map((items) => ({ artifacts: items.map(artifactSummary) })),
-        Effect.orDie
+        Effect.catch(failAsServiceHttpError)
       ))
       .handle("get", ({ params }) => artifacts.getArtifact(params.id).pipe(
         Effect.catch(failAsHttpError)
@@ -103,7 +103,7 @@ export const KnowledgeHttpHandlers = HttpApiBuilder.group(
     const knowledge = yield* KnowledgeRepository;
 
     return handlers
-      .handle("getProfile", () => knowledge.getProfile().pipe(Effect.orDie))
+      .handle("getProfile", () => knowledge.getProfile().pipe(Effect.catch(failAsServiceHttpError)))
       .handle("updateGapStatus", ({ params, payload }) =>
         knowledge.updateGapStatus(params.id, payload.status).pipe(
           Effect.catch(failAsHttpError)
@@ -112,7 +112,7 @@ export const KnowledgeHttpHandlers = HttpApiBuilder.group(
       .handle("clearProfile", () =>
         knowledge.clearProfile().pipe(
           Effect.map(() => ({ success: true })),
-          Effect.orDie
+          Effect.catch(failAsServiceHttpError)
         )
       );
   })
@@ -125,12 +125,12 @@ export const UserProfileHttpHandlers = HttpApiBuilder.group(
     const userProfile = yield* UserProfileRepository;
 
     return handlers
-      .handle("getProfile", () => userProfile.getProfile().pipe(Effect.orDie))
-      .handle("saveProfile", ({ payload }) => userProfile.saveProfile(payload).pipe(Effect.orDie))
+      .handle("getProfile", () => userProfile.getProfile().pipe(Effect.catch(failAsServiceHttpError)))
+      .handle("saveProfile", ({ payload }) => userProfile.saveProfile(payload).pipe(Effect.catch(failAsServiceHttpError)))
       .handle("clearProfile", () =>
         userProfile.clearProfile().pipe(
           Effect.map(() => ({ success: true })),
-          Effect.orDie
+          Effect.catch(failAsServiceHttpError)
         )
       );
   })

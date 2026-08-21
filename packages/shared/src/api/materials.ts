@@ -1,6 +1,6 @@
 import { Schema } from "effect";
 import { HttpApiEndpoint, HttpApiGroup } from "effect/unstable/httpapi";
-import { InvalidRequest, ResourceNotFound } from "../schemas/http-error.ts";
+import { ResourceHttpErrors, ServiceHttpErrors } from "../schemas/http-error.ts";
 import {
   DeleteMaterialResponse,
   MaterialListResponse,
@@ -10,24 +10,23 @@ import {
   UploadMaterialInput
 } from "../schemas/material.ts";
 
-const ClientHttpErrors = [ResourceNotFound, InvalidRequest] as const;
-
 export class MaterialsApi extends HttpApiGroup.make("materials")
   .add(
     HttpApiEndpoint.get("list", "/", {
-      success: MaterialListResponse
+      success: MaterialListResponse,
+      error: ServiceHttpErrors
     }),
     HttpApiEndpoint.get("get", "/:id", {
       params: {
         id: Schema.String
       },
       success: PdfMaterial,
-      error: ClientHttpErrors
+      error: ResourceHttpErrors
     }),
     HttpApiEndpoint.post("upload", "/upload", {
       payload: UploadMaterialInput,
       success: PdfMaterial,
-      error: ClientHttpErrors
+      error: ResourceHttpErrors
     }),
     HttpApiEndpoint.post("renderPages", "/:id/pages", {
       params: {
@@ -35,14 +34,14 @@ export class MaterialsApi extends HttpApiGroup.make("materials")
       },
       payload: RenderPagesInput,
       success: MaterialPageImages,
-      error: ClientHttpErrors
+      error: ResourceHttpErrors
     }),
     HttpApiEndpoint.delete("delete", "/:id", {
       params: {
         id: Schema.String
       },
       success: DeleteMaterialResponse,
-      error: ClientHttpErrors
+      error: ResourceHttpErrors
     })
   )
   .prefix("/materials")

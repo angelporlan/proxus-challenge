@@ -1,7 +1,7 @@
 import { Schema } from "effect";
 import { HttpApiEndpoint, HttpApiGroup } from "effect/unstable/httpapi";
 import { Artifact, ArtifactAttempt, ArtifactListResponse, SubmitAttemptInput } from "../schemas/artifact.ts";
-import { InvalidRequest, ResourceNotFound } from "../schemas/http-error.ts";
+import { ResourceHttpErrors, ServiceHttpErrors } from "../schemas/http-error.ts";
 
 const ArtifactKindQuery = Schema.Struct({
   kind: Schema.optional(Schema.Union([
@@ -11,20 +11,19 @@ const ArtifactKindQuery = Schema.Struct({
   ]))
 });
 
-const ClientHttpErrors = [ResourceNotFound, InvalidRequest] as const;
-
 export class ArtifactsApi extends HttpApiGroup.make("artifacts")
   .add(
     HttpApiEndpoint.get("list", "/", {
       query: ArtifactKindQuery,
-      success: ArtifactListResponse
+      success: ArtifactListResponse,
+      error: ServiceHttpErrors
     }),
     HttpApiEndpoint.get("get", "/:id", {
       params: {
         id: Schema.String
       },
       success: Artifact,
-      error: ClientHttpErrors
+      error: ResourceHttpErrors
     }),
     HttpApiEndpoint.post("submit", "/:id/submit", {
       params: {
@@ -32,7 +31,7 @@ export class ArtifactsApi extends HttpApiGroup.make("artifacts")
       },
       payload: SubmitAttemptInput,
       success: ArtifactAttempt,
-      error: ClientHttpErrors
+      error: ResourceHttpErrors
     }),
     HttpApiEndpoint.delete("delete", "/:id", {
       params: {
@@ -42,7 +41,7 @@ export class ArtifactsApi extends HttpApiGroup.make("artifacts")
         success: Schema.Boolean,
         id: Schema.String
       }),
-      error: ClientHttpErrors
+      error: ResourceHttpErrors
     })
   )
   .prefix("/artifacts")

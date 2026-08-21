@@ -1,6 +1,7 @@
 import { Schema } from "effect";
 import { HttpApiEndpoint, HttpApiGroup } from "effect/unstable/httpapi";
 import { AgentMessage } from "../schemas/agent-message.ts";
+import { TutorHttpErrors } from "../schemas/http-error.ts";
 
 export const TutorChatRequest = Schema.Struct({
   messages: Schema.Array(AgentMessage),
@@ -36,7 +37,8 @@ export type TutorChatStreamEvent = typeof TutorChatStreamEvent.Type;
 export class TutorApi extends HttpApiGroup.make("tutor")
   .add(HttpApiEndpoint.post("chat", "/chat", {
     payload: TutorChatRequest,
-    success: TutorChatResponse
+    success: TutorChatResponse,
+    error: TutorHttpErrors
   }))
   .prefix("/tutor")
 {}

@@ -14,6 +14,7 @@ import { FileUserProfileRepository } from "../../infra/user-profile/file-user-pr
 import { MaterialRepository } from "../../domain/materials/material.ts";
 import { PopplerPdfService } from "../../infra/materials/poppler-pdf-service.ts";
 import { HttpHandlersLive } from "./handlers.ts";
+import { httpErrorResponse } from "./http-errors.ts";
 
 const ApiRoutes = HttpApiBuilder.layer(ProxusApi, {
   openapiPath: "/openapi.json"
@@ -47,7 +48,7 @@ const TutorStreamRoute = HttpRouter.add("POST", "/api/tutor/chat/stream", () =>
         "x-accel-buffering": "no"
       }
     });
-  })
+  }).pipe(Effect.catch((error) => Effect.succeed(httpErrorResponse(error))))
 );
 
 const RawPdfRoute = HttpRouter.add("GET", "/api/materials/:id/raw", () =>
@@ -55,8 +56,8 @@ const RawPdfRoute = HttpRouter.add("GET", "/api/materials/:id/raw", () =>
     const { id } = yield* HttpRouter.schemaPathParams(Schema.Struct({ id: Schema.String }));
     const materials = yield* MaterialRepository;
     const fs = yield* FileSystem.FileSystem;
-    const filePath = yield* materials.getFilePath(id).pipe(Effect.orDie);
-    const stat = yield* fs.stat(filePath).pipe(Effect.orDie);
+    const filePath = yield* materials.getFilePath(id);
+    const stat = yield* fs.stat(filePath);
     const stream = fs.stream(filePath);
 
     return HttpServerResponse.stream(stream, {
@@ -67,7 +68,7 @@ const RawPdfRoute = HttpRouter.add("GET", "/api/materials/:id/raw", () =>
         ...(stat.size !== undefined ? { "content-length": String(stat.size) } : {})
       }
     });
-  })
+  }).pipe(Effect.catch((error) => Effect.succeed(httpErrorResponse(error))))
 );
 
 const Routes = Layer.mergeAll(ApiRoutes, DocsRoute, TutorStreamRoute, RawPdfRoute);
