@@ -6,6 +6,27 @@ import {
   Response
 } from "effect/unstable/ai";
 
+// ---------------------------------------------------------------------------
+// Trade-off: Manual Gemini adapter vs @proxus/ai-google
+// ---------------------------------------------------------------------------
+// This file implements a manual Gemini REST adapter rather than using the
+// `@effect/ai-google` package available in `packages/ai-google`.
+//
+// Reasons for the manual adapter:
+//   1. The agent harness requires fine-grained control over tool-call parsing,
+//      including recovery from models that emit tool calls as plain text or raw
+//      JSON (see `toResponseParts`). The upstream adapter does not expose hooks
+//      for this normalization.
+//   2. The custom `toolParameters` function allows dynamic parameter schema
+//      generation per tool name, which the harness CLI system relies on.
+//   3. Keeping this in-tree avoids coupling to the beta-stage upstream API
+//      surface which may change between Effect 4 beta releases.
+//
+// Future improvement: once Effect AI v4 stabilizes, migrate to
+// `@effect/ai-google` and push the text-recovery heuristics into the harness
+// layer instead. This would reduce ~300 lines of adapter code.
+// ---------------------------------------------------------------------------
+
 const defaultModel = "gemini-2.5-flash";
 
 const FunctionCall = Schema.Struct({

@@ -44,6 +44,4 @@ export const sumAgent = Effect.gen(function* () {
   Effect.provide(Layer.mergeAll(SumToolkitLive, GeminiModel))
 );
 
-if (import.meta.main) {
-  Effect.runPromise(sumAgent);
-}
+Effect.runPromise(sumAgent);

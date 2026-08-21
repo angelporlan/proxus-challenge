@@ -160,6 +160,4 @@ export const mathAgent2 = Effect.gen(function* () {
   ))
 );
 
-if (import.meta.main) {
-  Effect.runPromise(mathAgent2);
-}
+Effect.runPromise(mathAgent2);
