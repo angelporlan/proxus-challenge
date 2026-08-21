@@ -100,14 +100,16 @@ export const runSearchThenViewEval = Effect.gen(function* () {
 
   // Check if tool was invoked and page 18 was correctly identified
   const calledSearchTool = searchCallCount >= 1;
+  const calledViewTool = viewCallCount >= 1;
   const identifiesPage18 = result.output.includes("18") || result.output.includes("página 18") || result.output.includes("pagina 18");
   const mentionsInviolabilidad = result.output.toLowerCase().includes("domicilio") || result.output.toLowerCase().includes("inviolab");
-  const passed = calledSearchTool && identifiesPage18 && mentionsInviolabilidad;
+  const passed = calledSearchTool && calledViewTool && identifiesPage18 && mentionsInviolabilidad;
 
   yield* Console.log("--- Evaluation Criteria Results ---");
-  yield* Console.log(`1. Executed 'materials search' tool: ${calledSearchTool ? `PASSED (${searchCallCount} search call(s), ${viewCallCount} render call(s))` : "FAILED"}`);
-  yield* Console.log(`2. Located exact page (Page 18): ${identifiesPage18 ? "PASSED" : "FAILED"}`);
-  yield* Console.log(`3. Retrieved accurate definition of inviolabilidad: ${mentionsInviolabilidad ? "PASSED" : "FAILED"}`);
+  yield* Console.log(`1. Executed 'materials search' tool: ${calledSearchTool ? `PASSED (${searchCallCount} search call(s))` : "FAILED"}`);
+  yield* Console.log(`2. Executed 'materials view' after search: ${calledViewTool ? `PASSED (${viewCallCount} render call(s))` : "FAILED"}`);
+  yield* Console.log(`3. Located exact page (Page 18): ${identifiesPage18 ? "PASSED" : "FAILED"}`);
+  yield* Console.log(`4. Retrieved accurate definition of inviolabilidad: ${mentionsInviolabilidad ? "PASSED" : "FAILED"}`);
   yield* Console.log(`\nFinal Verdict: ${passed ? "✅ ALL EVALUATION CRITERIA PASSED" : "❌ EVALUATION FAILED"}\n`);
 
   return { passed, output: result.output };
