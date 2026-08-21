@@ -81,12 +81,40 @@ describe("UserProfileModal", () => {
     await user.click(resetTrigger);
 
     expect(
-      screen.getByText("¿Quieres borrar lo que Proxo sabe sobre ti?")
+      screen.getByText("¿Quieres reiniciar lo que Proxo sabe de ti?")
     ).toBeInTheDocument();
 
     const confirmButton = screen.getAllByRole("button", { name: /Reiniciar memoria/i })[1]!;
     await user.click(confirmButton);
 
     expect(onClearMemory).toHaveBeenCalledOnce();
+  });
+
+  it("shows confirmation dialog before deleting all study data", async () => {
+    const user = userEvent.setup();
+    const onClearAllData = vi.fn();
+
+    render(
+      <UserProfileModal
+        isOpen={true}
+        onClose={vi.fn()}
+        profile={profile}
+        onSave={vi.fn()}
+        onClearMemory={vi.fn()}
+        onClearAllData={onClearAllData}
+      />
+    );
+
+    const clearDataTrigger = screen.getByRole("button", { name: /Eliminar datos/i });
+    await user.click(clearDataTrigger);
+
+    expect(
+      screen.getByText("¿Eliminar todos los datos de estudio?")
+    ).toBeInTheDocument();
+
+    const confirmButton = screen.getByRole("button", { name: "Eliminar todos los datos" });
+    await user.click(confirmButton);
+
+    expect(onClearAllData).toHaveBeenCalledOnce();
   });
 });

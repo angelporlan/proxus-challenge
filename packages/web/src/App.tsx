@@ -41,8 +41,14 @@ import {
   materialQuery,
   materialsQuery
 } from "./domain/materials/atoms.ts";
-import { deleteArtifactAction } from "./domain/artifacts/atoms.ts";
-import { knowledgeProfileQuery } from "./domain/knowledge/atoms.ts";
+import {
+  artifactsQuery,
+  deleteArtifactAction
+} from "./domain/artifacts/atoms.ts";
+import {
+  clearKnowledgeProfileAction,
+  knowledgeProfileQuery
+} from "./domain/knowledge/atoms.ts";
 import { setArtifactSaved } from "./domain/artifacts/saved-artifacts.ts";
 import {
   clearUserProfileAction,
@@ -100,6 +106,8 @@ export function App() {
 
   const deleteMaterial = useAtomSet(deleteMaterialAction, { mode: "promise" });
   const materialsResult = useAtomValue(materialsQuery);
+  const artifactsResult = useAtomValue(artifactsQuery);
+  const clearKnowledgeProfile = useAtomSet(clearKnowledgeProfileAction, { mode: "promise" });
   const userProfileResult = useAtomValue(userProfileQuery);
   const saveUserProfile = useAtomSet(saveUserProfileAction, { mode: "promise" });
   const clearUserProfile = useAtomSet(clearUserProfileAction, { mode: "promise" });
@@ -410,6 +418,50 @@ export function App() {
     } finally {
       setIsDeletingArtifact(false);
     }
+  };
+
+  const handleClearAllStudyData = async () => {
+    // 1. Delete all materials
+    const materials = AsyncResult.match(materialsResult, {
+      onInitial: () => [],
+      onFailure: () => [],
+      onSuccess: ({ value }) => value.materials
+    });
+    for (const mat of materials) {
+      try {
+        await deleteMaterial(mat.id);
+      } catch (err) {
+        console.error("Error deleting material", mat.id, err);
+      }
+    }
+
+    // 2. Delete all artifacts
+    const artifacts = AsyncResult.match(artifactsResult, {
+      onInitial: () => [],
+      onFailure: () => [],
+      onSuccess: ({ value }) => value.artifacts
+    });
+    for (const art of artifacts) {
+      try {
+        await deleteArtifact(art.id);
+        setArtifactSaved(art.id, false);
+      } catch (err) {
+        console.error("Error deleting artifact", art.id, err);
+      }
+    }
+
+    // 3. Clear knowledge profile / gaps
+    try {
+      await clearKnowledgeProfile();
+    } catch (err) {
+      console.error("Error clearing knowledge profile", err);
+    }
+
+    // 4. Reset workspace selection
+    setSelectedMaterialId(null);
+    setSelectedArtifactId(null);
+    setActiveTab("workspace");
+    notify({ tone: "neutral", title: "Todos los materiales, exámenes y lagunas han sido eliminados" });
   };
 
   const handleAskAboutMistake = (context: {
@@ -799,6 +851,7 @@ export function App() {
           sessionStorage.removeItem("proxus_skipped_onboarding");
           notify({ title: "Memoria del tutor reiniciada correctamente", tone: "success" });
         }}
+        onClearAllData={handleClearAllStudyData}
         theme={theme}
       />
 

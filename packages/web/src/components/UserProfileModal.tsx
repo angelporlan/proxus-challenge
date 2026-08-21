@@ -9,6 +9,7 @@ interface UserProfileModalProps {
   readonly profile: UserProfile | null | undefined;
   readonly onSave: (updated: UpdateUserProfileInput) => Promise<void> | void;
   readonly onClearMemory: () => Promise<void> | void;
+  readonly onClearAllData?: (() => Promise<void> | void) | undefined;
   readonly theme?: "dark" | "light" | undefined;
 }
 
@@ -18,6 +19,7 @@ export function UserProfileModal({
   profile,
   onSave,
   onClearMemory,
+  onClearAllData,
   theme = "dark"
 }: UserProfileModalProps) {
   const isLight = theme === "light";
@@ -30,6 +32,8 @@ export function UserProfileModal({
   const [isSaving, setIsSaving] = useState(false);
   const [showConfirmReset, setShowConfirmReset] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
+  const [showConfirmClearData, setShowConfirmClearData] = useState(false);
+  const [isClearingAllData, setIsClearingAllData] = useState(false);
 
   useEffect(() => {
     if (profile) {
@@ -81,6 +85,18 @@ export function UserProfileModal({
       onClose();
     } finally {
       setIsClearing(false);
+    }
+  };
+
+  const handleConfirmClearAllData = async () => {
+    if (!onClearAllData) return;
+    setIsClearingAllData(true);
+    try {
+      await onClearAllData();
+      setShowConfirmClearData(false);
+      onClose();
+    } finally {
+      setIsClearingAllData(false);
     }
   };
 
@@ -222,18 +238,32 @@ export function UserProfileModal({
           </div>
 
           {/* Actions Footer */}
-          <div className="pt-4 flex items-center justify-between border-t border-slate-200/80 dark:border-slate-800/80 gap-2">
-            <button
-              type="button"
-              onClick={() => setShowConfirmReset(true)}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 transition"
-              title="Borrar todos los datos de memoria del tutor"
-            >
-              <span className="material-symbols-outlined text-[16px]">delete_forever</span>
-              <span>Reiniciar memoria</span>
-            </button>
+          <div className="pt-4 flex flex-wrap items-center justify-between border-t border-slate-200/80 dark:border-slate-800/80 gap-2">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => setShowConfirmReset(true)}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/40 transition"
+                title="Restablecer el perfil de personalización y memoria de Proxo"
+              >
+                <span className="material-symbols-outlined text-[16px]">restart_alt</span>
+                <span>Reiniciar memoria</span>
+              </button>
 
-            <div className="flex items-center gap-2">
+              {onClearAllData && (
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmClearData(true)}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 transition"
+                  title="Eliminar todos los PDFs, materiales, quizzes, esquemas y lagunas de estudio"
+                >
+                  <span className="material-symbols-outlined text-[16px]">delete_forever</span>
+                  <span>Eliminar datos</span>
+                </button>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2 ml-auto">
               <button
                 type="button"
                 onClick={onClose}
@@ -254,7 +284,7 @@ export function UserProfileModal({
           </div>
         </form>
 
-        {/* Destructive Reset Confirmation Dialog */}
+        {/* Destructive Reset Memory Confirmation Dialog */}
         {showConfirmReset && (
           <div className="absolute inset-0 z-20 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs animate-in fade-in duration-150">
             <div
@@ -262,12 +292,12 @@ export function UserProfileModal({
                 isLight ? "bg-white border-slate-200 text-slate-900" : "bg-slate-900 border-slate-800 text-slate-100"
               }`}
             >
-              <div className="flex items-center gap-3 text-red-500">
+              <div className="flex items-center gap-3 text-amber-500">
                 <span className="material-symbols-outlined text-2xl">warning</span>
-                <h3 className="font-bold text-sm">¿Quieres borrar lo que Proxo sabe sobre ti?</h3>
+                <h3 className="font-bold text-sm">¿Quieres reiniciar lo que Proxo sabe de ti?</h3>
               </div>
               <p className={`text-xs leading-relaxed ${isLight ? "text-slate-600" : "text-slate-400"}`}>
-                Esto eliminará tu perfil de aprendizaje y tendrás que volver a responder las preguntas de personalización.
+                Esto restablecerá tu perfil de personalización y volverás a pasar por las preguntas de bienvenida.
               </p>
               <div className="flex justify-end gap-2 pt-2">
                 <button
@@ -284,9 +314,48 @@ export function UserProfileModal({
                   type="button"
                   onClick={handleConfirmReset}
                   disabled={isClearing}
-                  className="px-3.5 py-1.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-semibold shadow-xs transition"
+                  className="px-3.5 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-semibold shadow-xs transition disabled:opacity-50"
                 >
-                  {isClearing ? "Borrando…" : "Reiniciar memoria"}
+                  {isClearing ? "Reiniciando…" : "Reiniciar memoria"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Destructive Clear All Data Confirmation Dialog */}
+        {showConfirmClearData && (
+          <div className="absolute inset-0 z-20 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs animate-in fade-in duration-150">
+            <div
+              className={`w-full max-w-sm rounded-2xl border p-5 space-y-4 shadow-2xl ${
+                isLight ? "bg-white border-slate-200 text-slate-900" : "bg-slate-900 border-slate-800 text-slate-100"
+              }`}
+            >
+              <div className="flex items-center gap-3 text-red-500">
+                <span className="material-symbols-outlined text-2xl">delete_sweep</span>
+                <h3 className="font-bold text-sm">¿Eliminar todos los datos de estudio?</h3>
+              </div>
+              <p className={`text-xs leading-relaxed ${isLight ? "text-slate-600" : "text-slate-400"}`}>
+                Esta acción eliminará de forma permanente todos tus <strong>documentos PDF</strong>, los <strong>quizzes y esquemas generados</strong> y el registro de <strong>lagunas de conocimiento</strong>.
+              </p>
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmClearData(false)}
+                  disabled={isClearingAllData}
+                  className={`px-3 py-1.5 rounded-xl border text-xs font-medium transition ${
+                    isLight ? "border-slate-200 text-slate-600 hover:bg-slate-100" : "border-slate-800 text-slate-400 hover:bg-slate-800"
+                  }`}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmClearAllData}
+                  disabled={isClearingAllData}
+                  className="px-3.5 py-1.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-semibold shadow-xs transition disabled:opacity-50"
+                >
+                  {isClearingAllData ? "Eliminando datos…" : "Eliminar todos los datos"}
                 </button>
               </div>
             </div>
