@@ -19,6 +19,7 @@ interface SidebarProps {
   readonly onRequestDeleteArtifact?: ((artifact: { readonly id: string; readonly title: string; readonly kind: "note" | "quiz" | "test" }, trigger?: HTMLButtonElement) => void) | undefined;
   readonly deletingMaterialId?: string | null | undefined;
   readonly recentlyUploadedId?: string | null | undefined;
+  readonly onOpenProfile?: (() => void) | undefined;
   readonly theme?: "dark" | "light" | undefined;
 }
 
@@ -34,6 +35,7 @@ export function Sidebar({
   onRequestDeleteArtifact,
   deletingMaterialId = null,
   recentlyUploadedId = null,
+  onOpenProfile,
   theme = "dark"
 }: SidebarProps) {
   const materials = useAtomValue(materialsQuery);
@@ -69,30 +71,48 @@ export function Sidebar({
       }`}
       aria-label="Biblioteca de estudio"
     >
-      <header className="mb-6 flex items-center gap-3">
-        <div
-          className={`grid size-10 place-items-center rounded-xl border ${
-            isLight
-              ? "border-indigo-200 bg-indigo-50 text-indigo-700"
-              : "border-indigo-500/20 bg-indigo-500/10 text-indigo-300"
-          }`}
-        >
-          <span className="material-symbols-outlined text-xl" aria-hidden="true">
-            auto_stories
-          </span>
-        </div>
-        <div>
-          <strong
-            className={`block font-display text-base font-bold tracking-tight ${
-              isLight ? "text-slate-900" : "text-slate-100"
+      <header className="mb-6 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <div
+            className={`grid size-10 place-items-center rounded-xl border shrink-0 ${
+              isLight
+                ? "border-indigo-200 bg-indigo-50 text-indigo-700"
+                : "border-indigo-500/20 bg-indigo-500/10 text-indigo-300"
             }`}
           >
-            Proxus
-          </strong>
-          <span className={`block text-xs ${isLight ? "text-slate-500" : "text-slate-400"}`}>
-            Espacio de estudio
-          </span>
+            <span className="material-symbols-outlined text-xl" aria-hidden="true">
+              auto_stories
+            </span>
+          </div>
+          <div className="min-w-0">
+            <strong
+              className={`block font-display text-base font-bold tracking-tight truncate ${
+                isLight ? "text-slate-900" : "text-slate-100"
+              }`}
+            >
+              Proxus
+            </strong>
+            <span className={`block text-xs truncate ${isLight ? "text-slate-500" : "text-slate-400"}`}>
+              Espacio de estudio
+            </span>
+          </div>
         </div>
+
+        {onOpenProfile && (
+          <button
+            type="button"
+            onClick={onOpenProfile}
+            className={`size-8 rounded-xl border grid place-items-center transition active:scale-95 shrink-0 ${
+              isLight
+                ? "border-purple-200 bg-purple-50 hover:bg-purple-100 text-purple-700 shadow-2xs"
+                : "border-purple-800/60 bg-purple-950/40 hover:bg-purple-900/50 text-purple-300 shadow-2xs"
+            }`}
+            title="Personalización: lo que tu tutor sabe de ti"
+            aria-label="Personalización y memoria del alumno"
+          >
+            <span className="material-symbols-outlined text-[17px]">psychology</span>
+          </button>
+        )}
       </header>
 
       <section className="mb-7 min-w-0" aria-labelledby="materials-heading">
@@ -112,9 +132,10 @@ export function Sidebar({
           <button
             type="button"
             onClick={onRequestUpload}
-            className="flex min-h-9 items-center gap-1 rounded-lg bg-indigo-600 px-2.5 py-1.5 text-xs font-semibold text-white transition hover:bg-indigo-500 min-[1440px]:hidden"
+            className="flex min-h-8 items-center gap-1 rounded-lg bg-indigo-600 px-2.5 py-1 text-xs font-semibold text-white shadow-xs transition hover:bg-indigo-500 active:scale-95"
+            title="Subir nuevo documento PDF"
           >
-            <span className="material-symbols-outlined text-sm" aria-hidden="true">
+            <span className="material-symbols-outlined text-[15px]" aria-hidden="true">
               add
             </span>
             <span>Subir PDF</span>
@@ -359,7 +380,7 @@ export function Sidebar({
               <div className="flex flex-col gap-2.5">
                 {categoriesConfig.map((category) => {
                   const items = value.artifacts.filter(
-                    (a) => savedArtifactIds.has(a.id) && a.kind === category.kind
+                    (a) => a.kind === category.kind
                   );
                   const isCollapsed = collapsedCategories[category.kind] ?? false;
 
@@ -403,6 +424,7 @@ export function Sidebar({
                           ) : (
                             items.map((artifact) => {
                               const isSelected = selectedArtifactId === artifact.id;
+                              const isSaved = savedArtifactIds.has(artifact.id);
                               return (
                                 <div
                                   key={artifact.id}
@@ -451,6 +473,11 @@ export function Sidebar({
                                     <span className="truncate block min-w-0 flex-1 text-xs font-medium leading-snug">
                                       {artifact.title}
                                     </span>
+                                    {isSaved && (
+                                      <span className="material-symbols-outlined text-[13px] text-amber-500 shrink-0" title="Favorito guardado">
+                                        star
+                                      </span>
+                                    )}
                                   </button>
 
                                   {onRequestDeleteArtifact && (

@@ -53,6 +53,7 @@ interface ChatProps {
   readonly theme?: "dark" | "light" | undefined;
   readonly isMaximized?: boolean | undefined;
   readonly onToggleMaximize?: (() => void) | undefined;
+  readonly onOpenProfile?: (() => void) | undefined;
   readonly onClose?: (() => void) | undefined;
 }
 
@@ -64,6 +65,12 @@ type ChatItem =
       readonly message: AgentMessage & { readonly role: "assistant" };
       readonly associatedTools?: readonly AgentMessage[] | undefined;
     };
+
+interface AssistantReveal {
+  readonly id: number;
+  readonly content: string;
+  readonly visibleLength: number;
+}
 
 interface ParsedUserDoc {
   readonly id?: string | undefined;
@@ -271,12 +278,14 @@ export function Chat({
   theme = "dark",
   isMaximized = false,
   onToggleMaximize,
+  onOpenProfile,
   onClose
 }: ChatProps = {}) {
   const isLight = theme === "light";
   const [messages, setMessages] = useState<readonly AgentMessage[]>([]);
   const [input, setInput] = useState("");
   const [isSending, setIsSending] = useState(false);
+  const [assistantReveal, setAssistantReveal] = useState<AssistantReveal | null>(null);
   const [error, setError] = useState<string | undefined>();
   const [tutorMode, setTutorMode] = useState<TutorMode>("explanatory");
 
@@ -288,6 +297,7 @@ export function Chat({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const assistantRevealIdRef = useRef(0);
   const refreshArtifacts = useAtomRefresh(artifactsQuery);
   const refreshMaterials = useAtomRefresh(materialsQuery);
   const refreshKnowledge = useAtomRefresh(knowledgeProfileQuery);
@@ -623,20 +633,48 @@ export function Chat({
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages, isSending]);
+  }, [messages, isSending, assistantReveal?.visibleLength]);
+
+  const isTutorWriting = assistantReveal !== null;
+
+  useEffect(() => {
+    if (!assistantReveal) return;
+
+    if (assistantReveal.visibleLength >= assistantReveal.content.length) {
+      const finishTimer = window.setTimeout(() => setAssistantReveal(null), 420);
+      return () => window.clearTimeout(finishTimer);
+    }
+
+    // Reveal a few characters at a time. The short cadence feels like writing
+    // while keeping long answers quick enough to read during a demo.
+    const revealTimer = window.setTimeout(() => {
+      setAssistantReveal((current) => {
+        if (!current || current.id !== assistantReveal.id) return current;
+        const increment = Math.max(3, Math.min(10, Math.ceil(current.content.length / 120)));
+        return {
+          ...current,
+          visibleLength: Math.min(current.content.length, current.visibleLength + increment)
+        };
+      });
+    }, 18);
+
+    return () => window.clearTimeout(revealTimer);
+  }, [assistantReveal]);
 
   const submit = async (nextInput: string) => {
     const trimmed = nextInput.trim();
-    if ((trimmed.length === 0 && attachedDocs.length === 0) || isSending) {
+    if ((trimmed.length === 0 && attachedDocs.length === 0) || isSending || isTutorWriting) {
       return;
     }
 
     const finalPrompt = trimmed || "Explícame los conceptos clave de este documento.";
     const activeMaterialIds = attachedDocs.map((d) => d.id);
     const documentReferences = attachedDocs.map((d) => d.title);
+    const optimisticUserMessage: AgentMessage = { role: "user", content: finalPrompt };
 
     setAttachedDocs([]);
     setInput("");
+    setMessages((current) => [...current, optimisticUserMessage]);
     setIsSending(true);
     setError(undefined);
     pendingInvalidations.current = [];
@@ -655,7 +693,21 @@ export function Chat({
         }
 
         const message = event.message;
-        setMessages((current) => [...current, message]);
+        // The user's message is rendered optimistically above so the turn
+        // feels immediate. The server echoes it as the first stream event.
+        if (message.role !== "user") {
+          setMessages((current) => [...current, message]);
+        }
+
+        if (message.role === "assistant") {
+          const revealId = assistantRevealIdRef.current + 1;
+          assistantRevealIdRef.current = revealId;
+          setAssistantReveal({
+            id: revealId,
+            content: message.content,
+            visibleLength: 0
+          });
+        }
 
         if (message.role === "tool-call") {
           pendingInvalidations.current.push(invalidationsForToolCall(message));
@@ -758,13 +810,42 @@ export function Chat({
                 con IA
               </span>
             </div>
-            <p className={`text-[11px] mt-0.5 ${isLight ? "text-slate-500" : "text-slate-400"}`}>
-              Pregunta, repasa y practica con tus materiales
-            </p>
+            <div className="mt-1 flex items-center gap-2">
+              <p className={`text-[11px] ${isLight ? "text-slate-500" : "text-slate-400"}`}>
+                Pregunta, repasa y practica con tus materiales
+              </p>
+              <span
+                className={`hidden items-center gap-1 text-[10px] sm:flex ${
+                  isTutorWriting || isSending
+                    ? "text-indigo-500"
+                    : isLight
+                      ? "text-emerald-600"
+                      : "text-emerald-400"
+                }`}
+              >
+                <span className={`size-1.5 rounded-full ${isTutorWriting || isSending ? "animate-pulse bg-indigo-500" : "bg-emerald-500"}`} />
+                {isTutorWriting ? "Escribiendo" : isSending ? "Pensando" : "En línea"}
+              </span>
+            </div>
           </div>
         </div>
 
         <div className="flex items-center gap-1.5">
+          {onOpenProfile && (
+            <button
+              type="button"
+              onClick={onOpenProfile}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl border text-xs font-semibold transition-all duration-150 active:scale-95 ${
+                isLight
+                  ? "border-purple-200 bg-purple-50 hover:bg-purple-100/80 text-purple-700 shadow-2xs"
+                  : "border-purple-800/60 bg-purple-950/40 hover:bg-purple-900/50 text-purple-300 shadow-2xs"
+              }`}
+              title="Personalización: ver o editar lo que el tutor sabe de ti"
+            >
+              <span className="material-symbols-outlined text-[15px] text-purple-500">psychology</span>
+              <span className="hidden sm:inline">Personalizado</span>
+            </button>
+          )}
 
           {onToggleMaximize && (
             <button
@@ -804,7 +885,10 @@ export function Chat({
                 : "border-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-900"
             } disabled:opacity-30 disabled:cursor-not-allowed`}
             type="button"
-            onClick={() => setMessages([])}
+            onClick={() => {
+              setMessages([]);
+              setAssistantReveal(null);
+            }}
             disabled={messages.length === 0}
             title="Limpiar conversación"
             aria-label="Limpiar conversación"
@@ -835,7 +919,12 @@ export function Chat({
       </header>
 
       {/* Messages Scroll Area */}
-      <section className="flex flex-col gap-4 overflow-y-auto p-4 sm:p-6" aria-live="polite">
+      <section
+        className={`chat-message-scroll relative flex flex-col gap-4 overflow-y-auto p-4 sm:p-6 ${
+          isLight ? "bg-slate-50/80" : "bg-[#090d16]"
+        }`}
+        aria-live="polite"
+      >
         {messages.length === 0 ? (
           <div className="m-auto w-full max-w-2xl text-center py-6">
             <div className="mx-auto mb-4 grid size-12 place-items-center rounded-xl border border-indigo-500/20 bg-indigo-600/10 text-indigo-500">
@@ -954,111 +1043,142 @@ export function Chat({
               );
             }
 
+            const isCurrentlyWriting =
+              isTutorWriting &&
+              index === groupedItems.length - 1 &&
+              item.message.content === assistantReveal?.content;
+
             return (
-              <article key={index} className="ui-enter flex flex-col gap-1.5 max-w-3xl self-start items-start w-full">
-                <div className="flex items-center gap-2 px-1">
-                  <span className={`text-[11px] font-mono font-semibold uppercase tracking-wider ${
-                    isLight ? "text-slate-500" : "text-slate-400"
-                  }`}>
-                    Tutor
-                  </span>
+              <article key={index} className="ui-enter flex max-w-3xl self-start items-start gap-2.5">
+                <div
+                  className={`mt-1 grid size-8 shrink-0 place-items-center rounded-xl border ${
+                    isLight
+                      ? "border-indigo-200 bg-indigo-50 text-indigo-600"
+                      : "border-indigo-500/20 bg-indigo-500/10 text-indigo-300"
+                  }`}
+                  aria-hidden="true"
+                >
+                  <span className="material-symbols-outlined text-[17px]">school</span>
                 </div>
 
-                <div
-                  className={`w-full rounded-xl rounded-bl-sm border p-5 transition-colors sm:p-6 ${
-                    isLight
-                      ? "bg-white border-slate-200 text-slate-800"
-                      : "bg-slate-900/90 border-slate-800 text-slate-100"
-                  }`}
-                >
-                  <div className="prose dark:prose-invert max-w-none text-sm space-y-2">
-                    <Streamdown>{item.message.content}</Streamdown>
+                <div className="min-w-0 flex-1">
+                  <div className="mb-1 flex items-center gap-2 px-1">
+                    <span className={`text-[11px] font-semibold ${
+                      isLight ? "text-slate-600" : "text-slate-300"
+                    }`}>
+                      Tutor
+                    </span>
+                    {isCurrentlyWriting ? (
+                      <span className="flex items-center gap-1 text-[10px] text-indigo-500">
+                        <span className="size-1.5 animate-pulse rounded-full bg-indigo-500" />
+                        escribiendo
+                      </span>
+                    ) : (
+                      <span className={`text-[10px] ${isLight ? "text-slate-400" : "text-slate-500"}`}>
+                        ahora
+                      </span>
+                    )}
                   </div>
 
-                  {/* Interactive Artifact Cards (if artifacts were created/referenced) */}
-                  {(() => {
-                    const uuidRegex = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
-                    const textMatches = item.message.content.match(uuidRegex) ?? [];
-                    const toolMatches: string[] = [];
-                    if (item.associatedTools) {
-                      for (const t of item.associatedTools) {
-                        try {
-                          const str = JSON.stringify(t);
-                          const m = str.match(uuidRegex);
-                          if (m) toolMatches.push(...m);
-                        } catch {
-                          // ignore
+                  <div
+                    className={`w-fit max-w-full rounded-2xl rounded-bl-sm border p-4 transition-colors sm:p-5 ${
+                      isLight
+                        ? "bg-white border-slate-200 text-slate-800 shadow-sm"
+                        : "bg-slate-900/90 border-slate-800 text-slate-100 shadow-lg shadow-black/10"
+                    }`}
+                  >
+                    <div className="prose dark:prose-invert max-w-none text-sm space-y-2">
+                      <Streamdown>
+                        {isCurrentlyWriting
+                          ? item.message.content.slice(0, assistantReveal?.visibleLength ?? 0)
+                          : item.message.content}
+                      </Streamdown>
+                      {isCurrentlyWriting && (
+                        <span
+                          aria-label="El tutor está escribiendo"
+                          className="ui-typing-caret ml-0.5 inline-block h-[1.05em] w-[2px] translate-y-[0.16em] rounded-full bg-indigo-500 align-baseline"
+                        />
+                      )}
+                    </div>
+
+                    {/* Interactive Artifact Cards (if artifacts were created/referenced) */}
+                    {(() => {
+                      const uuidRegex = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
+                      const textMatches = item.message.content.match(uuidRegex) ?? [];
+                      const toolMatches: string[] = [];
+                      if (item.associatedTools) {
+                        for (const t of item.associatedTools) {
+                          try {
+                            const str = JSON.stringify(t);
+                            const m = str.match(uuidRegex);
+                            if (m) toolMatches.push(...m);
+                          } catch {
+                            // ignore
+                          }
                         }
                       }
-                    }
-                    const artifactIds = Array.from(new Set([...textMatches, ...toolMatches]));
-                    if (artifactIds.length === 0) return null;
-                    return (
-                      <div className="flex flex-col gap-2.5 my-3">
-                        {artifactIds.map((artId) => (
-                          <ArtifactChatCard
-                            key={artId}
-                            artifactId={artId}
-                            onOpenInWorkspace={(id) => onSelectArtifact?.(id)}
-                            onOpenMindMap={onOpenMindMap}
-                            isLight={isLight}
-                          />
-                        ))}
-                      </div>
-                    );
-                  })()}
+                      const artifactIds = Array.from(new Set([...textMatches, ...toolMatches]));
+                      if (artifactIds.length === 0) return null;
+                      return (
+                        <div className="flex flex-col gap-2.5 my-3">
+                          {artifactIds.map((artId) => (
+                            <ArtifactChatCard
+                              key={artId}
+                              artifactId={artId}
+                              onOpenInWorkspace={(id) => onSelectArtifact?.(id)}
+                              onOpenMindMap={onOpenMindMap}
+                              isLight={isLight}
+                            />
+                          ))}
+                        </div>
+                      );
+                    })()}
 
-                  {/* Quick Action Buttons */}
-                  {index === groupedItems.length - 1 && (
-                    <div
-                      className={`mt-4 flex flex-wrap items-center gap-2 border-t pt-3 ${
-                        isLight ? "border-slate-100" : "border-slate-800/80"
-                      }`}
-                    >
-                      <span className="mr-1 text-[11px] font-medium text-slate-400">Continuar con</span>
-                      {onOpenMindMap && (
-                        <button
-                          type="button"
-                          onClick={() => onOpenMindMap()}
-                          className={`flex min-h-9 items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold shadow-sm transition ${
-                            isLight
-                              ? "border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100"
-                              : "border-indigo-800/50 bg-indigo-950/60 text-indigo-300 hover:bg-indigo-900/60"
-                          }`}
-                        >
-                          <span className="material-symbols-outlined text-xs" aria-hidden="true">schema</span>
-                          <span>Ver esquema</span>
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => void submit("Genera un quiz de 5 preguntas basado en esta explicación.")}
-                        className={`flex min-h-9 items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition ${
-                          isLight
-                            ? "border-slate-200 bg-slate-100 text-slate-700 hover:bg-slate-200"
-                            : "border-slate-700/60 bg-slate-800/80 text-slate-200 hover:bg-slate-800"
+                    {/* Quick Action Buttons */}
+                    {index === groupedItems.length - 1 && !isCurrentlyWriting && (
+                      <div
+                        className={`mt-4 flex flex-wrap items-center gap-2 border-t pt-3 ${
+                          isLight ? "border-slate-100" : "border-slate-800/80"
                         }`}
                       >
-                        <span className="material-symbols-outlined text-xs" aria-hidden="true">quiz</span>
-                        <span>Crear quiz</span>
-                      </button>
-                    </div>
-                  )}
+                        <span className="mr-1 text-[11px] font-medium text-slate-400">Continuar con</span>
+                        {onOpenMindMap && (
+                          <button
+                            type="button"
+                            onClick={() => onOpenMindMap()}
+                            className={`flex min-h-9 items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold shadow-sm transition ${
+                              isLight
+                                ? "border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100"
+                                : "border-indigo-800/50 bg-indigo-950/60 text-indigo-300 hover:bg-indigo-900/60"
+                            }`}
+                          >
+                            <span className="material-symbols-outlined text-xs" aria-hidden="true">schema</span>
+                            <span>Ver esquema</span>
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => void submit("Genera un quiz de 5 preguntas basado en esta explicación.")}
+                          className={`flex min-h-9 items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition ${
+                            isLight
+                              ? "border-slate-200 bg-slate-100 text-slate-700 hover:bg-slate-200"
+                              : "border-slate-700/60 bg-slate-800/80 text-slate-200 hover:bg-slate-800"
+                          }`}
+                        >
+                          <span className="material-symbols-outlined text-xs" aria-hidden="true">quiz</span>
+                          <span>Crear quiz</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </article>
             );
           })
         )}
 
-        {isSending && groupedItems.length > 0 && groupedItems.at(-1)?.kind !== "tools" && (
-          <div className={`ui-enter flex max-w-xs items-center gap-2.5 rounded-xl border p-3.5 text-xs ${
-            isLight
-              ? "bg-indigo-50 border-indigo-200 text-indigo-700"
-              : "bg-indigo-950/40 border-indigo-800/40 text-indigo-300"
-          }`}>
-            <div className="size-3.5 animate-spin rounded-full border-2 border-indigo-500 border-t-transparent"></div>
-            <span>El tutor está preparando tu respuesta…</span>
-          </div>
+        {isSending && !isTutorWriting && groupedItems.at(-1)?.kind !== "tools" && (
+          <TutorThinkingBubble isLight={isLight} />
         )}
 
         <div ref={messagesEndRef} />
@@ -1705,9 +1825,9 @@ export function Chat({
               {/* Send Button */}
               <button
                 type="submit"
-                disabled={isSending || (input.trim().length === 0 && attachedDocs.length === 0)}
+                disabled={isSending || isTutorWriting || (input.trim().length === 0 && attachedDocs.length === 0)}
                 className={`grid size-8 place-items-center rounded-xl transition ${
-                  (input.trim().length > 0 || attachedDocs.length > 0) && !isSending
+                  (input.trim().length > 0 || attachedDocs.length > 0) && !isSending && !isTutorWriting
                     ? "bg-indigo-600 text-white hover:bg-indigo-500 shadow-md shadow-indigo-600/30"
                     : isLight
                     ? "bg-slate-100 text-slate-400 hover:bg-slate-200"
@@ -1723,6 +1843,39 @@ export function Chat({
         </form>
       </footer>
     </section>
+  );
+}
+
+function TutorThinkingBubble({ isLight }: { readonly isLight: boolean }) {
+  return (
+    <div className="ui-enter flex items-start gap-2.5" aria-label="El tutor está pensando" role="status">
+      <div
+        className={`mt-1 grid size-8 shrink-0 place-items-center rounded-xl border ${
+          isLight
+            ? "border-indigo-200 bg-indigo-50 text-indigo-600"
+            : "border-indigo-500/20 bg-indigo-500/10 text-indigo-300"
+        }`}
+        aria-hidden="true"
+      >
+        <span className="material-symbols-outlined text-[17px]">school</span>
+      </div>
+      <div
+        className={`rounded-2xl rounded-bl-sm border px-4 py-3 text-xs ${
+          isLight
+            ? "border-slate-200 bg-white text-slate-500 shadow-sm"
+            : "border-slate-800 bg-slate-900/90 text-slate-400"
+        }`}
+      >
+        <div className="flex items-center gap-2">
+          <span>El tutor está pensando</span>
+          <span className="flex items-center gap-1" aria-hidden="true">
+            <span className="ui-thinking-dot" />
+            <span className="ui-thinking-dot ui-thinking-dot--2" />
+            <span className="ui-thinking-dot ui-thinking-dot--3" />
+          </span>
+        </div>
+      </div>
+    </div>
   );
 }
 

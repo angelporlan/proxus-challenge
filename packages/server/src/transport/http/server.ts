@@ -10,6 +10,7 @@ import { TutorChatService, TutorChatServiceLive } from "../../domain/agents/acad
 import { FileArtifactRepository } from "../../infra/artifacts/file-artifact-repository.ts";
 import { FileKnowledgeRepository } from "../../infra/knowledge/file-knowledge-repository.ts";
 import { FileMaterialRepository } from "../../infra/materials/file-material-repository.ts";
+import { FileUserProfileRepository } from "../../infra/user-profile/file-user-profile-repository.ts";
 import { MaterialRepository } from "../../domain/materials/material.ts";
 import { PopplerPdfService } from "../../infra/materials/poppler-pdf-service.ts";
 import { HttpHandlersLive } from "./handlers.ts";
@@ -77,6 +78,7 @@ const DomainLive = Layer.mergeAll(
 );
 
 const KnowledgeLayer = FileKnowledgeRepository.layer(".data/knowledge");
+const UserProfileLayer = FileUserProfileRepository.layer(".data");
 
 const InfraLive = Layer.mergeAll(
   FileMaterialRepository.layer(".data/materials/pdfs").pipe(
@@ -85,7 +87,8 @@ const InfraLive = Layer.mergeAll(
   FileArtifactRepository.layer(".data/artifacts").pipe(
     Layer.provide(KnowledgeLayer)
   ),
-  KnowledgeLayer
+  KnowledgeLayer,
+  UserProfileLayer
 );
 
 export const HttpServerLive = HttpRouter.serve(Routes).pipe(

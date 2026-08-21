@@ -44,6 +44,13 @@ import {
 import { deleteArtifactAction } from "./domain/artifacts/atoms.ts";
 import { knowledgeProfileQuery } from "./domain/knowledge/atoms.ts";
 import { setArtifactSaved } from "./domain/artifacts/saved-artifacts.ts";
+import {
+  clearUserProfileAction,
+  saveUserProfileAction,
+  userProfileQuery
+} from "./domain/user-profile/atoms.ts";
+import { ConversationalOnboarding } from "./components/ConversationalOnboarding.tsx";
+import { UserProfileModal } from "./components/UserProfileModal.tsx";
 
 type ActiveTab = "workspace" | "mindmap" | "pdf" | "gaps";
 type Theme = "dark" | "light";
@@ -93,6 +100,13 @@ export function App() {
 
   const deleteMaterial = useAtomSet(deleteMaterialAction, { mode: "promise" });
   const materialsResult = useAtomValue(materialsQuery);
+  const userProfileResult = useAtomValue(userProfileQuery);
+  const saveUserProfile = useAtomSet(saveUserProfileAction, { mode: "promise" });
+  const clearUserProfile = useAtomSet(clearUserProfileAction, { mode: "promise" });
+  const [isUserProfileModalOpen, setIsUserProfileModalOpen] = useState(false);
+  const [hasSkippedOnboarding, setHasSkippedOnboarding] = useState(
+    () => typeof window !== "undefined" && sessionStorage.getItem("proxus_skipped_onboarding") === "true"
+  );
   const { notify } = useToast();
   const deleteTriggerRef = useRef<HTMLButtonElement>(null);
   const deleteSuccessFocusRef = useRef<HTMLElement | null>(null);
@@ -155,6 +169,22 @@ export function App() {
       }),
     [materialsResult]
   );
+
+  const userProfile = useMemo(
+    () =>
+      AsyncResult.match(userProfileResult, {
+        onInitial: () => null,
+        onFailure: () => null,
+        onSuccess: ({ value }) => value
+      }),
+    [userProfileResult]
+  );
+
+  const shouldShowOnboarding =
+    userProfile !== null &&
+    !userProfile.onboardingCompleted &&
+    !hasSkippedOnboarding;
+
 
   useEffect(() => {
     document.documentElement.classList.toggle("light", isLight);
@@ -514,6 +544,7 @@ export function App() {
           onRequestDeleteArtifact={requestDeleteArtifact}
           deletingMaterialId={isDeleting ? pendingDeletion?.id ?? null : null}
           recentlyUploadedId={recentlyUploadedId}
+          onOpenProfile={() => setIsUserProfileModalOpen(true)}
           theme={theme}
         />
       </ResponsivePanel>
@@ -546,63 +577,46 @@ export function App() {
           isTutorOpen ? "border-r" : "border-r-0"
         } min-[1440px]:min-w-[640px] ${isLight ? "border-slate-200 bg-slate-50/70" : "border-slate-800 bg-slate-950/70"}`}
       >
-        <header className={`flex shrink-0 items-center justify-between gap-3 border-b px-3 py-2.5 pr-14 sm:px-4 min-[1440px]:pr-4 ${isLight ? "border-slate-200 bg-white/95" : "border-slate-800 bg-slate-900/90"}`}>
-          <div className="flex min-w-0 items-center gap-2">
-            <IconButton ref={libraryFallbackRef} label="Abrir biblioteca" variant="ghost" className="min-[1440px]:hidden" onClick={openLibrary} aria-expanded={isLibraryOpen}>
+        <header className={`flex shrink-0 items-center justify-between gap-2 border-b px-3 py-2 sm:px-4 ${isLight ? "border-slate-200 bg-white/95" : "border-slate-800 bg-slate-900/90"}`}>
+          <div className="flex min-w-0 items-center gap-1.5 sm:gap-2">
+            <IconButton ref={libraryFallbackRef} label="Abrir biblioteca" variant="ghost" className="min-[1440px]:hidden shrink-0" onClick={openLibrary} aria-expanded={isLibraryOpen}>
               <span className="material-symbols-outlined text-[18px]">menu</span>
             </IconButton>
-            <div role="tablist" aria-label="Vistas del espacio de estudio" className={`flex items-center gap-0.5 rounded-xl border p-1 text-xs ${isLight ? "border-slate-200 bg-slate-100" : "border-slate-800 bg-slate-950"}`}>
+            <div role="tablist" aria-label="Vistas del espacio de estudio" className={`flex items-center gap-0.5 rounded-xl border p-1 text-xs shrink-0 overflow-x-auto ${isLight ? "border-slate-200 bg-slate-100" : "border-slate-800 bg-slate-950"}`}>
               <WorkspaceTab id="workspace" label="Estudio" icon="school" active={activeTab === "workspace"} onClick={() => changeTab("workspace")} onKeyDown={handleTabKeyDown} isLight={isLight} />
-              <WorkspaceTab id="gaps" label={activeGapsCount > 0 ? `Lagunas (${activeGapsCount})` : "Lagunas"} icon="psychology_alt" active={activeTab === "gaps"} onClick={() => changeTab("gaps")} onKeyDown={handleTabKeyDown} isLight={isLight} />
+              <WorkspaceTab id="gaps" label="Lagunas" badge={activeGapsCount} icon="psychology_alt" active={activeTab === "gaps"} onClick={() => changeTab("gaps")} onKeyDown={handleTabKeyDown} isLight={isLight} />
               <WorkspaceTab id="mindmap" label="Esquema" icon="schema" active={activeTab === "mindmap"} onClick={() => changeTab("mindmap")} onKeyDown={handleTabKeyDown} isLight={isLight} />
               <WorkspaceTab id="pdf" label="PDF" icon="picture_as_pdf" active={activeTab === "pdf"} disabled={!hasMaterials} onClick={() => changeTab("pdf")} onKeyDown={handleTabKeyDown} isLight={isLight} />
             </div>
           </div>
 
-          <div className="flex shrink-0 items-center gap-1.5">
+          <div className="flex shrink-0 items-center gap-1 sm:gap-1.5">
             {selectedArtifactId && activeTab === "workspace" && (
-              <IconButton label="Cerrar recurso" variant="ghost" onClick={() => setSelectedArtifactId(null)}>
+              <IconButton label="Cerrar recurso" variant="ghost" onClick={() => setSelectedArtifactId(null)} className="shrink-0">
                 <span className="material-symbols-outlined text-[18px]">close</span>
               </IconButton>
             )}
-            <button type="button" onClick={() => setIsUploadOpen(true)} className="ui-primary-action">
-              <span className="material-symbols-outlined text-[17px]">upload_file</span>
-              <span className="hidden sm:inline">Subir PDF</span>
-            </button>
-            <button
-              type="button"
-              onClick={handleOpenFullscreenChat}
-              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-semibold transition ${
-                isLight
-                  ? "border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 shadow-sm"
-                  : "border-indigo-800/80 bg-indigo-950/50 text-indigo-300 hover:bg-indigo-900/60"
-              }`}
-              title="Abrir Tutor en Modo Chat Completo (Pantalla Completa)"
-            >
-              <span className="material-symbols-outlined text-[17px]">open_in_full</span>
-              <span className="hidden sm:inline">Modo Chat</span>
-            </button>
-            <IconButton label={isLight ? "Cambiar a modo oscuro" : "Cambiar a modo claro"} variant="ghost" onClick={toggleTheme}>
+            <IconButton label={isLight ? "Cambiar a modo oscuro" : "Cambiar a modo claro"} variant="ghost" onClick={toggleTheme} className="shrink-0">
               <span className="material-symbols-outlined text-[18px]">{isLight ? "dark_mode" : "light_mode"}</span>
             </IconButton>
             <button
               ref={tutorFallbackRef}
               type="button"
               onClick={() => (isTutorOpen ? closeTutor() : openTutor())}
-              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-semibold transition ${
+              className={`flex min-h-8 items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-semibold transition-all duration-150 active:scale-95 shrink-0 ${
                 isTutorOpen
                   ? isLight
-                    ? "border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 shadow-xs"
-                    : "border-indigo-800/80 bg-indigo-950/50 text-indigo-300 hover:bg-indigo-900/60"
+                    ? "border-purple-200 bg-purple-50 text-purple-700 shadow-2xs"
+                    : "border-purple-800/80 bg-purple-950/50 text-purple-300 shadow-2xs"
                   : isLight
-                  ? "border-slate-200 text-slate-700 hover:text-slate-900 hover:bg-slate-100 shadow-xs"
-                  : "border-slate-800 text-slate-300 hover:text-slate-100 hover:bg-slate-800/80"
+                  ? "border-slate-200 text-slate-700 hover:text-slate-900 hover:bg-slate-100 shadow-2xs"
+                  : "border-slate-800 text-slate-300 hover:text-slate-100 hover:bg-slate-800/80 shadow-2xs"
               }`}
               title={isTutorOpen ? "Ocultar Tutor de estudio" : "Mostrar Tutor de estudio"}
               aria-expanded={isTutorOpen}
             >
-              <span className="material-symbols-outlined text-[17px]">forum</span>
-              <span className="hidden sm:inline">{isTutorOpen ? "Ocultar Tutor" : "Tutor"}</span>
+              <span className="material-symbols-outlined text-[17px] text-purple-500">forum</span>
+              <span className="hidden xl:inline">{isTutorOpen ? "Ocultar Tutor" : "Tutor"}</span>
             </button>
           </div>
         </header>
@@ -702,6 +716,7 @@ export function App() {
           theme={theme}
           isMaximized={false}
           onToggleMaximize={handleOpenFullscreenChat}
+          onOpenProfile={() => setIsUserProfileModalOpen(true)}
         />
       </ResponsivePanel>
 
@@ -745,10 +760,47 @@ export function App() {
               theme={theme}
               isMaximized={true}
               onToggleMaximize={handleCloseFullscreenChat}
+              onOpenProfile={() => setIsUserProfileModalOpen(true)}
             />
           </div>
         </div>
       )}
+
+      {/* Conversational Onboarding for New Students */}
+      {shouldShowOnboarding && (
+        <ConversationalOnboarding
+          currentProfile={userProfile}
+          onComplete={async (updated) => {
+            await saveUserProfile(updated);
+            setHasSkippedOnboarding(false);
+            sessionStorage.removeItem("proxus_skipped_onboarding");
+            notify({ title: "¡Perfil configurado! El tutor ha adaptado su memoria.", tone: "success" });
+          }}
+          onSkip={() => {
+            setHasSkippedOnboarding(true);
+            sessionStorage.setItem("proxus_skipped_onboarding", "true");
+          }}
+          theme={theme}
+        />
+      )}
+
+      {/* User Profile & Memory Settings Modal */}
+      <UserProfileModal
+        isOpen={isUserProfileModalOpen}
+        onClose={() => setIsUserProfileModalOpen(false)}
+        profile={userProfile}
+        onSave={async (updated) => {
+          await saveUserProfile(updated);
+          notify({ title: "Perfil de aprendizaje actualizado", tone: "success" });
+        }}
+        onClearMemory={async () => {
+          await clearUserProfile();
+          setHasSkippedOnboarding(false);
+          sessionStorage.removeItem("proxus_skipped_onboarding");
+          notify({ title: "Memoria del tutor reiniciada correctamente", tone: "success" });
+        }}
+        theme={theme}
+      />
 
       <DocumentUploadModal isOpen={isUploadOpen} onClose={() => setIsUploadOpen(false)} onUploaded={handleUploaded} />
 
@@ -771,19 +823,50 @@ export function App() {
   );
 }
 
-function WorkspaceTab({ id, label, icon, active, disabled = false, onClick, onKeyDown, isLight }: {
+function WorkspaceTab({ id, label, icon, active, disabled = false, badge, onClick, onKeyDown, isLight }: {
   readonly id: ActiveTab;
   readonly label: string;
   readonly icon: string;
   readonly active: boolean;
   readonly disabled?: boolean;
+  readonly badge?: number | undefined;
   readonly onClick: () => void;
   readonly onKeyDown: (event: ReactKeyboardEvent<HTMLButtonElement>) => void;
   readonly isLight: boolean;
 }) {
   return (
-    <button id={`workspace-tab-${id}`} type="button" role="tab" aria-controls="workspace-panel" aria-selected={active} tabIndex={active ? 0 : -1} disabled={disabled} onClick={onClick} onKeyDown={onKeyDown} className={`flex min-h-8 items-center gap-1.5 rounded-lg px-2.5 py-1.5 font-medium transition-colors disabled:opacity-40 ${active ? "bg-indigo-600 text-white" : isLight ? "text-slate-600 hover:bg-white hover:text-slate-900" : "text-slate-400 hover:bg-slate-900 hover:text-slate-100"}`}>
-      <span className="material-symbols-outlined text-[16px]">{icon}</span><span>{label}</span>
+    <button
+      id={`workspace-tab-${id}`}
+      type="button"
+      role="tab"
+      aria-controls="workspace-panel"
+      aria-selected={active}
+      tabIndex={active ? 0 : -1}
+      disabled={disabled}
+      onClick={onClick}
+      onKeyDown={onKeyDown}
+      title={badge && badge > 0 ? `${label} (${badge})` : label}
+      className={`flex min-h-8 items-center gap-1.5 rounded-lg px-2 sm:px-2.5 py-1.5 text-xs font-medium transition-all duration-150 disabled:opacity-40 shrink-0 ${
+        active
+          ? "bg-indigo-600 text-white shadow-xs font-semibold"
+          : isLight
+          ? "text-slate-600 hover:bg-white hover:text-slate-900"
+          : "text-slate-400 hover:bg-slate-900 hover:text-slate-100"
+      }`}
+    >
+      <span className="material-symbols-outlined text-[16px] shrink-0">{icon}</span>
+      <span className="hidden sm:inline">{label}</span>
+      {badge !== undefined && badge > 0 && (
+        <span
+          className={`rounded-full px-1.5 py-0.2 text-[10px] font-bold ${
+            active
+              ? "bg-white/25 text-white"
+              : "bg-red-500/15 text-red-500 dark:bg-red-500/20 dark:text-red-400"
+          }`}
+        >
+          {badge}
+        </span>
+      )}
     </button>
   );
 }

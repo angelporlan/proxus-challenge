@@ -5,6 +5,7 @@ import { TutorChatService } from "../../domain/agents/academic-tutor/tutor-chat-
 import { ArtifactRepository, type Artifact } from "../../domain/artifacts/artifact.ts";
 import { MaterialRepository } from "../../domain/materials/material.ts";
 import { KnowledgeRepository } from "../../domain/knowledge/knowledge-profile.ts";
+import { UserProfileRepository } from "../../domain/user-profile/user-profile.ts";
 
 // ---------------------------------------------------------------------------
 // Domain error → descriptive die messages
@@ -188,9 +189,37 @@ export const KnowledgeHttpHandlers = HttpApiBuilder.group(
   })
 );
 
+export const UserProfileHttpHandlers = HttpApiBuilder.group(
+  ProxusApi,
+  "userProfile",
+  Effect.fn(function* (handlers) {
+    const userProfile = yield* UserProfileRepository;
+
+    return handlers
+      .handle("getProfile", () =>
+        userProfile.getProfile().pipe(
+          Effect.catch((error) => Effect.die(error instanceof Error ? error : new Error(String(error))))
+        )
+      )
+      .handle("saveProfile", ({ payload }) =>
+        userProfile.saveProfile(payload).pipe(
+          Effect.catch((error) => Effect.die(error instanceof Error ? error : new Error(String(error))))
+        )
+      )
+      .handle("clearProfile", () =>
+        userProfile.clearProfile().pipe(
+          Effect.map(() => ({ success: true })),
+          Effect.catch((error) => Effect.die(error instanceof Error ? error : new Error(String(error))))
+        )
+      );
+  })
+);
+
 export const HttpHandlersLive = Layer.mergeAll(
   TutorHttpHandlers,
   MaterialsHttpHandlers,
   ArtifactsHttpHandlers,
-  KnowledgeHttpHandlers
+  KnowledgeHttpHandlers,
+  UserProfileHttpHandlers
 );
+
