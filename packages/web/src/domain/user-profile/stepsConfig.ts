@@ -80,20 +80,20 @@ export const ONBOARDING_STEPS: readonly OnboardingStep[] = [
     ]
   },
   {
-    id: "step_goal",
-    question: "¿Cuál es tu principal objetivo ahora mismo?",
-    subtitle: "Para que cada ejercicio y explicación sume hacia tu meta.",
-    type: "chips_with_other",
-    profileField: "goal",
-    labelField: "goalLabel",
+    id: "step_help_preference",
+    question: "¿Cómo quieres que te ayude cuando no entiendas algo?",
+    subtitle: "Así adapto mi forma de intervenir y explicarte los conceptos difíciles.",
+    type: "chips",
+    profileField: "helpPreference",
+    labelField: "helpPreferenceLabel",
     required: true,
     options: [
-      { id: "pass_next_exam", label: "Aprobar mi próximo examen", icon: "flag" },
-      { id: "improve_grades", label: "Mejorar mis notas", icon: "star" },
-      { id: "understand_subject", label: "Entender mejor una asignatura", icon: "auto_stories" },
-      { id: "prepare_civil_service", label: "Preparar una oposición", icon: "workspace_premium" },
-      { id: "build_study_habit", label: "Crear un hábito de estudio", icon: "fitness_center" },
-      { id: "other", label: "Otro", icon: "edit_note" }
+      { id: "step_by_step", label: "Explícamelo paso a paso", icon: "format_list_numbered" },
+      { id: "examples", label: "Ponme un ejemplo", icon: "science" },
+      { id: "simple", label: "Explícamelo de forma sencilla", icon: "lightbulb" },
+      { id: "guided_questions", label: "Hazme preguntas para que lo descubra", icon: "quiz" },
+      { id: "direct", label: "Ve directo al grano", icon: "bolt" },
+      { id: "not_sure", label: "No estoy seguro", icon: "help_outline" }
     ]
   }
 ] as const;

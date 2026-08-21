@@ -36,8 +36,8 @@ export const TutorChatServiceLive = Layer.effect(
       const totalMaterialsCount = materialsList.length;
 
       let userProfileContext = "";
-      if (userProfile && (userProfile.onboardingCompleted || userProfile.educationLevel || userProfile.study || userProfile.mainDifficulty || userProfile.mainBlocker || userProfile.goal)) {
-        const lines: string[] = ["=== STUDENT LEARNING PROFILE & PERSONALIZATION ==="];
+      if (userProfile && (userProfile.onboardingCompleted || userProfile.educationLevel || userProfile.study || userProfile.mainDifficulty || userProfile.mainBlocker || userProfile.helpPreference)) {
+        const lines: string[] = ["=== STUDENT LEARNING PROFILE & ADAPTIVE PEDAGOGY ==="];
         if (userProfile.educationLevel || userProfile.educationLevelLabel) {
           lines.push(`- Education Level: ${userProfile.educationLevelLabel ?? userProfile.educationLevel}`);
         }
@@ -50,14 +50,15 @@ export const TutorChatServiceLive = Layer.effect(
         if (userProfile.mainBlocker) {
           lines.push(`- Current Study Blocker / Obstacle: ${userProfile.mainBlocker}`);
         }
-        if (userProfile.goal || userProfile.goalLabel) {
-          lines.push(`- Primary Goal: ${userProfile.goalLabel ?? userProfile.goal}`);
+        if (userProfile.helpPreference || userProfile.helpPreferenceLabel) {
+          lines.push(`- Preferred Help / Explanation Style: ${userProfile.helpPreferenceLabel ?? userProfile.helpPreference}`);
         }
 
-        lines.push("\nPEDAGOGICAL INSTRUCTIONS BASED ON PROFILE:");
+        lines.push("\nDYNAMIC FORMAT & PEDAGOGICAL ADAPTATION (Apply IMPLICITLY without citing profile fields):");
+
         const level = ((userProfile.educationLevel ?? "") + " " + (userProfile.educationLevelLabel ?? "")).toLowerCase();
         if (level.includes("bachillerato") || level.includes("high_school")) {
-          lines.push("- High School (Bachillerato): Use intuitive, step-by-step explanations with vivid everyday analogies and prepare them for college entrance (EVAU/Selectividad) where relevant. Avoid overly dense academic jargon.");
+          lines.push("- High School (Bachillerato): Use intuitive explanations with vivid everyday analogies; prepare for college entrance (EVAU/Selectividad) where relevant; avoid overly dense academic jargon.");
         } else if (level.includes("universidad") || level.includes("university")) {
           lines.push("- University: Provide technical depth, rigorous conceptual clarity, and formal grounding while remaining engaging and supportive.");
         } else if (level.includes("oposiciones") || level.includes("civil_service")) {
@@ -68,25 +69,40 @@ export const TutorChatServiceLive = Layer.effect(
 
         const diff = ((userProfile.mainDifficulty ?? "") + " " + (userProfile.mainDifficultyLabel ?? "")).toLowerCase();
         if (diff.includes("theory") || diff.includes("teoría")) {
-          lines.push("- Student struggles with Theory: Always introduce complex abstract ideas with concrete real-life examples or analogies first before formal definitions.");
+          lines.push("- Structure Adaptation (Theory difficulty): Avoid dense walls of abstract text. Lead with a tangible analogy, split concepts into small digestible blocks, and insert a brief check question.");
         } else if (diff.includes("exercises") || diff.includes("ejercicios")) {
-          lines.push("- Student struggles with Exercises: Break problems down into clear, numbered steps and guide them through sample problems proactively.");
+          lines.push("- Structure Adaptation (Exercises difficulty): Break problem-solving into clear numbered steps and guide through sample exercises with immediate feedback.");
         } else if (diff.includes("memor") || diff.includes("recordar")) {
-          lines.push("- Student struggles with Memorization: Provide mnemonic devices, acronyms, and quick retrieval check questions.");
+          lines.push("- Structure Adaptation (Memorization difficulty): Provide mnemonic devices, acronyms, and quick active-recall check questions.");
         } else if (diff.includes("concentr") || diff.includes("distra")) {
-          lines.push("- Student struggles with Focus: Keep responses concise, modular, and in easily digestible chunks. Ask for small confirmations rather than dumping large texts.");
+          lines.push("- Structure Adaptation (Focus difficulty): Keep responses concise, modular, and in easily digestible chunks. Ask for small confirmations rather than dumping large texts.");
+        } else if (diff.includes("constan") || diff.includes("consistency")) {
+          lines.push("- Structure Adaptation (Consistency difficulty): Propose micro-sprints (e.g. 5-minute study blocks or 1 single practice question at a time), set clear immediate next steps, and celebrate micro-milestones.");
         }
 
         const blocker = (userProfile.mainBlocker ?? "").toLowerCase();
-        if (blocker.includes("tiempo") || blocker.includes("poco tiempo")) {
-          lines.push("- Blocker (Lack of time): Prioritize high-yield concepts, bulleted summaries, and maximum efficiency in explanations.");
+        if (blocker.includes("tiempo") || blocker.includes("poco tiempo") || blocker.includes("time")) {
+          lines.push("- Structure Adaptation (Lack of time): Prioritize high-yield 80/20 takeaways. Format with scannable executive bullet points and offer fast 5/15 minute options.");
+        } else if (blocker.includes("constan") || blocker.includes("hábito")) {
+          lines.push("- Structure Adaptation (Consistency blocker): Break tasks into small manageable blocks. Avoid overwhelming study plans; focus on 1 immediate win.");
         } else if (blocker.includes("bloqueo") || blocker.includes("exámenes")) {
-          lines.push("- Blocker (Exam anxiety / mental block): Provide positive reinforcement, clear checklists, and confidence-building practice questions.");
+          lines.push("- Structure Adaptation (Exam anxiety / mental block): Provide positive reinforcement, clear checklists, and confidence-building practice questions.");
         }
 
-        if (userProfile.goal || userProfile.goalLabel) {
-          lines.push(`- Goal: Orient practice and feedback towards helping them achieve: "${userProfile.goalLabel ?? userProfile.goal}".`);
+        const helpPref = ((userProfile.helpPreference ?? "") + " " + (userProfile.helpPreferenceLabel ?? "")).toLowerCase();
+        if (helpPref.includes("step_by_step") || helpPref.includes("paso a paso")) {
+          lines.push("- Preferred Explanation Mode: Break down difficult concepts into sequential, numbered steps (1., 2., 3.).");
+        } else if (helpPref.includes("examples") || helpPref.includes("ejemplo")) {
+          lines.push("- Preferred Explanation Mode: Anchor every abstract definition immediately with a realistic, relatable example.");
+        } else if (helpPref.includes("simple") || helpPref.includes("sencilla")) {
+          lines.push("- Preferred Explanation Mode: Use clean, plain language and eliminate unnecessary technical jargon.");
+        } else if (helpPref.includes("guided_questions") || helpPref.includes("preguntas")) {
+          lines.push("- Preferred Explanation Mode: Use active Socratic prompts and questions to help the student deduce the insight.");
+        } else if (helpPref.includes("direct") || helpPref.includes("grano")) {
+          lines.push("- Preferred Explanation Mode: Be ultra-concise, high-density, and straight to the point with zero padding.");
         }
+
+        lines.push("- RULE: Never explicitly say 'Como me dijiste que...' or 'Dado que tu perfil indica...'. Apply these guidelines silently and naturally.");
 
         userProfileContext = lines.join("\n");
       }

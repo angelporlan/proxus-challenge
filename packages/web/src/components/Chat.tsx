@@ -279,6 +279,15 @@ function parseUserContent(
   };
 }
 
+function cleanAssistantContent(raw: string): string {
+  if (!raw) return "";
+  const trimmed = raw.trim();
+  if (/^(?:Tool call\s+)?[a-zA-Z0-9_-]+\s*:\s*(?:json=)?\{/i.test(trimmed)) {
+    return "He preparado el recurso solicitado. Puedes revisarlo a continuación:";
+  }
+  return raw.replace(/^(?:Tool call\s+)?[a-zA-Z0-9_-]+\s*:\s*(?:json=)?\{[^\n]+\}\n*/gi, "").trim() || raw;
+}
+
 export function Chat({
   prefillPrompt,
   prefillAttachments,
@@ -1209,8 +1218,8 @@ export function Chat({
                     <div className="prose dark:prose-invert max-w-none text-sm space-y-2">
                       <Streamdown>
                         {isCurrentlyWriting
-                          ? item.message.content.slice(0, assistantReveal?.visibleLength ?? 0)
-                          : item.message.content}
+                          ? cleanAssistantContent(item.message.content).slice(0, assistantReveal?.visibleLength ?? 0)
+                          : cleanAssistantContent(item.message.content)}
                       </Streamdown>
                       {isCurrentlyWriting && (
                         <span
@@ -1264,7 +1273,25 @@ export function Chat({
                         {onOpenMindMap && (
                           <button
                             type="button"
-                            onClick={() => onOpenMindMap()}
+                            onClick={() => {
+                              const hasNote = messages.some(
+                                (m) =>
+                                  (m.role === "tool-result" &&
+                                    typeof m.result === "object" &&
+                                    m.result !== null &&
+                                    (m.result as any).kind === "note") ||
+                                  (m.role === "tool-call" &&
+                                    typeof m.input === "object" &&
+                                    m.input !== null &&
+                                    JSON.stringify(m.input).includes('"kind":"note"'))
+                              );
+                              if (hasNote) {
+                                onOpenMindMap();
+                              } else {
+                                void submit("Genera una nota de estudio estructurada con el esquema conceptual detallado de este tema.");
+                                onOpenMindMap();
+                              }
+                            }}
                             className={`flex min-h-9 items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold shadow-sm transition ${
                               isLight
                                 ? "border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100"

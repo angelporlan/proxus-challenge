@@ -179,6 +179,16 @@ export function App() {
     [materialsResult]
   );
 
+  const materialsList = useMemo(
+    () =>
+      AsyncResult.match(materialsResult, {
+        onInitial: () => [],
+        onFailure: () => [],
+        onSuccess: ({ value }) => value.materials
+      }),
+    [materialsResult]
+  );
+
   const userProfile = useMemo(
     () =>
       AsyncResult.match(userProfileResult, {
@@ -704,7 +714,13 @@ export function App() {
                 onAskTutorAboutConcept={(concept, notes) => openTutor(`Explica detalladamente el concepto "${concept}" en el contexto de mis apuntes: ${notes || ""}`)}
                 onGenerateQuizForBranch={(branch) => openTutor(`Crea un quiz de 3 preguntas de opción múltiple centrado en el apartado "${branch}".`)}
                 onOpenPdfPage={(materialId, page) => handleSelectMaterial(materialId, page)}
-                onGenerateAiMap={(title) => openTutor(`Profundiza en un esquema del tema "${title}" con conceptos fundamentales y casos prácticos.`)}
+                onGenerateAiMap={(title, matId) => {
+                  const targetMat = materialsList.find((m) => m.id === matId || m.title === title);
+                  openTutor(
+                    `Genera una nota de estudio estructurada con el esquema conceptual detallado del documento "${title}".`,
+                    targetMat ? [{ id: targetMat.id, title: targetMat.title, pageCount: targetMat.pageCount }] : undefined
+                  );
+                }}
               />
             </Suspense>
           ) : activeTab === "pdf" && selectedMaterialId ? (

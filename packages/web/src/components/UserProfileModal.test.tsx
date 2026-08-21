@@ -11,8 +11,8 @@ describe("UserProfileModal", () => {
     mainDifficulty: "understanding_theory",
     mainDifficultyLabel: "Entender la teoría",
     mainBlocker: "Tengo poco tiempo",
-    goal: "pass_next_exam",
-    goalLabel: "Aprobar mi próximo examen",
+    helpPreference: "step_by_step",
+    helpPreferenceLabel: "Explícamelo paso a paso",
     onboardingCompleted: true
   };
 
@@ -61,6 +61,22 @@ describe("UserProfileModal", () => {
         onboardingCompleted: true
       })
     );
+  });
+
+  it("allows selecting help preference style", async () => {
+    const onSave = vi.fn();
+
+    render(
+      <UserProfileModal
+        isOpen={true}
+        onClose={vi.fn()}
+        profile={profile}
+        onSave={onSave}
+        onClearMemory={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText("¿Cómo quieres que te ayude cuando no entiendas algo?")).toBeInTheDocument();
   });
 
   it("shows confirmation dialog before resetting memory", async () => {

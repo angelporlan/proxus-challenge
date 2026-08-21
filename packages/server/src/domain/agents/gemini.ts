@@ -236,6 +236,24 @@ const firstFunctionCall = (parts: ReadonlyArray<GeminiPart>) =>
 const decodeGeminiResponse = (json: unknown) =>
   Schema.decodeUnknownSync(GeminiResponse)(json);
 
+function parseFlexibleJson(raw: string): unknown {
+  const trimmed = raw.trim();
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    try {
+      const normalized = trimmed
+        .replace(/\bTrue\b/g, "true")
+        .replace(/\bFalse\b/g, "false")
+        .replace(/\bNone\b/g, "null")
+        .replace(/'([^'\\]*(?:\\.[^'\\]*)*)'/g, (_m, content) => `"${content.replace(/"/g, '\\"')}"`);
+      return JSON.parse(normalized);
+    } catch {
+      return undefined;
+    }
+  }
+}
+
 const toResponseParts = (
   parts: ReadonlyArray<GeminiPart>,
   tools: LanguageModel.ProviderOptions["tools"]
@@ -251,37 +269,52 @@ const toResponseParts = (
 
       const text = part.text.trim();
 
-      // Check if model emitted tool call as text: Tool call cli: {"input":"..."} or cli: {"input":"..."}
-      const toolMatch = /^(?:Tool call\s+)?([a-zA-Z0-9_-]+)\s*:\s*(\{.+\})$/s.exec(text);
+      // Check if model emitted tool call as text: Tool call cli: json={...} or cli: {"input":"..."}
+      const toolMatch = /^(?:Tool call\s+)?([a-zA-Z0-9_-]+)\s*:\s*(?:(?:json|input|command)\s*=\s*)?(.+)$/s.exec(text);
       if (toolMatch && toolMatch[1] && toolMatch[2] && toolNames.has(toolMatch[1])) {
-        try {
-          const parsed = JSON.parse(toolMatch[2]);
+        const payloadStr = toolMatch[2].trim();
+        const parsed = parseFlexibleJson(payloadStr);
+        if (parsed !== undefined) {
+          let params: Record<string, unknown> = {};
+          if (toolMatch[1] === "cli") {
+            if (typeof parsed === "string") {
+              params = { input: parsed };
+            } else if (parsed && typeof parsed === "object" && typeof (parsed as Record<string, unknown>).input === "string") {
+              params = parsed as Record<string, unknown>;
+            } else if (parsed && typeof parsed === "object" && ((parsed as Record<string, unknown>).kind || (parsed as Record<string, unknown>).questions || (parsed as Record<string, unknown>).markdown)) {
+              params = { input: `artifacts create '${JSON.stringify(parsed)}'` };
+            } else {
+              params = { input: JSON.stringify(parsed) };
+            }
+          } else {
+            params = typeof parsed === "object" && parsed !== null ? (parsed as Record<string, unknown>) : { input: parsed };
+          }
+
           return [
             Response.makePart("tool-call", {
               id: `call_${crypto.randomUUID()}`,
               name: toolMatch[1],
-              params: parsed,
+              params,
               providerExecuted: false
             })
           ];
-        } catch {}
+        }
       }
 
       // Check if model emitted raw JSON tool call: {"name":"cli","args":{"input":"..."}}
       if (text.startsWith("{") && text.endsWith("}")) {
-        try {
-          const parsed = JSON.parse(text);
-          if (parsed && typeof parsed === "object" && typeof parsed.name === "string" && toolNames.has(parsed.name)) {
-            return [
-              Response.makePart("tool-call", {
-                id: `call_${crypto.randomUUID()}`,
-                name: parsed.name,
-                params: parsed.args ?? parsed.params ?? {},
-                providerExecuted: false
-              })
-            ];
-          }
-        } catch {}
+        const parsed = parseFlexibleJson(text);
+        if (parsed && typeof parsed === "object" && typeof (parsed as Record<string, unknown>).name === "string" && toolNames.has((parsed as Record<string, unknown>).name as string)) {
+          const rec = parsed as Record<string, unknown>;
+          return [
+            Response.makePart("tool-call", {
+              id: `call_${crypto.randomUUID()}`,
+              name: rec.name as string,
+              params: (rec.args ?? rec.params ?? {}) as Record<string, unknown>,
+              providerExecuted: false
+            })
+          ];
+        }
       }
 
       return [Response.makePart("text", { text: part.text })];

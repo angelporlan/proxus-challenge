@@ -23,46 +23,25 @@ export interface MindMapViewerProps {
   readonly onAskTutorAboutConcept?: ((concept: string, context?: string) => void) | undefined;
   readonly onGenerateQuizForBranch?: ((branchName: string) => void) | undefined;
   readonly onOpenPdfPage?: ((materialId: string, page: number) => void) | undefined;
-  readonly onGenerateAiMap?: ((materialTitle: string) => void) | undefined;
+  readonly onGenerateAiMap?: ((materialTitle: string, materialId?: string) => void) | undefined;
   readonly theme?: "dark" | "light" | undefined;
 }
 
 // Dynamic Fallback MindMap Generator for any uploaded material
-function buildFallbackMindMap(material: { readonly id: string; readonly title: string; readonly pageCount: number }): MindMapNode {
+export function buildFallbackMindMap(material: { readonly id: string; readonly title: string; readonly pageCount: number }): MindMapNode {
   return {
     id: `map-${material.id}`,
     label: material.title,
     color: "#6366f1",
-    notes: `Documento de ${material.pageCount} páginas disponible para análisis y generación activa de esquemas por IA.`,
+    icon: "auto_stories",
+    notes: `Documento de ${material.pageCount} páginas en tu biblioteca. Pulsa en "Generar con IA" para que Proxo extraiga los conceptos clave, fórmulas y secciones en un mapa interactivo.`,
     children: [
       {
-        id: "branch-1",
-        label: "Conceptos Fundamentales",
-        color: "#f59e0b",
-        notes: "Estructura conceptual y definiciones clave del documento.",
-        children: [
-          { id: "b1-1", label: "Definiciones y Alcance", notes: "Principios rectores y marco normativo." },
-          { id: "b1-2", label: "Objetivos y Finalidad", notes: "Aplicación y supuestos prácticos." }
-        ]
-      },
-      {
-        id: "branch-2",
-        label: "Desarrollo y Articulado",
-        color: "#06b6d4",
-        notes: "Contenido articulado del temario.",
-        children: [
-          { id: "b2-1", label: "Requisitos y Procedimiento", notes: "Plazos, garantías y trámites esenciales." },
-          { id: "b2-2", label: "Excepciones y Casos Especiales", notes: "Límites legales y jurisprudencia." }
-        ]
-      },
-      {
-        id: "branch-3",
-        label: "Garantías y Aplicación Práctica",
-        color: "#10b981",
-        notes: "Evaluación y preguntas clave para examen.",
-        children: [
-          { id: "b3-1", label: "Régimen Sancionador y Tutela", notes: "Órganos competentes y recursos aplicables." }
-        ]
+        id: `gen-${material.id}`,
+        label: "Generar mapa conceptual con IA",
+        color: "#8b5cf6",
+        icon: "auto_awesome",
+        notes: `Pide a Proxo que analice "${material.title}" y cree un esquema estructurado con los apartados y conceptos fundamentales.`
       }
     ]
   };
@@ -77,6 +56,7 @@ export function parseMarkdownToMindMap(title: string, markdown: string, rootId =
     level: number;
     label: string;
     notes?: string | undefined;
+    page?: number | undefined;
     children: RawNode[];
   }
 
@@ -95,6 +75,7 @@ export function parseMarkdownToMindMap(title: string, markdown: string, rootId =
     let level = 1;
     let label = trimmed;
     let notes: string | undefined;
+    let page: number | undefined;
 
     if (trimmed.startsWith("# ")) {
       const mainTitle = trimmed.replace(/^#\s+/, "").replace(/\*\*/g, "").replace(/^Esquema:\s*/i, "").trim();
@@ -102,20 +83,20 @@ export function parseMarkdownToMindMap(title: string, markdown: string, rootId =
       continue;
     } else if (trimmed.startsWith("## ")) {
       level = 1;
-      label = trimmed.replace(/^##\s+/, "").replace(/\*\*/g, "").trim();
+      label = trimmed.replace(/^##\s+/, "").replace(/^\d+(\.\d+)*[\.\)\:\-]\s*/, "").replace(/\*\*/g, "").trim();
     } else if (trimmed.startsWith("### ")) {
       level = 2;
-      label = trimmed.replace(/^###\s+/, "").replace(/\*\*/g, "").trim();
+      label = trimmed.replace(/^###\s+/, "").replace(/^\d+(\.\d+)*[\.\)\:\-]\s*/, "").replace(/\*\*/g, "").trim();
     } else if (trimmed.startsWith("#### ")) {
       level = 3;
-      label = trimmed.replace(/^####\s+/, "").replace(/\*\*/g, "").trim();
+      label = trimmed.replace(/^####\s+/, "").replace(/^\d+(\.\d+)*[\.\)\:\-]\s*/, "").replace(/\*\*/g, "").trim();
     } else if (/^\d+\.\s+/.test(trimmed)) {
       if (/^\d+\.\d+\.\s+/.test(trimmed)) {
         level = 2;
-        label = trimmed.replace(/^\d+\.\d+\.\s+/, "").replace(/\*\*/g, "").trim();
+        label = trimmed.replace(/^\d+\.\d+[\.\)\:\-]\s*/, "").replace(/\*\*/g, "").trim();
       } else {
         level = 1;
-        label = trimmed.replace(/\*\*/g, "").trim();
+        label = trimmed.replace(/^\d+[\.\)\:\-]\s*/, "").replace(/\*\*/g, "").trim();
       }
     } else if (/^[-*•]\s+/.test(trimmed)) {
       level = 3;
@@ -125,7 +106,13 @@ export function parseMarkdownToMindMap(title: string, markdown: string, rootId =
         label = boldMatch[1]!.trim();
         notes = boldMatch[2]!.replace(/\*\*/g, "").trim();
       } else {
-        label = bulletText.replace(/\*\*/g, "").trim();
+        const colonIdx = bulletText.indexOf(":");
+        if (colonIdx > 0 && colonIdx < 45) {
+          label = bulletText.slice(0, colonIdx).replace(/\*\*/g, "").trim();
+          notes = bulletText.slice(colonIdx + 1).replace(/\*\*/g, "").trim();
+        } else {
+          label = bulletText.replace(/\*\*/g, "").trim();
+        }
       }
     } else if (/^\*\*([^*]+)\*\*:\s*(.*)$/.test(trimmed)) {
       level = 2;
@@ -140,18 +127,17 @@ export function parseMarkdownToMindMap(title: string, markdown: string, rootId =
 
     if (!label) continue;
 
-    if (label.length > 50 && !notes) {
-      const parts = label.split(/[:.·]/);
-      if (parts.length > 1 && parts[0]!.length < 40) {
-        notes = label;
-        label = parts[0]!.trim();
-      }
+    // Extract page number if present in label (e.g. "Análisis Termodinámico (Pág. 12)")
+    const pageMatch = /\((?:Pág|Págs|Página|Páginas)\.?\s*(\d+)(?:-\d+)?\)/i.exec(label);
+    if (pageMatch && pageMatch[1]) {
+      page = parseInt(pageMatch[1], 10);
     }
 
     const newNode: RawNode = {
       level,
       label,
       notes,
+      page,
       children: []
     };
 
@@ -170,6 +156,7 @@ export function parseMarkdownToMindMap(title: string, markdown: string, rootId =
       id: `${rootId}-${path}`,
       label: node.label,
       notes: node.notes,
+      page: node.page,
       color,
       children: node.children.length > 0
         ? node.children.map((c, i) => convert(c, `${path}-${i}`, depth === 0 ? i : branchIdx, depth + 1))
@@ -191,25 +178,13 @@ export function parseMarkdownToMindMap(title: string, markdown: string, rootId =
 }
 
 function resolveMindMap(
-  selectedId: string | null | undefined,
-  materials: readonly { readonly id: string; readonly title: string; readonly pageCount: number }[],
+  _selectedId: string | null | undefined,
+  _materials: readonly { readonly id: string; readonly title: string; readonly pageCount: number }[],
   noteArtifactDetail?: NoteArtifact | null
 ): MindMapNode | null {
   if (noteArtifactDetail && noteArtifactDetail.markdown) {
     return parseMarkdownToMindMap(noteArtifactDetail.title, noteArtifactDetail.markdown, noteArtifactDetail.id);
   }
-
-  if (selectedId) {
-    const mat = materials.find((m) => m.id === selectedId);
-    if (mat) {
-      return buildFallbackMindMap(mat);
-    }
-  }
-
-  if (materials.length > 0 && materials[0]) {
-    return buildFallbackMindMap(materials[0]);
-  }
-
   return null;
 }
 
@@ -589,7 +564,7 @@ export function MindMapViewer({
       references: currentMindMap.references,
       page: currentMindMap.page,
       color: currentMindMap.color || "#06b6d4",
-      icon: currentMindMap.icon || "gavel",
+      icon: currentMindMap.icon || "auto_stories",
       level: 0,
       side: "right",
       x: rootX,
@@ -812,7 +787,7 @@ export function MindMapViewer({
               {onGenerateAiMap && (
                 <button
                   type="button"
-                  onClick={() => onGenerateAiMap(currentMindMap?.label ?? activeMaterial?.title ?? "este documento")}
+                  onClick={() => onGenerateAiMap(currentMindMap?.label ?? activeMaterial?.title ?? "este documento", activeMaterial?.id)}
                   className="ui-primary-action"
                   title="Pedir al tutor que profundice en el esquema"
                 >
@@ -964,7 +939,7 @@ export function MindMapViewer({
                 {onGenerateAiMap && activeMaterial && (
                   <button
                     type="button"
-                    onClick={() => onGenerateAiMap(activeMaterial.title)}
+                    onClick={() => onGenerateAiMap(activeMaterial.title, activeMaterial.id)}
                     className="ui-primary-action"
                   >
                     <span className="material-symbols-outlined text-[17px]">auto_awesome</span>
@@ -1247,19 +1222,45 @@ export function MindMapViewer({
               </button>
             </div>
 
-            {/* Schematic Mini Visual Representation */}
-            <div className="flex-1 my-1 relative rounded-lg border border-dashed border-slate-300 dark:border-slate-800 flex items-center justify-center overflow-hidden">
-              <div className="size-3.5 rounded-full bg-cyan-500 shadow-sm"></div>
-              <div className="absolute left-3 top-3 size-2 rounded-full bg-amber-500"></div>
-              <div className="absolute left-3 bottom-3 size-2 rounded-full bg-pink-500"></div>
-              <div className="absolute right-3 top-3 size-2 rounded-full bg-teal-500"></div>
-              <div className="absolute right-3 bottom-3 size-2 rounded-full bg-purple-500"></div>
+            {/* Real SVG Mini Visual Representation */}
+            <div className="flex-1 my-1 relative rounded-xl border border-dashed border-slate-300 dark:border-slate-800 flex items-center justify-center overflow-hidden bg-slate-500/5">
+              <svg
+                viewBox={`${bounds.minX - 40} ${bounds.minY - 40} ${bounds.width + 80} ${bounds.height + 80}`}
+                className="w-full h-full p-1 pointer-events-none"
+                preserveAspectRatio="xMidYMid meet"
+              >
+                {/* Connectors */}
+                {allConnectors.map((conn) => (
+                  <path
+                    key={conn.id}
+                    d={conn.pathD}
+                    stroke={conn.color}
+                    strokeWidth="10"
+                    fill="none"
+                    opacity="0.65"
+                  />
+                ))}
+                {/* Nodes */}
+                {allNodes.map((node) => (
+                  <rect
+                    key={node.id}
+                    x={node.x}
+                    y={node.y}
+                    width={node.width}
+                    height={node.height}
+                    rx="14"
+                    fill={node.color}
+                    opacity={node.level === 0 ? "1" : "0.85"}
+                  />
+                ))}
+              </svg>
+              {/* Viewport Indicator */}
               <div
-                className="pointer-events-none absolute rounded border-2 border-cyan-500 bg-cyan-500/10"
+                className="pointer-events-none absolute rounded-md border-2 border-cyan-500 bg-cyan-500/15 transition-transform duration-75"
                 style={{
-                  width: `${Math.max(25, Math.min(80, 50 / zoom))}%`,
-                  height: `${Math.max(25, Math.min(80, 50 / zoom))}%`,
-                  transform: `translate(${-pan.x * 0.04}px, ${-pan.y * 0.04}px)`
+                  width: `${Math.max(18, Math.min(85, 45 / zoom))}%`,
+                  height: `${Math.max(18, Math.min(85, 45 / zoom))}%`,
+                  transform: `translate(${-pan.x * 0.03}px, ${-pan.y * 0.03}px)`
                 }}
               />
             </div>

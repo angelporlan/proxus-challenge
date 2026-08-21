@@ -66,9 +66,23 @@ Skill text may describe workflows, conventions, examples, or tools available els
       toolkit: AgentToolkit,
       layer: AgentToolkit.toLayer({
         load_skill: ({ name }) => loadSkill(name),
-        cli: ({ input }) => AgentCli.execute(commands, input).pipe(
-          Effect.mapError(AgentCli.renderError)
-        )
+        cli: (params: any) => {
+          let input = "";
+          if (typeof params?.input === "string") {
+            input = params.input;
+          } else if (params && typeof params === "object") {
+            if (params.kind || params.questions || params.markdown) {
+              input = `artifacts create '${JSON.stringify(params)}'`;
+            } else if (params.json && typeof params.json === "object") {
+              input = `artifacts create '${JSON.stringify(params.json)}'`;
+            } else if (typeof params.json === "string") {
+              input = `artifacts create '${params.json}'`;
+            }
+          }
+          return AgentCli.execute(commands, input).pipe(
+            Effect.mapError(AgentCli.renderError)
+          );
+        }
       }),
       systemPrompt,
       skills: spec.skills,

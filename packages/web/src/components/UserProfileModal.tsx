@@ -27,7 +27,7 @@ export function UserProfileModal({
   const [study, setStudy] = useState(profile?.study ?? "");
   const [mainDifficulty, setMainDifficulty] = useState(profile?.mainDifficulty ?? "");
   const [mainBlocker, setMainBlocker] = useState(profile?.mainBlocker ?? "");
-  const [goal, setGoal] = useState(profile?.goal ?? "");
+  const [helpPreference, setHelpPreference] = useState(profile?.helpPreference ?? "");
 
   const [isSaving, setIsSaving] = useState(false);
   const [showConfirmReset, setShowConfirmReset] = useState(false);
@@ -41,7 +41,7 @@ export function UserProfileModal({
       setStudy(profile.study ?? "");
       setMainDifficulty(profile.mainDifficulty ?? "");
       setMainBlocker(profile.mainBlocker ?? "");
-      setGoal(profile.goal ?? "");
+      setHelpPreference(profile.helpPreference ?? "");
     }
   }, [profile, isOpen]);
 
@@ -57,8 +57,8 @@ export function UserProfileModal({
       const diffStep = ONBOARDING_STEPS.find((s) => s.id === "step_difficulty");
       const diffLabel = diffStep?.options?.find((o) => o.id === mainDifficulty)?.label;
 
-      const goalStep = ONBOARDING_STEPS.find((s) => s.id === "step_goal");
-      const gLabel = goalStep?.options?.find((o) => o.id === goal)?.label;
+      const helpStep = ONBOARDING_STEPS.find((s) => s.id === "step_help_preference");
+      const hLabel = helpStep?.options?.find((o) => o.id === helpPreference)?.label;
 
       await onSave({
         educationLevel: educationLevel || undefined,
@@ -67,8 +67,8 @@ export function UserProfileModal({
         mainDifficulty: mainDifficulty || undefined,
         mainDifficultyLabel: diffLabel || undefined,
         mainBlocker: mainBlocker || undefined,
-        goal: goal || undefined,
-        goalLabel: gLabel || undefined,
+        helpPreference: helpPreference || undefined,
+        helpPreferenceLabel: hLabel || undefined,
         onboardingCompleted: true
       });
       onClose();
@@ -215,25 +215,25 @@ export function UserProfileModal({
             />
           </div>
 
-          {/* Objetivo principal */}
+          {/* Preferencia de explicación / intervención */}
           <div className="space-y-1.5">
             <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
-              Objetivo principal
+              ¿Cómo quieres que te ayude cuando no entiendas algo?
             </label>
             <select
-              value={goal}
-              onChange={(e) => setGoal(e.target.value)}
+              value={helpPreference}
+              onChange={(e) => setHelpPreference(e.target.value)}
               className={`w-full min-h-10 rounded-xl px-3 text-xs border outline-none transition focus:ring-2 focus:ring-indigo-500/40 ${
                 isLight ? "bg-white border-slate-300 text-slate-900" : "bg-slate-900 border-slate-700 text-slate-100"
               }`}
             >
               <option value="">(No especificado)</option>
-              <option value="pass_next_exam">Aprobar mi próximo examen</option>
-              <option value="improve_grades">Mejorar mis notas</option>
-              <option value="understand_subject">Entender mejor una asignatura</option>
-              <option value="prepare_civil_service">Preparar una oposición</option>
-              <option value="build_study_habit">Crear un hábito de estudio</option>
-              <option value="other">Otro</option>
+              <option value="step_by_step">Explícamelo paso a paso</option>
+              <option value="examples">Ponme un ejemplo</option>
+              <option value="simple">Explícamelo de forma sencilla</option>
+              <option value="guided_questions">Hazme preguntas para que lo descubra</option>
+              <option value="direct">Ve directo al grano</option>
+              <option value="not_sure">No estoy seguro</option>
             </select>
           </div>
 
