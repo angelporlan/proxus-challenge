@@ -1,5 +1,6 @@
 import { Schema } from "effect";
 import { HttpApiEndpoint, HttpApiGroup } from "effect/unstable/httpapi";
+import { InvalidRequest, ResourceNotFound } from "../schemas/http-error.ts";
 import {
   DeleteMaterialResponse,
   MaterialListResponse,
@@ -8,6 +9,8 @@ import {
   RenderPagesInput,
   UploadMaterialInput
 } from "../schemas/material.ts";
+
+const ClientHttpErrors = [ResourceNotFound, InvalidRequest] as const;
 
 export class MaterialsApi extends HttpApiGroup.make("materials")
   .add(
@@ -18,26 +21,29 @@ export class MaterialsApi extends HttpApiGroup.make("materials")
       params: {
         id: Schema.String
       },
-      success: PdfMaterial
+      success: PdfMaterial,
+      error: ClientHttpErrors
     }),
     HttpApiEndpoint.post("upload", "/upload", {
       payload: UploadMaterialInput,
-      success: PdfMaterial
+      success: PdfMaterial,
+      error: ClientHttpErrors
     }),
     HttpApiEndpoint.post("renderPages", "/:id/pages", {
       params: {
         id: Schema.String
       },
       payload: RenderPagesInput,
-      success: MaterialPageImages
+      success: MaterialPageImages,
+      error: ClientHttpErrors
     }),
     HttpApiEndpoint.delete("delete", "/:id", {
       params: {
         id: Schema.String
       },
-      success: DeleteMaterialResponse
+      success: DeleteMaterialResponse,
+      error: ClientHttpErrors
     })
   )
   .prefix("/materials")
 {}
-
