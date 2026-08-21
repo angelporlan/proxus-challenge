@@ -589,6 +589,10 @@ function TrueFalseInput({
 function AttemptSummary({ attempt }: { readonly attempt: Extract<ArtifactAttempt, { readonly status: "graded" }> }) {
   const percentage = Math.round((attempt.score / attempt.maxScore) * 100);
   const isPassed = percentage >= 50;
+  const incorrectCount = attempt.corrections.filter((c) => {
+    if (c.questionType === "short-answer") return c.score < c.maxScore;
+    return !c.correct;
+  }).length;
 
   return (
     <section className={`mt-6 rounded-xl border p-6 ${
@@ -607,6 +611,17 @@ function AttemptSummary({ attempt }: { readonly attempt: Extract<ArtifactAttempt
         </span>
       </div>
       <p className="text-slate-700 dark:text-slate-300 text-sm leading-relaxed">{attempt.summary}</p>
+
+      {incorrectCount > 0 && (
+        <div className="mt-3 flex items-center justify-between gap-3 p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-900 dark:text-amber-200 text-xs">
+          <div className="flex items-center gap-2">
+            <span className="material-symbols-outlined text-amber-500 text-base">psychology_alt</span>
+            <span>
+              <strong>{incorrectCount} laguna(s) de conocimiento registradas:</strong> Se han añadido a tu perfil para reforzar tu estudio activo con el tutor.
+            </span>
+          </div>
+        </div>
+      )}
     </section>
   );
 }
