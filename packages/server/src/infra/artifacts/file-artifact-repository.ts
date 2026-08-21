@@ -1,4 +1,5 @@
-import { Effect, FileSystem, Layer, Path, Schema } from "effect";
+import { Effect, FileSystem, Layer, Option, Path, Schema } from "effect";
+import type { KnowledgeGap } from "@proxus/shared";
 import {
   Artifact,
   ArtifactAttempt,
@@ -19,14 +20,72 @@ import {
   type ArtifactRepository as ArtifactRepositoryType,
   type ArtifactRepositoryError
 } from "../../domain/artifacts/artifact.ts";
+import { KnowledgeRepository } from "../../domain/knowledge/knowledge-profile.ts";
 
 const ArtifactFromJson = Schema.fromJsonString(Artifact);
 const ArtifactAttemptFromJson = Schema.fromJsonString(ArtifactAttempt);
 
+function extractKnowledgeGaps(artifact: ArtifactType, graded: ArtifactAttemptType): readonly KnowledgeGap[] {
+  if (graded.status !== "graded" || (artifact.kind !== "quiz" && artifact.kind !== "test")) {
+    return [];
+  }
+
+  const now = new Date().toISOString();
+  const gaps: KnowledgeGap[] = [];
+
+  for (const correction of graded.corrections) {
+    let isIncorrect = false;
+    let studentAns = "";
+    let correctAns = "";
+    let expl = "";
+
+    if (correction.questionType === "multiple-choice") {
+      isIncorrect = !correction.correct;
+      const q = artifact.questions.find((item) => item.id === correction.questionId && item.type === "multiple-choice");
+      const chosenOpt = q && "options" in q ? q.options.find((o) => o.id === correction.selectedOptionId)?.text ?? correction.selectedOptionId : correction.selectedOptionId;
+      const correctOpt = q && "options" in q ? q.options.find((o) => o.id === correction.correctOptionId)?.text ?? correction.correctOptionId : correction.correctOptionId;
+      studentAns = chosenOpt;
+      correctAns = correctOpt;
+      expl = correction.explanation;
+    } else if (correction.questionType === "true-false") {
+      isIncorrect = !correction.correct;
+      studentAns = String(correction.answer);
+      correctAns = String(correction.correctAnswer);
+      expl = correction.explanation;
+    } else if (correction.questionType === "short-answer") {
+      isIncorrect = correction.score < correction.maxScore;
+      studentAns = "Respuesta enviada";
+      correctAns = "Ver feedback";
+      expl = correction.feedback;
+    }
+
+    if (isIncorrect) {
+      const q = artifact.questions.find((item) => item.id === correction.questionId);
+      const prompt = q ? q.prompt : `Pregunta ${correction.questionId}`;
+      gaps.push({
+        id: `gap-${artifact.id}-${correction.questionId}`,
+        conceptId: correction.questionId,
+        topic: artifact.title,
+        question: prompt,
+        studentAnswer: studentAns,
+        correctAnswer: correctAns,
+        explanation: expl,
+        status: "active",
+        failedAt: now,
+        sourceArtifactId: artifact.id,
+        sourceQuestionId: correction.questionId
+      });
+    }
+  }
+
+  return gaps;
+}
+
 export const FileArtifactRepository = {
-  make: (directory: string): Effect.Effect<ArtifactRepositoryType, never, FileSystem.FileSystem | Path.Path> => Effect.gen(function* () {
+  make: (directory: string): Effect.Effect<ArtifactRepositoryType, never, FileSystem.FileSystem | Path.Path | KnowledgeRepository> => Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
+    const knowledgeRepoOption = yield* Effect.serviceOption(KnowledgeRepository);
 
     const artifactsDirectory = path.join(directory, "artifacts");
     const attemptsDirectory = path.join(directory, "attempts");
@@ -69,33 +128,20 @@ export const FileArtifactRepository = {
       );
     });
 
-    const writeArtifactFile = (artifact: ArtifactType): Effect.Effect<void, ArtifactRepositoryError> => Effect.gen(function* () {
-      const encoded = yield* Schema.encodeUnknownEffect(Artifact)(artifact).pipe(
-        Effect.mapError(mapSerializationError)
-      );
-      const prettyJson = JSON.stringify(encoded, null, 2);
-      if (prettyJson === undefined) {
-        return yield* new ArtifactRepositorySerializationError({ reason: "Artifact did not encode to JSON" });
-      }
-
+    const writeArtifactFile = (artifact: ArtifactType) => Effect.gen(function* () {
       yield* ensureDirectories();
-      yield* fs.writeFileString(artifactPath(artifact.id), `${prettyJson}\n`).pipe(Effect.mapError(mapStorageError));
+      const text = JSON.stringify(Schema.encodeSync(Artifact)(artifact), null, 2);
+      yield* fs.writeFileString(artifactPath(artifact.id), text).pipe(Effect.mapError(mapStorageError));
     });
 
-    const writeAttemptFile = (attempt: ArtifactAttemptType): Effect.Effect<void, ArtifactRepositoryError> => Effect.gen(function* () {
-      const encoded = yield* Schema.encodeUnknownEffect(ArtifactAttempt)(attempt).pipe(
-        Effect.mapError(mapSerializationError)
-      );
-      const prettyJson = JSON.stringify(encoded, null, 2);
-      if (prettyJson === undefined) {
-        return yield* new ArtifactRepositorySerializationError({ reason: "Attempt did not encode to JSON" });
-      }
-
+    const writeAttemptFile = (attempt: ArtifactAttemptType) => Effect.gen(function* () {
       yield* ensureDirectories();
-      yield* fs.writeFileString(attemptPath(attempt.id), `${prettyJson}\n`).pipe(Effect.mapError(mapStorageError));
+      const text = JSON.stringify(Schema.encodeSync(ArtifactAttempt)(attempt), null, 2);
+      yield* fs.writeFileString(attemptPath(attempt.id), text).pipe(Effect.mapError(mapStorageError));
     });
 
     const listFiles = (targetDirectory: string) => Effect.gen(function* () {
+      yield* ensureDirectories();
       const exists = yield* fs.exists(targetDirectory).pipe(Effect.mapError(mapStorageError));
       if (!exists) {
         return [] as readonly string[];
@@ -151,6 +197,15 @@ export const FileArtifactRepository = {
       const artifact = yield* readArtifactFile(attempt.artifactId);
       const graded = yield* gradeAttempt(artifact, attempt);
       yield* writeAttemptFile(graded);
+
+      // Auto-record knowledge gaps in background if student made mistakes
+      if (Option.isSome(knowledgeRepoOption)) {
+        const gaps = extractKnowledgeGaps(artifact, graded);
+        if (gaps.length > 0) {
+          yield* knowledgeRepoOption.value.recordGaps(gaps).pipe(Effect.catch(() => Effect.void));
+        }
+      }
+
       return graded;
     });
 
