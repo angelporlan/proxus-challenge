@@ -105,7 +105,7 @@ export const runSearchThenViewEval = Effect.gen(function* () {
   const passed = calledSearchTool && identifiesPage18 && mentionsInviolabilidad;
 
   yield* Console.log("--- Evaluation Criteria Results ---");
-  yield* Console.log(`1. Executed 'materials search' tool: ${calledSearchTool ? `PASSED (${searchCallCount} call(s))` : "FAILED"}`);
+  yield* Console.log(`1. Executed 'materials search' tool: ${calledSearchTool ? `PASSED (${searchCallCount} search call(s), ${viewCallCount} render call(s))` : "FAILED"}`);
   yield* Console.log(`2. Located exact page (Page 18): ${identifiesPage18 ? "PASSED" : "FAILED"}`);
   yield* Console.log(`3. Retrieved accurate definition of inviolabilidad: ${mentionsInviolabilidad ? "PASSED" : "FAILED"}`);
   yield* Console.log(`\nFinal Verdict: ${passed ? "✅ ALL EVALUATION CRITERIA PASSED" : "❌ EVALUATION FAILED"}\n`);

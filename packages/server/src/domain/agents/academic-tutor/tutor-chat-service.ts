@@ -107,8 +107,14 @@ export const TutorChatServiceLive = Layer.effect(
         userProfileContext = lines.join("\n");
       }
 
+      const docRefsContext = (input.documentReferences && input.documentReferences.length > 0)
+        ? `=== REFERENCED DOCUMENTS IN THIS TURN ===\nThe student explicitly referenced or attached:\n` +
+          input.documentReferences.map((ref) => `- ${ref}`).join("\n")
+        : "";
+
       const knowledgeProfileContext = [
         userProfileContext,
+        docRefsContext,
         activeGaps.length > 0
           ? `=== STUDENT KNOWLEDGE GAPS & ACTIVE WEAKNESSES ===\nThe student recently failed the following question(s) in practice quizzes:\n` +
             activeGaps.map((g) => `- [${g.topic}] Question: "${g.question}" (Student Answer: "${g.studentAnswer}", Correct: "${g.correctAnswer}")`).join("\n") +

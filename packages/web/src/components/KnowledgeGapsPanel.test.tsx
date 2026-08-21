@@ -22,6 +22,6 @@ describe("KnowledgeGapsPanel", () => {
     expect(reviewingTab).toBeInTheDocument();
 
     await user.click(reviewingTab);
-    expect(screen.getByText(/No hay conceptos en esta sección/i)).toBeInTheDocument();
+    expect(screen.getByText(/¡Aún no hay evaluaciones realizadas!|No hay conceptos en esta sección/i)).toBeInTheDocument();
   });
 });
