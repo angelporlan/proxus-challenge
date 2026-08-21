@@ -27,7 +27,7 @@ describe("UserProfileModal", () => {
       />
     );
 
-    expect(screen.getByText("Lo que tu tutor sabe de ti")).toBeInTheDocument();
+    expect(screen.getByText("Lo que Proxo sabe de ti")).toBeInTheDocument();
     expect(screen.getByDisplayValue("Ingeniería Informática")).toBeInTheDocument();
     expect(screen.getByDisplayValue("Tengo poco tiempo")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Guardar cambios" })).toBeInTheDocument();
@@ -81,7 +81,7 @@ describe("UserProfileModal", () => {
     await user.click(resetTrigger);
 
     expect(
-      screen.getByText("¿Quieres borrar lo que tu tutor sabe sobre ti?")
+      screen.getByText("¿Quieres borrar lo que Proxo sabe sobre ti?")
     ).toBeInTheDocument();
 
     const confirmButton = screen.getAllByRole("button", { name: /Reiniciar memoria/i })[1]!;

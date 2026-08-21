@@ -107,7 +107,7 @@ export function Sidebar({
                 ? "border-purple-200 bg-purple-50 hover:bg-purple-100 text-purple-700 shadow-2xs"
                 : "border-purple-800/60 bg-purple-950/40 hover:bg-purple-900/50 text-purple-300 shadow-2xs"
             }`}
-            title="Personalización: lo que tu tutor sabe de ti"
+            title="Personalización: lo que Proxo sabe de ti"
             aria-label="Personalización y memoria del alumno"
           >
             <span className="material-symbols-outlined text-[17px]">psychology</span>

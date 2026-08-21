@@ -15,7 +15,7 @@ describe("ConversationalOnboarding", () => {
       />
     );
 
-    expect(screen.getByText(/¡Hola! Soy tu tutor/i)).toBeInTheDocument();
+    expect(screen.getByText(/¡Hola! Soy/i)).toBeInTheDocument();
     await waitFor(() => {
       expect(screen.getByText("¿Qué estás estudiando?")).toBeInTheDocument();
     });

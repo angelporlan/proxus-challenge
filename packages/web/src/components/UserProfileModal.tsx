@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import type { UserProfile, UpdateUserProfileInput } from "@proxus/shared";
 import { ONBOARDING_STEPS } from "../domain/user-profile/stepsConfig.ts";
+import proxoAvatar from "../assets/proxo-avatar.jpg";
 
 interface UserProfileModalProps {
   readonly isOpen: boolean;
@@ -97,11 +98,13 @@ export function UserProfileModal({
           }`}
         >
           <div className="flex items-center gap-2.5">
-            <div className="size-8 rounded-xl bg-gradient-to-tr from-indigo-600 to-purple-600 flex items-center justify-center text-white shadow-xs">
-              <span className="material-symbols-outlined text-[18px]">psychology</span>
-            </div>
+            <img
+              src={proxoAvatar}
+              alt="Proxo"
+              className="size-8 rounded-xl object-cover shadow-xs border border-indigo-500/30"
+            />
             <div>
-              <h2 className="text-sm font-bold tracking-tight">Lo que tu tutor sabe de ti</h2>
+              <h2 className="text-sm font-bold tracking-tight">Lo que Proxo sabe de ti</h2>
               <p className={`text-[11px] ${isLight ? "text-slate-500" : "text-slate-400"}`}>
                 Personalización y memoria activa del estudiante
               </p>
@@ -261,7 +264,7 @@ export function UserProfileModal({
             >
               <div className="flex items-center gap-3 text-red-500">
                 <span className="material-symbols-outlined text-2xl">warning</span>
-                <h3 className="font-bold text-sm">¿Quieres borrar lo que tu tutor sabe sobre ti?</h3>
+                <h3 className="font-bold text-sm">¿Quieres borrar lo que Proxo sabe sobre ti?</h3>
               </div>
               <p className={`text-xs leading-relaxed ${isLight ? "text-slate-600" : "text-slate-400"}`}>
                 Esto eliminará tu perfil de aprendizaje y tendrás que volver a responder las preguntas de personalización.

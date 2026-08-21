@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import type { UserProfile, UpdateUserProfileInput } from "@proxus/shared";
 import { ONBOARDING_STEPS, type OnboardingStep, type StepOption } from "../domain/user-profile/stepsConfig.ts";
+import proxoAvatar from "../assets/proxo-avatar.jpg";
 
 interface ConversationalOnboardingProps {
   readonly currentProfile?: UserProfile | null | undefined;
@@ -216,18 +217,21 @@ export function ConversationalOnboarding({
         }`}
       >
         {/* Header */}
+        {/* Header */}
         <header
           className={`flex items-center justify-between border-b px-5 py-3.5 shrink-0 ${
             isLight ? "border-slate-200 bg-slate-50/80" : "border-slate-800/80 bg-slate-900/60"
           }`}
         >
           <div className="flex items-center gap-2.5">
-            <div className="size-8 rounded-xl bg-gradient-to-tr from-indigo-600 to-purple-600 flex items-center justify-center text-white shadow-xs">
-              <span className="material-symbols-outlined text-[18px]">psychology</span>
-            </div>
+            <img
+              src={proxoAvatar}
+              alt="Proxo"
+              className="size-8 rounded-xl object-cover shadow-xs border border-indigo-500/30"
+            />
             <div>
               <div className="flex items-center gap-1.5">
-                <strong className="text-xs sm:text-sm font-bold tracking-tight">Tutor de estudio IA</strong>
+                <strong className="text-xs sm:text-sm font-bold tracking-tight">Proxo · Tutor de estudio IA</strong>
                 <span className="rounded-full bg-indigo-500/15 text-indigo-500 px-1.5 py-0.2 text-[9.5px] font-semibold border border-indigo-500/20">
                   Personalización
                 </span>
@@ -275,9 +279,11 @@ export function ConversationalOnboarding({
         >
           {/* Welcome Message */}
           <div className="flex items-start gap-3 max-w-[85%] animate-in fade-in slide-in-from-bottom-2 duration-300">
-            <div className="size-7 rounded-lg bg-indigo-600 text-white flex items-center justify-center shrink-0 mt-0.5 shadow-2xs">
-              <span className="material-symbols-outlined text-[15px]">school</span>
-            </div>
+            <img
+              src={proxoAvatar}
+              alt="Proxo"
+              className="size-7 rounded-lg object-cover shrink-0 mt-0.5 shadow-2xs border border-indigo-500/20"
+            />
             <div
               className={`rounded-2xl rounded-tl-xs p-3.5 border ${
                 isLight
@@ -285,9 +291,9 @@ export function ConversationalOnboarding({
                   : "bg-slate-900/80 border-slate-800 text-slate-200 shadow-2xs"
               }`}
             >
-              <p className="font-semibold text-xs text-indigo-500 dark:text-indigo-400 mb-1">Tutor</p>
+              <p className="font-semibold text-xs text-indigo-500 dark:text-indigo-400 mb-1">Proxo</p>
               <p>
-                ¡Hola! Soy tu tutor. Antes de empezar, quiero conocerte un poco para poder adaptar cómo te ayudo.
+                ¡Hola! Soy <strong>Proxo</strong>, tu tutor de estudio. Antes de empezar, quiero conocerte un poco para poder adaptar cómo te ayudo.
                 Serán solo unas preguntas rápidas.
               </p>
             </div>
@@ -298,9 +304,11 @@ export function ConversationalOnboarding({
             <React.Fragment key={idx}>
               {/* Question bubble */}
               <div className="flex items-start gap-3 max-w-[85%] animate-in fade-in duration-200">
-                <div className="size-7 rounded-lg bg-indigo-600 text-white flex items-center justify-center shrink-0 mt-0.5 shadow-2xs">
-                  <span className="material-symbols-outlined text-[15px]">school</span>
-                </div>
+                <img
+                  src={proxoAvatar}
+                  alt="Proxo"
+                  className="size-7 rounded-lg object-cover shrink-0 mt-0.5 shadow-2xs border border-indigo-500/20"
+                />
                 <div
                   className={`rounded-2xl rounded-tl-xs p-3.5 border ${
                     isLight
@@ -324,9 +332,11 @@ export function ConversationalOnboarding({
           {/* Current Question Bubble */}
           {!isFinished && step && !isQuestionThinking && (
             <div className="flex items-start gap-3 max-w-[85%] animate-in fade-in slide-in-from-bottom-2 duration-300">
-              <div className="size-7 rounded-lg bg-indigo-600 text-white flex items-center justify-center shrink-0 mt-0.5 shadow-2xs">
-                <span className="material-symbols-outlined text-[15px]">school</span>
-              </div>
+              <img
+                src={proxoAvatar}
+                alt="Proxo"
+                className="size-7 rounded-lg object-cover shrink-0 mt-0.5 shadow-2xs border border-indigo-500/20"
+              />
               <div
                 className={`rounded-2xl rounded-tl-xs p-3.5 border ${
                   isLight
@@ -360,9 +370,11 @@ export function ConversationalOnboarding({
           {/* Final Summary Card when Finished */}
           {isFinished && (
             <div className="flex items-start gap-3 max-w-[90%] animate-in fade-in zoom-in-95 duration-300">
-              <div className="size-7 rounded-lg bg-indigo-600 text-white flex items-center justify-center shrink-0 mt-0.5 shadow-2xs">
-                <span className="material-symbols-outlined text-[15px]">school</span>
-              </div>
+              <img
+                src={proxoAvatar}
+                alt="Proxo"
+                className="size-7 rounded-lg object-cover shrink-0 mt-0.5 shadow-2xs border border-indigo-500/20"
+              />
               <div
                 className={`rounded-2xl rounded-tl-xs p-4 border space-y-3 ${
                   isLight
@@ -371,7 +383,7 @@ export function ConversationalOnboarding({
                 }`}
               >
                 <div className="flex items-center gap-2">
-                  <span className="font-semibold text-xs text-indigo-500 dark:text-indigo-400">Tutor</span>
+                  <span className="font-semibold text-xs text-indigo-500 dark:text-indigo-400">Proxo</span>
                   <span className="inline-flex items-center gap-1 rounded-full bg-purple-500/15 text-purple-600 dark:text-purple-300 px-2 py-0.5 text-[10px] font-semibold border border-purple-500/20">
                     <span className="material-symbols-outlined text-[12px]">auto_awesome</span>
                     <span>Perfil adaptado</span>
@@ -519,19 +531,22 @@ export function ConversationalOnboarding({
 
 function OnboardingThinkingBubble({ isLight }: { readonly isLight: boolean }) {
   return (
-    <div className="ui-enter flex items-start gap-3 max-w-[85%]" role="status" aria-label="El tutor está pensando">
-      <div className="size-7 rounded-lg bg-indigo-600 text-white flex items-center justify-center shrink-0 mt-0.5 shadow-2xs" aria-hidden="true">
-        <span className="material-symbols-outlined text-[15px]">school</span>
-      </div>
+    <div className="ui-enter flex items-start gap-3 max-w-[85%]" role="status" aria-label="Proxo está pensando">
+      <img
+        src={proxoAvatar}
+        alt="Proxo"
+        className="size-7 rounded-lg object-cover shrink-0 mt-0.5 shadow-2xs border border-indigo-500/20 animate-pulse"
+      />
       <div
         className={`rounded-2xl rounded-tl-xs p-3.5 border text-xs ${
           isLight
-            ? "bg-slate-50 border-slate-200 text-slate-500 shadow-2xs"
-            : "bg-slate-900/80 border-slate-800 text-slate-400 shadow-2xs"
+            ? "bg-slate-50 border-slate-200 text-slate-600 shadow-2xs"
+            : "bg-slate-900/80 border-slate-800 text-slate-300 shadow-2xs"
         }`}
       >
         <div className="flex items-center gap-2">
-          <span>El tutor está pensando</span>
+          <span className="font-semibold text-indigo-600 dark:text-indigo-400">Proxo</span>
+          <span className="text-slate-500 dark:text-slate-400">está pensando</span>
           <span className="flex items-center gap-1" aria-hidden="true">
             <span className="ui-thinking-dot" />
             <span className="ui-thinking-dot ui-thinking-dot--2" />

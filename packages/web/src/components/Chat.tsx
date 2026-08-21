@@ -10,6 +10,8 @@ import { materialsQuery, uploadMaterialAction } from "../domain/materials/atoms.
 import { applyInvalidations, invalidationsForToolCall } from "../domain/tutor/invalidation.ts";
 import { streamTutorMessage } from "../domain/tutor/stream.ts";
 import { ArtifactChatCard } from "./ArtifactChatCard.tsx";
+import proxoAvatar from "../assets/proxo-avatar.jpg";
+import proxoFoxTransparent from "../assets/proxo-fox-transparent.png";
 
 const starterPrompts = [
   {
@@ -786,16 +788,18 @@ export function Chat({
         }`}
       >
         <div className="flex items-center gap-3">
-          <div
-            className={`grid size-9 place-items-center rounded-xl border ${
-              isLight
-                ? "border-indigo-200 bg-indigo-50 text-indigo-700"
-                : "border-indigo-500/20 bg-indigo-500/10 text-indigo-300"
-            }`}
-          >
-            <span className="material-symbols-outlined text-lg" aria-hidden="true">
-              local_library
-            </span>
+          <div className="relative">
+            <img
+              src={proxoAvatar}
+              alt="Proxo"
+              className="size-9 rounded-xl object-cover border border-indigo-500/30 shadow-xs"
+            />
+            <span
+              className={`absolute -bottom-0.5 -right-0.5 size-2.5 rounded-full border-2 ${
+                isLight ? "border-white" : "border-slate-950"
+              } ${isTutorWriting || isSending ? "animate-pulse bg-indigo-500" : "bg-emerald-500"}`}
+              title={isTutorWriting ? "Escribiendo…" : isSending ? "Pensando…" : "En línea"}
+            />
           </div>
           <div>
             <div className="flex items-center gap-2">
@@ -804,15 +808,15 @@ export function Chat({
                   isLight ? "text-slate-900" : "text-slate-100"
                 }`}
               >
-                Tutor de estudio
+                Proxo
               </h1>
-              <span className="rounded-full border border-indigo-500/20 bg-indigo-500/10 px-2 py-0.5 text-[10px] font-medium text-indigo-500">
-                con IA
+              <span className="rounded-full border border-indigo-500/20 bg-indigo-500/10 px-2 py-0.5 text-[10px] font-semibold text-indigo-500">
+                Tutor IA
               </span>
             </div>
             <div className="mt-1 flex items-center gap-2">
               <p className={`text-[11px] ${isLight ? "text-slate-500" : "text-slate-400"}`}>
-                Pregunta, repasa y practica con tus materiales
+                Tu tutor académico inteligente
               </p>
               <span
                 className={`hidden items-center gap-1 text-[10px] sm:flex ${
@@ -927,22 +931,24 @@ export function Chat({
       >
         {messages.length === 0 ? (
           <div className="m-auto w-full max-w-2xl text-center py-6">
-            <div className="mx-auto mb-4 grid size-12 place-items-center rounded-xl border border-indigo-500/20 bg-indigo-600/10 text-indigo-500">
-              <span className="material-symbols-outlined text-2xl" aria-hidden="true">
-                menu_book
-              </span>
+            <div className="relative mx-auto mb-3 inline-block">
+              <img
+                src={proxoFoxTransparent}
+                alt="Proxo"
+                className="size-28 sm:size-32 object-contain drop-shadow-md mx-auto transform hover:scale-105 transition-transform duration-300"
+              />
             </div>
             <h2
-              className={`font-display font-bold text-2xl sm:text-3xl mb-2 ${
+              className={`font-display font-bold text-2xl sm:text-3xl mb-1.5 ${
                 isLight ? "text-slate-900" : "text-slate-100"
               }`}
             >
-              ¿Qué quieres estudiar?
+              ¡Hola! Soy Proxo
             </h2>
             <p className={`text-xs sm:text-sm max-w-md mx-auto mb-8 leading-relaxed ${
               isLight ? "text-slate-600" : "text-slate-400"
             }`}>
-              Pregunta sobre tus materiales o elige una forma de empezar.
+              Tu tutor de estudio con IA. Pregúntame sobre tus apuntes, genera exámenes y esquemas o resuelve dudas difíciles.
             </p>
 
             {/* Quick Starters Grid */}
@@ -1050,23 +1056,18 @@ export function Chat({
 
             return (
               <article key={index} className="ui-enter flex max-w-3xl self-start items-start gap-2.5">
-                <div
-                  className={`mt-1 grid size-8 shrink-0 place-items-center rounded-xl border ${
-                    isLight
-                      ? "border-indigo-200 bg-indigo-50 text-indigo-600"
-                      : "border-indigo-500/20 bg-indigo-500/10 text-indigo-300"
-                  }`}
-                  aria-hidden="true"
-                >
-                  <span className="material-symbols-outlined text-[17px]">school</span>
-                </div>
+                <img
+                  src={proxoAvatar}
+                  alt="Proxo"
+                  className="mt-1 size-8 shrink-0 rounded-xl object-cover border border-indigo-500/30 shadow-xs"
+                />
 
                 <div className="min-w-0 flex-1">
                   <div className="mb-1 flex items-center gap-2 px-1">
-                    <span className={`text-[11px] font-semibold ${
-                      isLight ? "text-slate-600" : "text-slate-300"
+                    <span className={`text-[11px] font-bold ${
+                      isLight ? "text-slate-700" : "text-slate-200"
                     }`}>
-                      Tutor
+                      Proxo
                     </span>
                     {isCurrentlyWriting ? (
                       <span className="flex items-center gap-1 text-[10px] text-indigo-500">
@@ -1848,26 +1849,22 @@ export function Chat({
 
 function TutorThinkingBubble({ isLight }: { readonly isLight: boolean }) {
   return (
-    <div className="ui-enter flex items-start gap-2.5" aria-label="El tutor está pensando" role="status">
-      <div
-        className={`mt-1 grid size-8 shrink-0 place-items-center rounded-xl border ${
-          isLight
-            ? "border-indigo-200 bg-indigo-50 text-indigo-600"
-            : "border-indigo-500/20 bg-indigo-500/10 text-indigo-300"
-        }`}
-        aria-hidden="true"
-      >
-        <span className="material-symbols-outlined text-[17px]">school</span>
-      </div>
+    <div className="ui-enter flex items-start gap-2.5" aria-label="Proxo está pensando" role="status">
+      <img
+        src={proxoAvatar}
+        alt="Proxo"
+        className="mt-1 size-8 shrink-0 rounded-xl object-cover border border-indigo-500/30 shadow-xs animate-pulse"
+      />
       <div
         className={`rounded-2xl rounded-bl-sm border px-4 py-3 text-xs ${
           isLight
-            ? "border-slate-200 bg-white text-slate-500 shadow-sm"
-            : "border-slate-800 bg-slate-900/90 text-slate-400"
+            ? "border-slate-200 bg-white text-slate-600 shadow-sm"
+            : "border-slate-800 bg-slate-900/90 text-slate-300 shadow-sm"
         }`}
       >
         <div className="flex items-center gap-2">
-          <span>El tutor está pensando</span>
+          <span className="font-semibold text-indigo-600 dark:text-indigo-400">Proxo</span>
+          <span className="text-slate-500 dark:text-slate-400">está pensando</span>
           <span className="flex items-center gap-1" aria-hidden="true">
             <span className="ui-thinking-dot" />
             <span className="ui-thinking-dot ui-thinking-dot--2" />
