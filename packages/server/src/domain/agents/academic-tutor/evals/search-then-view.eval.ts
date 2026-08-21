@@ -11,53 +11,6 @@ const mockPdfPages = [
   { page: 45, text: "Título IV: Del Gobierno y de la Administración. Funciones del poder ejecutivo." }
 ];
 
-const makeMockMaterialRepo = () => MaterialRepository.of({
-  list: () => Effect.succeed([
-    {
-      id: "constitucion-completa",
-      title: "Constitución Española Completa",
-      fileName: "constitucion.pdf",
-      pageCount: 50,
-      uploadedAt: new Date().toISOString()
-    }
-  ]),
-  get: (id) => Effect.succeed({
-    id,
-    title: "Constitución Española Completa",
-    fileName: "constitucion.pdf",
-    pageCount: 50,
-    uploadedAt: new Date().toISOString()
-  }),
-  upload: () => Effect.die("Not implemented"),
-  delete: () => Effect.void,
-  renderPages: (id, pages) => Effect.succeed({
-    type: "material-page-images",
-    material: {
-      id,
-      title: "Constitución Española Completa",
-      fileName: "constitucion.pdf",
-      pageCount: 50,
-      uploadedAt: new Date().toISOString()
-    },
-    pages: pages.map((page) => ({
-      page,
-      mediaType: "image/png" as const,
-      data: `data:image/png;base64,${btoa(`Contenido de la página ${page}`)}`
-    }))
-  }),
-  getFilePath: () => Effect.succeed("/tmp/constitucion.pdf"),
-  searchText: (id, query) => {
-    const qLower = query.toLowerCase();
-    const matches = mockPdfPages
-      .filter((p) => p.text.toLowerCase().includes(qLower))
-      .map((p) => ({
-        page: p.page,
-        snippet: p.text.slice(0, 120),
-        score: 1
-      }));
-    return Effect.succeed(matches);
-  }
-});
 
 const makeMockArtifactRepo = () => ArtifactRepository.of({
   createArtifact: (input) => Effect.succeed({ id: "art-1", ...input }),
@@ -77,7 +30,62 @@ export const runSearchThenViewEval = Effect.gen(function* () {
   yield* Console.log(" Running AI Eval: Search in Materials Prior to View");
   yield* Console.log("========================================================\n");
 
-  const harness = makeAcademicTutorHarness(makeMockMaterialRepo(), makeMockArtifactRepo());
+  let searchCallCount = 0;
+  let viewCallCount = 0;
+
+  const mockRepo = MaterialRepository.of({
+    list: () => Effect.succeed([
+      {
+        id: "constitucion-completa",
+        title: "Constitución Española Completa",
+        fileName: "constitucion.pdf",
+        pageCount: 50,
+        uploadedAt: new Date().toISOString()
+      }
+    ]),
+    get: (id) => Effect.succeed({
+      id,
+      title: "Constitución Española Completa",
+      fileName: "constitucion.pdf",
+      pageCount: 50,
+      uploadedAt: new Date().toISOString()
+    }),
+    upload: () => Effect.die("Not implemented"),
+    delete: () => Effect.void,
+    renderPages: (id, pages) => {
+      viewCallCount++;
+      return Effect.succeed({
+        type: "material-page-images",
+        material: {
+          id,
+          title: "Constitución Española Completa",
+          fileName: "constitucion.pdf",
+          pageCount: 50,
+          uploadedAt: new Date().toISOString()
+        },
+        pages: pages.map((page) => ({
+          page,
+          mediaType: "image/png" as const,
+          data: `data:image/png;base64,${btoa(`Contenido de la página ${page}`)}`
+        }))
+      });
+    },
+    getFilePath: () => Effect.succeed("/tmp/constitucion.pdf"),
+    searchText: (id, query) => {
+      searchCallCount++;
+      const qLower = query.toLowerCase();
+      const matches = mockPdfPages
+        .filter((p) => p.text.toLowerCase().includes(qLower))
+        .map((p) => ({
+          page: p.page,
+          snippet: p.text.slice(0, 120),
+          score: 1
+        }));
+      return Effect.succeed(matches);
+    }
+  });
+
+  const harness = makeAcademicTutorHarness(mockRepo, makeMockArtifactRepo());
   const session = AgentSession.make(harness);
 
   const inputPrompt = "En el material 'constitucion-completa', busca qué dice sobre la inviolabilidad del domicilio y dime en qué página se encuentra exactamente.";
@@ -90,14 +98,16 @@ export const runSearchThenViewEval = Effect.gen(function* () {
 
   yield* Console.log(`Tutor Response:\n${result.output}\n`);
 
-  // Check if page 18 was correctly identified
+  // Check if tool was invoked and page 18 was correctly identified
+  const calledSearchTool = searchCallCount >= 1;
   const identifiesPage18 = result.output.includes("18") || result.output.includes("página 18") || result.output.includes("pagina 18");
   const mentionsInviolabilidad = result.output.toLowerCase().includes("domicilio") || result.output.toLowerCase().includes("inviolab");
-  const passed = identifiesPage18 && mentionsInviolabilidad;
+  const passed = calledSearchTool && identifiesPage18 && mentionsInviolabilidad;
 
   yield* Console.log("--- Evaluation Criteria Results ---");
-  yield* Console.log(`1. Located exact page (Page 18): ${identifiesPage18 ? "PASSED" : "FAILED"}`);
-  yield* Console.log(`2. Retrieved accurate definition of inviolabilidad: ${mentionsInviolabilidad ? "PASSED" : "FAILED"}`);
+  yield* Console.log(`1. Executed 'materials search' tool: ${calledSearchTool ? `PASSED (${searchCallCount} call(s))` : "FAILED"}`);
+  yield* Console.log(`2. Located exact page (Page 18): ${identifiesPage18 ? "PASSED" : "FAILED"}`);
+  yield* Console.log(`3. Retrieved accurate definition of inviolabilidad: ${mentionsInviolabilidad ? "PASSED" : "FAILED"}`);
   yield* Console.log(`\nFinal Verdict: ${passed ? "✅ ALL EVALUATION CRITERIA PASSED" : "❌ EVALUATION FAILED"}\n`);
 
   return { passed, output: result.output };

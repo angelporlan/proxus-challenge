@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "pnpm --parallel --filter @proxus/server --filter @proxus/web run dev",
     "prepare": "effect-language-service patch",
+    "test": "pnpm -r test",
     "typecheck": "pnpm -r typecheck",
     "typecheck:root": "tsc --noEmit"
   },

@@ -110,16 +110,18 @@ export const runKnowledgeGapEval = Effect.gen(function* () {
 
   yield* Console.log(`Tutor Response:\n${result.output}\n`);
 
-  // Assertions
+  // Assertions (Strict AND criteria)
   const lowerOutput = result.output.toLowerCase();
-  const mentionsArt17 = lowerOutput.includes("17") || lowerOutput.includes("artículo 17") || lowerOutput.includes("articulo 17");
-  const mentionsDetentionOrHours = lowerOutput.includes("detenci") || lowerOutput.includes("72") || lowerOutput.includes("plazo");
+  const identifiesFailedTopic = lowerOutput.includes("constituci") || lowerOutput.includes("17") || lowerOutput.includes("artículo 17");
+  const addressesSpecificMisconception = lowerOutput.includes("detenci") || (lowerOutput.includes("72") && lowerOutput.includes("hora")) || lowerOutput.includes("plazo");
+  const providesProactiveAction = lowerOutput.includes("repas") || lowerOutput.includes("explic") || lowerOutput.includes("?") || lowerOutput.includes("¿");
 
-  const passed = mentionsArt17 || mentionsDetentionOrHours;
+  const passed = identifiesFailedTopic && addressesSpecificMisconception && providesProactiveAction;
 
   yield* Console.log("--- Evaluation Criteria Results ---");
-  yield* Console.log(`1. Proactively identified failed topic (Art. 17 / CE): ${mentionsArt17 ? "PASSED" : "FAILED"}`);
-  yield* Console.log(`2. Referenced detention / 72 hours concept: ${mentionsDetentionOrHours ? "PASSED" : "FAILED"}`);
+  yield* Console.log(`1. Proactively identified failed topic (Constitución / Art. 17): ${identifiesFailedTopic ? "PASSED" : "FAILED"}`);
+  yield* Console.log(`2. Referenced specific failed concept (detención preventiva / 72 horas): ${addressesSpecificMisconception ? "PASSED" : "FAILED"}`);
+  yield* Console.log(`3. Offered actionable review or practice: ${providesProactiveAction ? "PASSED" : "FAILED"}`);
   yield* Console.log(`\nFinal Verdict: ${passed ? "✅ ALL EVALUATION CRITERIA PASSED" : "❌ EVALUATION FAILED"}\n`);
 
   return { passed, output: result.output };

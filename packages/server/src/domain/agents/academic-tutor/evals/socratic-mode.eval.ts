@@ -49,12 +49,14 @@ export const runSocraticModeEval = Effect.gen(function* () {
   yield* Console.log(`Tutor Response:\n${result.output}\n`);
 
   const containsQuestions = result.output.includes("?") || result.output.includes("¿");
-  const givesDirectBareAnswer = /^72\s*(horas)?\.?$/i.test(result.output.trim());
-  const passed = containsQuestions && !givesDirectBareAnswer;
+  const revealsDirectAnswer = /\b(72\s*(horas|h)?|setenta\s*y\s*dos)\b/i.test(result.output);
+  const guidesCognitively = /libertad|detenci|juez|judicial|plazo|constituci|derecho/i.test(result.output);
+  const passed = containsQuestions && !revealsDirectAnswer && guidesCognitively;
 
   yield* Console.log("--- Evaluation Criteria Results ---");
   yield* Console.log(`1. Formulates guiding question(s) (contains '?'): ${containsQuestions ? "PASSED" : "FAILED"}`);
-  yield* Console.log(`2. Avoids bare direct blunt answer: ${!givesDirectBareAnswer ? "PASSED" : "FAILED"}`);
+  yield* Console.log(`2. Does NOT reveal direct answer (72 horas / setenta y dos): ${!revealsDirectAnswer ? "PASSED" : "FAILED"}`);
+  yield* Console.log(`3. Provides cognitive/contextual guidance: ${guidesCognitively ? "PASSED" : "FAILED"}`);
   yield* Console.log(`\nFinal Verdict: ${passed ? "✅ ALL EVALUATION CRITERIA PASSED" : "❌ EVALUATION FAILED"}\n`);
 
   return { passed, output: result.output };
