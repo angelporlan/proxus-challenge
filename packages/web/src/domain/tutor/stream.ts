@@ -5,6 +5,22 @@ import { apiClientConfig } from "../../api-client/config.ts";
 const TutorChatStreamEventFromJsonString = Schema.fromJsonString(TutorChatStreamEvent);
 const decodeEvent = Schema.decodeUnknownSync(TutorChatStreamEventFromJsonString);
 
+export function tutorStreamFailureMessage(status: number, body: string): string {
+  const trimmed = body.trim();
+  if (trimmed.length === 0) {
+    return `Tutor request failed (${status})`;
+  }
+  try {
+    const parsed = JSON.parse(trimmed) as { readonly message?: unknown };
+    if (typeof parsed.message === "string" && parsed.message.trim().length > 0) {
+      return parsed.message;
+    }
+  } catch {
+    // Keep the raw body when the server did not return JSON.
+  }
+  return trimmed;
+}
+
 export async function* streamTutorMessage(
   input: TutorChatRequest,
   signal?: AbortSignal
@@ -20,7 +36,7 @@ export async function* streamTutorMessage(
   });
 
   if (!response.ok) {
-    throw new Error(await response.text());
+    throw new Error(tutorStreamFailureMessage(response.status, await response.text()));
   }
 
   if (response.body === null) {

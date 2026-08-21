@@ -1,20 +1,19 @@
-import { useAtomRefresh, useAtomSet, useAtomValue } from "@effect/atom-react";
-import type { AgentMessage, ChatSession } from "@proxus/shared";
+import { useAtomValue } from "@effect/atom-react";
+import type { ChatSession } from "@proxus/shared";
 import * as AsyncResult from "effect/unstable/reactivity/AsyncResult";
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { artifactsQuery } from "../domain/artifacts/atoms.ts";
-import { knowledgeProfileQuery } from "../domain/knowledge/atoms.ts";
-import { materialsQuery, uploadMaterialAction } from "../domain/materials/atoms.ts";
-import { applyInvalidations, invalidationsForToolCall } from "../domain/tutor/invalidation.ts";
-import { streamTutorMessage } from "../domain/tutor/stream.ts";
-import {
-  loadSavedSessions,
-  saveSessions,
-  createOrUpdateSession,
-  deleteStoredSession,
-  makeNewSessionId
-} from "../domain/sessions/storage.ts";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { materialsQuery } from "../domain/materials/atoms.ts";
+import { groupChatItems } from "./chat/group-chat-items.ts";
+import { ChatComposer } from "./chat/ChatComposer.tsx";
+import { ChatHeader } from "./chat/ChatHeader.tsx";
+import { ChatMessageList } from "./chat/ChatMessageList.tsx";
+import type { ChatProps } from "./chat/types.ts";
+import { useChatPdfUpload } from "../hooks/useChatPdfUpload.ts";
+import { useChatSessions } from "../hooks/useChatSessions.ts";
+import { useMentions, type AttachedDoc } from "../hooks/useMentions.ts";
+import { useTutorTurn } from "../hooks/useTutorTurn.ts";
 import { useVoiceDictation } from "../hooks/useVoiceDictation.ts";
+
 export {
   findMentionRanges,
   splitMentionParts,
@@ -22,13 +21,6 @@ export {
   type MentionRange,
   type MentionPart
 } from "../hooks/useMentions.ts";
-import { useMentions, type AttachedDoc } from "../hooks/useMentions.ts";
-import { ChatComposer } from "./chat/ChatComposer.tsx";
-import { ChatHeader } from "./chat/ChatHeader.tsx";
-import { ChatMessageList } from "./chat/ChatMessageList.tsx";
-import { groupChatItems } from "./chat/group-chat-items.ts";
-import type { AssistantReveal, ChatProps, TutorMode } from "./chat/types.ts";
-
 export type { ChatProps, TutorMode } from "./chat/types.ts";
 
 export function Chat({
@@ -42,49 +34,47 @@ export function Chat({
   onToggleMaximize
 }: ChatProps = {}) {
   const isLight = theme === "light";
-  const [sessions, setSessions] = useState<readonly ChatSession[]>(() => loadSavedSessions());
-  const [currentSessionId, setCurrentSessionId] = useState<string>(() => {
-    const saved = loadSavedSessions();
-    return saved[0]?.id ?? makeNewSessionId();
-  });
-  const [messages, setMessages] = useState<readonly AgentMessage[]>(() => {
-    const saved = loadSavedSessions();
-    return saved[0]?.messages ?? [];
-  });
   const [input, setInput] = useState("");
-  const [isSending, setIsSending] = useState(false);
-  const [assistantReveal, setAssistantReveal] = useState<AssistantReveal | null>(null);
-  const [error, setError] = useState<string | undefined>();
-  const [tutorMode, setTutorMode] = useState<TutorMode>(() => {
-    const saved = loadSavedSessions();
-    return saved[0]?.mode ?? "explanatory";
-  });
+  const [attachedDocs, setAttachedDocs] = useState<AttachedDoc[]>([]);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [isMagIaOpen, setIsMagIaOpen] = useState(false);
+
   const historyMenuRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (messages.length > 0) {
-      setSessions((prev) => {
-        const next = createOrUpdateSession(prev, currentSessionId, messages, tutorMode);
-        saveSessions(next);
-        return next;
-      });
-    }
-  }, [messages, currentSessionId, tutorMode]);
-
-  const abortControllerRef = useRef<AbortController | null>(null);
   const magIaRef = useRef<HTMLDivElement>(null);
   const mentionRef = useRef<HTMLDivElement>(null);
   const backdropRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const assistantRevealIdRef = useRef(0);
-  const pendingInvalidations = useRef<Array<ReturnType<typeof invalidationsForToolCall>>>([]);
 
-  const [attachedDocs, setAttachedDocs] = useState<AttachedDoc[]>([]);
-  const [isUploading, setIsUploading] = useState(false);
-  const [isMagIaOpen, setIsMagIaOpen] = useState(false);
+  const {
+    sessions,
+    currentSessionId,
+    messages,
+    setMessages,
+    tutorMode,
+    setTutorMode,
+    abortControllerRef,
+    handleNewChat: startNewChat,
+    handleSelectSession: restoreSession,
+    handleDeleteSession: handleDeleteStoredSession
+  } = useChatSessions();
+
+  const { isSending, isTutorWriting, assistantReveal, error, setError, submit, clearReveal } = useTutorTurn({
+    messages,
+    setMessages,
+    tutorMode,
+    attachedDocs,
+    setAttachedDocs,
+    setInput,
+    abortControllerRef,
+    messagesEndRef
+  });
+
+  const { isUploading, handleDirectFileUpload } = useChatPdfUpload({
+    setAttachedDocs,
+    setError
+  });
 
   const materialsResult = useAtomValue(materialsQuery);
   const availableMaterials = AsyncResult.match(materialsResult, {
@@ -92,11 +82,6 @@ export function Chat({
     onFailure: () => [],
     onSuccess: ({ value }) => value.materials
   });
-
-  const refreshArtifacts = useAtomRefresh(artifactsQuery);
-  const refreshMaterials = useAtomRefresh(materialsQuery);
-  const refreshKnowledge = useAtomRefresh(knowledgeProfileQuery);
-  const uploadMaterial = useAtomSet(uploadMaterialAction, { mode: "promise" });
 
   const { isListening, audioLevels, toggleListening, stopListening } = useVoiceDictation((text) =>
     setInput(text)
@@ -114,48 +99,24 @@ export function Chat({
     handleRemoveAttachedDoc
   } = useMentions(input, setInput, attachedDocs, setAttachedDocs, availableMaterials, textareaRef);
 
-  const handleNewChat = useCallback(() => {
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-      abortControllerRef.current = null;
-    }
-    const newId = makeNewSessionId();
-    setCurrentSessionId(newId);
-    setMessages([]);
-    setAssistantReveal(null);
+  const handleNewChat = () => {
+    startNewChat();
+    clearReveal();
     setIsHistoryOpen(false);
-  }, []);
+  };
 
-  const handleSelectSession = useCallback((session: ChatSession) => {
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-      abortControllerRef.current = null;
-    }
-    setCurrentSessionId(session.id);
-    setMessages(session.messages);
-    if (session.mode) {
-      setTutorMode(session.mode);
-    }
-    setAssistantReveal(null);
+  const handleSelectSession = (session: ChatSession) => {
+    restoreSession(session);
+    clearReveal();
     setIsHistoryOpen(false);
-  }, []);
+  };
 
-  const handleDeleteSession = useCallback((sessionId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setSessions((prev) => {
-      const next = deleteStoredSession(prev, sessionId);
-      saveSessions(next);
-      return next;
-    });
-    setCurrentSessionId((curr) => {
-      if (curr === sessionId) {
-        setMessages([]);
-        setAssistantReveal(null);
-        return makeNewSessionId();
-      }
-      return curr;
-    });
-  }, []);
+  const handleDeleteSession = (sessionId: string, event: React.MouseEvent) => {
+    if (currentSessionId === sessionId) {
+      clearReveal();
+    }
+    handleDeleteStoredSession(sessionId, event);
+  };
 
   useEffect(() => {
     const handleOutsideClick = (e: MouseEvent) => {
@@ -172,55 +133,6 @@ export function Chat({
     window.addEventListener("mousedown", handleOutsideClick);
     return () => window.removeEventListener("mousedown", handleOutsideClick);
   }, [setIsMentionOpen]);
-
-  useEffect(
-    () => () => {
-      abortControllerRef.current?.abort();
-    },
-    []
-  );
-
-  const handleDirectFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    if (file.type === "application/pdf" || file.name.endsWith(".pdf")) {
-      setIsUploading(true);
-      try {
-        const reader = new FileReader();
-        reader.onload = async () => {
-          try {
-            const base64 = (reader.result as string).split(",")[1];
-            if (!base64) return;
-            const cleanTitle = file.name.replace(/\.pdf$/i, "").replace(/[-_]/g, " ");
-            const res = await uploadMaterial({
-              title: cleanTitle,
-              fileName: file.name,
-              contentBase64: base64
-            });
-            refreshMaterials();
-            if (res && res.id) {
-              setAttachedDocs((prev) => [
-                ...prev.filter((d) => d.id !== res.id),
-                { id: res.id, title: res.title, pageCount: res.pageCount }
-              ]);
-            }
-          } catch (e) {
-            console.error("Direct upload failed", e);
-          } finally {
-            setIsUploading(false);
-          }
-        };
-        reader.readAsDataURL(file);
-      } catch (err) {
-        console.error("Reader error", err);
-        setIsUploading(false);
-      }
-    } else {
-      setError("Solo se pueden adjuntar documentos en formato PDF.");
-    }
-    event.target.value = "";
-  };
 
   useEffect(() => {
     if (prefillPrompt && !isSending) {
@@ -239,123 +151,6 @@ export function Chat({
       onClearPrefill?.();
     }
   }, [prefillPrompt, prefillAttachments, isSending, onClearPrefill]);
-
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "auto" });
-  };
-
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages, isSending, assistantReveal?.visibleLength]);
-
-  const isTutorWriting = assistantReveal !== null;
-
-  useEffect(() => {
-    if (!assistantReveal) return;
-
-    if (assistantReveal.visibleLength >= assistantReveal.content.length) {
-      const finishTimer = window.setTimeout(() => setAssistantReveal(null), 420);
-      return () => window.clearTimeout(finishTimer);
-    }
-
-    const revealTimer = window.setTimeout(() => {
-      setAssistantReveal((current) => {
-        if (!current || current.id !== assistantReveal.id) return current;
-        const increment = Math.max(3, Math.min(10, Math.ceil(current.content.length / 120)));
-        return {
-          ...current,
-          visibleLength: Math.min(current.content.length, current.visibleLength + increment)
-        };
-      });
-    }, 18);
-
-    return () => window.clearTimeout(revealTimer);
-  }, [assistantReveal]);
-
-  const submit = async (nextInput: string) => {
-    const trimmed = nextInput.trim();
-    if ((trimmed.length === 0 && attachedDocs.length === 0) || isSending || isTutorWriting) {
-      return;
-    }
-
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-    }
-    const controller = new AbortController();
-    abortControllerRef.current = controller;
-
-    const finalPrompt = trimmed || "Explícame los conceptos clave de este documento.";
-    const activeMaterialIds = attachedDocs.map((d) => d.id);
-    const documentReferences = attachedDocs.map((d) => d.title);
-    const optimisticUserMessage: AgentMessage = { role: "user", content: finalPrompt };
-
-    setAttachedDocs([]);
-    setInput("");
-    setMessages((current) => [...current, optimisticUserMessage]);
-    setIsSending(true);
-    setError(undefined);
-    pendingInvalidations.current = [];
-
-    try {
-      for await (const event of streamTutorMessage(
-        {
-          input: finalPrompt,
-          messages,
-          mode: tutorMode,
-          activeMaterialIds,
-          documentReferences,
-          maxSteps: 14
-        },
-        controller.signal
-      )) {
-        if (event.type === "done") {
-          continue;
-        }
-
-        const message = event.message;
-        if (message.role !== "user") {
-          setMessages((current) => [...current, message]);
-        }
-
-        if (message.role === "assistant") {
-          const revealId = assistantRevealIdRef.current + 1;
-          assistantRevealIdRef.current = revealId;
-          setAssistantReveal({
-            id: revealId,
-            content: message.content,
-            visibleLength: 0
-          });
-        }
-
-        if (message.role === "tool-call") {
-          pendingInvalidations.current.push(invalidationsForToolCall(message));
-        }
-
-        if (message.role === "tool-result") {
-          const keys = pendingInvalidations.current.shift() ?? [];
-          if (!message.isFailure) {
-            applyInvalidations(keys, {
-              refreshArtifacts,
-              refreshMaterials,
-              refreshKnowledge
-            });
-          }
-        }
-      }
-
-      setInput("");
-    } catch (err: unknown) {
-      if (err instanceof DOMException && err.name === "AbortError") {
-        return;
-      }
-      if (typeof err === "object" && err !== null && "name" in err && err.name === "AbortError") {
-        return;
-      }
-      setError("No se pudo completar la respuesta. Comprueba la conexión e inténtalo de nuevo.");
-    } finally {
-      setIsSending(false);
-    }
-  };
 
   const groupedItems = useMemo(() => groupChatItems(messages), [messages]);
 
