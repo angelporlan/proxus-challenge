@@ -19,6 +19,21 @@ export default defineConfig({
   },
   build: {
     outDir: "../dist",
-    emptyOutDir: true
+    emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        manualChunks(id: string) {
+          if (id.includes("node_modules/streamdown")) {
+            return "vendor-streamdown";
+          }
+          if (id.includes("node_modules/effect") || id.includes("node_modules/@effect")) {
+            return "vendor-effect";
+          }
+          if (id.includes("node_modules/react") || id.includes("node_modules/react-dom")) {
+            return "vendor-react";
+          }
+        }
+      }
+    }
   }
 });

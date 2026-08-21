@@ -6,21 +6,34 @@ import {
   type PointerEvent as ReactPointerEvent,
   type RefObject,
   type ReactNode,
+  lazy,
+  Suspense,
   useCallback,
   useEffect,
   useMemo,
   useRef,
   useState
 } from "react";
-import { ArtifactWorkspace } from "./components/ArtifactWorkspace.tsx";
 import { Chat } from "./components/Chat.tsx";
 import { DocumentUploadModal } from "./components/DocumentUploadModal.tsx";
 import { MaterialDeleteDialog } from "./components/MaterialDeleteDialog.tsx";
 import { ArtifactDeleteDialog } from "./components/ArtifactDeleteDialog.tsx";
-import { MindMapViewer } from "./components/MindMapViewer.tsx";
 import { OnboardingUpload } from "./components/OnboardingUpload.tsx";
-import { PdfSplitViewer } from "./components/PdfSplitViewer.tsx";
 import { Sidebar } from "./components/Sidebar.tsx";
+
+const ArtifactWorkspace = lazy(() => import("./components/ArtifactWorkspace.tsx").then(m => ({ default: m.ArtifactWorkspace })));
+const KnowledgeGapsPanel = lazy(() => import("./components/KnowledgeGapsPanel.tsx").then(m => ({ default: m.KnowledgeGapsPanel })));
+const MindMapViewer = lazy(() => import("./components/MindMapViewer.tsx").then(m => ({ default: m.MindMapViewer })));
+const PdfSplitViewer = lazy(() => import("./components/PdfSplitViewer.tsx").then(m => ({ default: m.PdfSplitViewer })));
+
+function LazyFallback() {
+  return (
+    <div className="flex h-full items-center justify-center gap-3 text-slate-400">
+      <span className="ui-spinner" />
+      <p className="text-sm">Cargando…</p>
+    </div>
+  );
+}
 import { IconButton } from "./components/ui/IconButton.tsx";
 import { useToast } from "./components/ui/Toast.tsx";
 import {
@@ -29,12 +42,13 @@ import {
   materialsQuery
 } from "./domain/materials/atoms.ts";
 import { deleteArtifactAction } from "./domain/artifacts/atoms.ts";
+import { knowledgeProfileQuery } from "./domain/knowledge/atoms.ts";
 import { setArtifactSaved } from "./domain/artifacts/saved-artifacts.ts";
 
-type ActiveTab = "workspace" | "mindmap" | "pdf";
+type ActiveTab = "workspace" | "mindmap" | "pdf" | "gaps";
 type Theme = "dark" | "light";
 
-const TAB_ORDER: readonly ActiveTab[] = ["workspace", "mindmap", "pdf"];
+const TAB_ORDER: readonly ActiveTab[] = ["workspace", "mindmap", "pdf", "gaps"];
 
 export function App() {
   const [theme, setTheme] = useState<Theme>(() => {
@@ -116,6 +130,12 @@ export function App() {
     () => constrainPanelWidths(sidebarWidth, chatWidth, viewportWidth),
     [chatWidth, sidebarWidth, viewportWidth]
   );
+  const profileResult = useAtomValue(knowledgeProfileQuery);
+  const activeGapsCount = AsyncResult.match(profileResult, {
+    onInitial: () => 0,
+    onFailure: () => 0,
+    onSuccess: ({ value }) => value.gaps.filter((g) => g.status === "active").length
+  });
   const isLight = theme === "light";
   const hasMaterials = AsyncResult.match(materialsResult, {
     onInitial: () => false,
@@ -533,6 +553,7 @@ export function App() {
             </IconButton>
             <div role="tablist" aria-label="Vistas del espacio de estudio" className={`flex items-center gap-0.5 rounded-xl border p-1 text-xs ${isLight ? "border-slate-200 bg-slate-100" : "border-slate-800 bg-slate-950"}`}>
               <WorkspaceTab id="workspace" label="Estudio" icon="school" active={activeTab === "workspace"} onClick={() => changeTab("workspace")} onKeyDown={handleTabKeyDown} isLight={isLight} />
+              <WorkspaceTab id="gaps" label={activeGapsCount > 0 ? `Lagunas (${activeGapsCount})` : "Lagunas"} icon="psychology_alt" active={activeTab === "gaps"} onClick={() => changeTab("gaps")} onKeyDown={handleTabKeyDown} isLight={isLight} />
               <WorkspaceTab id="mindmap" label="Esquema" icon="schema" active={activeTab === "mindmap"} onClick={() => changeTab("mindmap")} onKeyDown={handleTabKeyDown} isLight={isLight} />
               <WorkspaceTab id="pdf" label="PDF" icon="picture_as_pdf" active={activeTab === "pdf"} disabled={!hasMaterials} onClick={() => changeTab("pdf")} onKeyDown={handleTabKeyDown} isLight={isLight} />
             </div>
@@ -593,16 +614,29 @@ export function App() {
           className="min-h-0 flex-1 overflow-hidden ui-view-enter"
           key={activeTab}
         >
-          {activeTab === "mindmap" ? (
-            <MindMapViewer
-              theme={theme}
-              selectedMaterialId={selectedMaterialId}
-              onSelectMaterialId={setSelectedMaterialId}
-              onAskTutorAboutConcept={(concept, notes) => openTutor(`Explica detalladamente el concepto "${concept}" en el contexto de mis apuntes: ${notes || ""}`)}
-              onGenerateQuizForBranch={(branch) => openTutor(`Crea un quiz de 3 preguntas de opción múltiple centrado en el apartado "${branch}".`)}
-              onOpenPdfPage={(materialId, page) => handleSelectMaterial(materialId, page)}
-              onGenerateAiMap={(title) => openTutor(`Profundiza en un esquema del tema "${title}" con conceptos fundamentales y casos prácticos.`)}
-            />
+          {activeTab === "gaps" ? (
+            <Suspense fallback={<LazyFallback />}>
+              <KnowledgeGapsPanel
+                theme={theme}
+                onAskTutorAboutGap={(gap) =>
+                  openTutor(
+                    `Tengo dudas con esta pregunta de "${gap.topic}": "${gap.question}". ¿Por qué mi respuesta "${gap.studentAnswer}" no es correcta y la correcta es "${gap.correctAnswer}"? Explícamelo paso a paso.`
+                  )
+                }
+              />
+            </Suspense>
+          ) : activeTab === "mindmap" ? (
+            <Suspense fallback={<LazyFallback />}>
+              <MindMapViewer
+                theme={theme}
+                selectedMaterialId={selectedMaterialId}
+                onSelectMaterialId={setSelectedMaterialId}
+                onAskTutorAboutConcept={(concept, notes) => openTutor(`Explica detalladamente el concepto "${concept}" en el contexto de mis apuntes: ${notes || ""}`)}
+                onGenerateQuizForBranch={(branch) => openTutor(`Crea un quiz de 3 preguntas de opción múltiple centrado en el apartado "${branch}".`)}
+                onOpenPdfPage={(materialId, page) => handleSelectMaterial(materialId, page)}
+                onGenerateAiMap={(title) => openTutor(`Profundiza en un esquema del tema "${title}" con conceptos fundamentales y casos prácticos.`)}
+              />
+            </Suspense>
           ) : activeTab === "pdf" && selectedMaterialId ? (
             <SelectedMaterialPdfViewer
               materialId={selectedMaterialId}
@@ -614,7 +648,9 @@ export function App() {
           ) : activeTab === "pdf" ? (
             <NoPdfSelected recentMaterial={recentMaterial} onOpenRecent={() => recentMaterial && handleSelectMaterial(recentMaterial.id)} onUpload={() => setIsUploadOpen(true)} />
           ) : selectedArtifactId ? (
-            <ArtifactWorkspace artifactId={selectedArtifactId} onAskTutorAboutQuestion={handleAskAboutMistake} onOpenPdf={(id) => handleSelectMaterial(id)} />
+            <Suspense fallback={<LazyFallback />}>
+              <ArtifactWorkspace artifactId={selectedArtifactId} onAskTutorAboutQuestion={handleAskAboutMistake} onOpenPdf={(id) => handleSelectMaterial(id)} />
+            </Suspense>
           ) : !hasMaterials ? (
             <div className="h-full overflow-y-auto"><OnboardingUpload onUploaded={handleUploaded} onSelectPrompt={(prompt) => openTutor(prompt)} /></div>
           ) : (
@@ -905,13 +941,15 @@ function SelectedMaterialPdfViewer({
     onError: () => <LoadError onRetry={refresh} />,
     onDefect: () => <LoadError onRetry={refresh} />,
     onSuccess: ({ value }: { value: PdfMaterial }) => (
-      <PdfSplitViewer
-        material={value}
-        initialPage={initialPage}
-        onClose={onClose}
-        onAskAboutPage={onAskAboutPage}
-        onAskAboutSelection={onAskAboutSelection}
-      />
+      <Suspense fallback={<LazyFallback />}>
+        <PdfSplitViewer
+          material={value}
+          initialPage={initialPage}
+          onClose={onClose}
+          onAskAboutPage={onAskAboutPage}
+          onAskAboutSelection={onAskAboutSelection}
+        />
+      </Suspense>
     )
   });
 }
