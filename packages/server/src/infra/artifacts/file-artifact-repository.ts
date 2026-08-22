@@ -34,6 +34,16 @@ function extractKnowledgeGaps(artifact: ArtifactType, graded: ArtifactAttemptTyp
   const gaps: KnowledgeGap[] = [];
 
   for (const correction of graded.corrections) {
+    // Only process questions that the student actually attempted/answered
+    const studentAnswerProvided = graded.answers.some(
+      (a) => a.questionId === correction.questionId && (
+        a.questionType !== "multiple-choice" || (a.selectedOptionId && a.selectedOptionId.trim() !== "")
+      )
+    );
+    if (!studentAnswerProvided) {
+      continue;
+    }
+
     let isIncorrect = false;
     let studentAns = "";
     let correctAns = "";

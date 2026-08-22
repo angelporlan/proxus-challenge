@@ -1,8 +1,8 @@
-import { useAtomValue } from "@effect/atom-react";
+import { useAtomSet, useAtomValue } from "@effect/atom-react";
 import type { Artifact, NoteArtifact, QuizArtifact, TestArtifact } from "@proxus/shared";
 import * as AsyncResult from "effect/unstable/reactivity/AsyncResult";
 import React, { useState } from "react";
-import { artifactQuery } from "../domain/artifacts/atoms.ts";
+import { artifactQuery, submitArtifactAttemptAction } from "../domain/artifacts/atoms.ts";
 import { toggleArtifactSaved, useSavedArtifactIds } from "../domain/artifacts/saved-artifacts.ts";
 
 interface ArtifactChatCardProps {
@@ -186,6 +186,7 @@ function InlineQuizSolver({
   const [currentIdx, setCurrentIdx] = useState(0);
   const [selectedAnswers, setSelectedAnswers] = useState<Record<string, string | boolean>>({});
   const [showExplanation, setShowExplanation] = useState(false);
+  const submitAttempt = useAtomSet(submitArtifactAttemptAction, { mode: "promise" });
 
   const question = quiz.questions[currentIdx];
   if (!question) return null;
@@ -200,8 +201,33 @@ function InlineQuizSolver({
 
   const handleSelectOption = (optId: string | boolean) => {
     if (isAnswered) return;
-    setSelectedAnswers((prev) => ({ ...prev, [question.id]: optId }));
+    const nextAnswers = { ...selectedAnswers, [question.id]: optId };
+    setSelectedAnswers(nextAnswers);
     setShowExplanation(true);
+
+    const answersPayload = quiz.questions
+      .filter((q) => nextAnswers[q.id] !== undefined)
+      .map((q) => {
+        const val = nextAnswers[q.id];
+        if (q.type === "true-false") {
+          return {
+            questionType: "true-false" as const,
+            questionId: q.id,
+            answer: Boolean(val)
+          };
+        }
+        return {
+          questionType: "multiple-choice" as const,
+          questionId: q.id,
+          selectedOptionId: String(val)
+        };
+      });
+
+    void submitAttempt({
+      artifactKind: "quiz",
+      artifactId: quiz.id,
+      answers: answersPayload
+    }).catch(() => {});
   };
 
   const handleNext = () => {
@@ -353,6 +379,12 @@ function InlineQuizSolver({
             <span>{isCorrect ? "¡Correcto!" : "Respuesta incorrecta"}</span>
           </div>
           <p className="leading-relaxed">{question.explanation}</p>
+          {!isCorrect && (
+            <div className="mt-2 pt-2 border-t border-red-200 dark:border-red-800/50 flex items-center gap-1.5 font-semibold text-[11px] text-amber-700 dark:text-amber-300">
+              <span className="material-symbols-outlined text-[15px]">psychology_alt</span>
+              <span>Laguna registrada automáticamente en tu perfil para repasar</span>
+            </div>
+          )}
         </div>
       )}
 
