@@ -6,6 +6,7 @@ const port = Number(process.env.WEB_PORT ?? process.env.PORT ?? "5173");
 
 export default defineConfig({
   root: "src",
+  publicDir: "../public",
   plugins: [react()],
   server: {
     host: "0.0.0.0",
