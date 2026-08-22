@@ -5,6 +5,7 @@ import { TutorChatService } from "../../domain/agents/academic-tutor/tutor-chat-
 import { ArtifactRepository, type Artifact } from "../../domain/artifacts/artifact.ts";
 import { MaterialRepository } from "../../domain/materials/material.ts";
 import { MindMapService } from "../../domain/materials/mindmap-service.ts";
+import { deleteMaterialCascade } from "../../domain/materials/delete-material-cascade.ts";
 import { KnowledgeRepository } from "../../domain/knowledge/knowledge-profile.ts";
 import { UserProfileRepository } from "../../domain/user-profile/user-profile.ts";
 import { failAsHttpError, failAsServiceHttpError, failAsTutorHttpError } from "./http-errors.ts";
@@ -33,6 +34,8 @@ export const MaterialsHttpHandlers = HttpApiBuilder.group(
   Effect.fn(function* (handlers) {
     const materials = yield* MaterialRepository;
     const mindMaps = yield* MindMapService;
+    yield* ArtifactRepository;
+    yield* KnowledgeRepository;
 
     return handlers
       .handle("list", () => materials.list().pipe(
@@ -69,10 +72,9 @@ export const MaterialsHttpHandlers = HttpApiBuilder.group(
           Effect.catch(failAsHttpError)
         )
       )
-      .handle("delete", ({ params }) => materials.delete(params.id).pipe(
-        Effect.map(() => ({ success: true, id: params.id })),
-        Effect.catch(failAsHttpError)
-      ));
+      .handle("delete", ({ params }) =>
+        deleteMaterialCascade(params.id).pipe(Effect.catch(failAsHttpError))
+      );
   })
 );
 

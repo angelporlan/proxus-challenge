@@ -71,7 +71,8 @@ export const FileKnowledgeRepository = {
             correctAnswer: gap.correctAnswer,
             explanation: gap.explanation,
             status: "active",
-            failedAt: now
+            failedAt: now,
+            ...(gap.sourceMaterialId !== undefined ? { sourceMaterialId: gap.sourceMaterialId } : {})
           };
         } else {
           updatedGaps.push({
@@ -84,10 +85,22 @@ export const FileKnowledgeRepository = {
 
       const updatedProfile: KnowledgeProfileType = {
         gaps: updatedGaps,
+        totalAttempts: current.totalAttempts,
+        lastAttemptAt: current.lastAttemptAt
+      };
+
+      yield* writeProfile(updatedProfile);
+      return updatedProfile;
+    });
+
+    const recordCompletedAttempt = () => Effect.gen(function* () {
+      const current = yield* readProfile();
+      const now = new Date().toISOString();
+      const updatedProfile: KnowledgeProfileType = {
+        ...current,
         totalAttempts: current.totalAttempts + 1,
         lastAttemptAt: now
       };
-
       yield* writeProfile(updatedProfile);
       return updatedProfile;
     });
@@ -119,9 +132,11 @@ export const FileKnowledgeRepository = {
       return updatedGap;
     });
 
-    const removeGapsByArtifactId = (artifactId: string) => Effect.gen(function* () {
+    const removeGapsMatching = (
+      keep: (gap: KnowledgeGapType) => boolean
+    ) => Effect.gen(function* () {
       const current = yield* readProfile();
-      const remainingGaps = current.gaps.filter((gap) => gap.sourceArtifactId !== artifactId);
+      const remainingGaps = current.gaps.filter(keep);
 
       if (remainingGaps.length !== current.gaps.length) {
         yield* writeProfile({
@@ -130,6 +145,12 @@ export const FileKnowledgeRepository = {
         });
       }
     });
+
+    const removeGapsByArtifactId = (artifactId: string) =>
+      removeGapsMatching((gap) => gap.sourceArtifactId !== artifactId);
+
+    const removeGapsByMaterialId = (materialId: string) =>
+      removeGapsMatching((gap) => gap.sourceMaterialId !== materialId);
 
     const clearProfile = () => writeProfile(defaultProfile);
 
@@ -140,8 +161,10 @@ export const FileKnowledgeRepository = {
     return {
       getProfile,
       recordGaps,
+      recordCompletedAttempt,
       updateGapStatus,
       removeGapsByArtifactId,
+      removeGapsByMaterialId,
       clearProfile,
       listActiveGaps
     };

@@ -20,7 +20,8 @@ export const KnowledgeGap = Schema.Struct({
   reviewedAt: Schema.optional(Schema.String),
   masteredAt: Schema.optional(Schema.String),
   sourceArtifactId: Schema.String,
-  sourceQuestionId: Schema.String
+  sourceQuestionId: Schema.String,
+  sourceMaterialId: Schema.optional(Schema.String)
 });
 export type KnowledgeGap = typeof KnowledgeGap.Type;
 

@@ -51,7 +51,8 @@ export const NoteArtifact = Schema.Struct({
   kind: Schema.Literal("note"),
   id: Schema.String,
   title: Schema.String,
-  markdown: Schema.String
+  markdown: Schema.String,
+  sourceMaterialId: Schema.optional(Schema.String)
 });
 export type NoteArtifact = typeof NoteArtifact.Type;
 
@@ -59,7 +60,8 @@ export const QuizArtifact = Schema.Struct({
   kind: Schema.Literal("quiz"),
   id: Schema.String,
   title: Schema.String,
-  questions: Schema.Array(QuizQuestion)
+  questions: Schema.Array(QuizQuestion),
+  sourceMaterialId: Schema.optional(Schema.String)
 });
 export type QuizArtifact = typeof QuizArtifact.Type;
 
@@ -67,7 +69,8 @@ export const TestArtifact = Schema.Struct({
   kind: Schema.Literal("test"),
   id: Schema.String,
   title: Schema.String,
-  questions: Schema.Array(TestQuestion)
+  questions: Schema.Array(TestQuestion),
+  sourceMaterialId: Schema.optional(Schema.String)
 });
 export type TestArtifact = typeof TestArtifact.Type;
 

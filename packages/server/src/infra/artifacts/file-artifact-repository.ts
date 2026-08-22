@@ -85,7 +85,10 @@ function extractKnowledgeGaps(artifact: ArtifactType, graded: ArtifactAttemptTyp
         status: "active",
         failedAt: now,
         sourceArtifactId: artifact.id,
-        sourceQuestionId: correction.questionId
+        sourceQuestionId: correction.questionId,
+        ...(artifact.sourceMaterialId !== undefined
+          ? { sourceMaterialId: artifact.sourceMaterialId }
+          : {})
       });
     }
   }
@@ -216,12 +219,13 @@ export const FileArtifactRepository = {
       const graded = yield* gradeAttempt(artifact, attempt);
       yield* writeAttemptFile(graded);
 
-      // Auto-record knowledge gaps in background if student made mistakes
       if (Option.isSome(knowledgeRepoOption)) {
+        const knowledge = knowledgeRepoOption.value;
         const gaps = extractKnowledgeGaps(artifact, graded);
         if (gaps.length > 0) {
-          yield* knowledgeRepoOption.value.recordGaps(gaps).pipe(Effect.catch(() => Effect.void));
+          yield* knowledge.recordGaps(gaps).pipe(Effect.catch(() => Effect.void));
         }
+        yield* knowledge.recordCompletedAttempt().pipe(Effect.catch(() => Effect.void));
       }
 
       return graded;

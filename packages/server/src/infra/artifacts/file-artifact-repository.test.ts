@@ -67,4 +67,59 @@ describe("FileArtifactRepository", () => {
 
     expect(profile.gaps).toHaveLength(0);
   });
+
+  it("counts a perfect quiz as one completed attempt", async () => {
+    const profile = await runWithRepositories((artifacts, knowledge) => Effect.gen(function* () {
+      const quiz = yield* artifacts.createArtifact({
+        kind: "quiz",
+        title: "Quiz perfecto",
+        sourceMaterialId: "pdf-1",
+        questions: [{
+          type: "true-false",
+          id: "q1",
+          prompt: "2+2=4",
+          correctAnswer: true,
+          explanation: "Aritmética"
+        }]
+      });
+      const attempt = yield* artifacts.submitAttempt({
+        artifactKind: "quiz",
+        artifactId: quiz.id,
+        answers: [{ questionType: "true-false", questionId: "q1", answer: true }]
+      });
+      yield* artifacts.gradeAttempt(attempt.id);
+      return yield* knowledge.getProfile();
+    }));
+
+    expect(profile.gaps).toHaveLength(0);
+    expect(profile.totalAttempts).toBe(1);
+  });
+
+  it("copies sourceMaterialId onto recorded gaps", async () => {
+    const profile = await runWithRepositories((artifacts, knowledge) => Effect.gen(function* () {
+      const quiz = yield* artifacts.createArtifact({
+        kind: "quiz",
+        title: "Quiz con fallos",
+        sourceMaterialId: "pdf-1",
+        questions: [{
+          type: "true-false",
+          id: "q1",
+          prompt: "2+2=4",
+          correctAnswer: true,
+          explanation: "Aritmética"
+        }]
+      });
+      const attempt = yield* artifacts.submitAttempt({
+        artifactKind: "quiz",
+        artifactId: quiz.id,
+        answers: [{ questionType: "true-false", questionId: "q1", answer: false }]
+      });
+      yield* artifacts.gradeAttempt(attempt.id);
+      return yield* knowledge.getProfile();
+    }));
+
+    expect(profile.gaps).toHaveLength(1);
+    expect(profile.gaps[0]?.sourceMaterialId).toBe("pdf-1");
+    expect(profile.totalAttempts).toBe(1);
+  });
 });

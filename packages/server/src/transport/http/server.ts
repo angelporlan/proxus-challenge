@@ -34,6 +34,8 @@ const encodeNdjson = (event: TutorChatStreamEvent) =>
   encoder.encode(`${JSON.stringify(Schema.encodeSync(TutorChatStreamEvent)(event))}\n`);
 
 const TutorStreamRoute = HttpRouter.add("POST", "/api/tutor/chat/stream", () =>
+  // Streaming stays on a raw route because Effect HttpApi does not expose NDJSON
+  // event streams. Errors are mapped with the same httpErrorResponse used by the typed API.
   Effect.gen(function* () {
     const input = yield* HttpServerRequest.schemaBodyJson(TutorChatRequest);
     const tutor = yield* TutorChatService;

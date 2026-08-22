@@ -54,6 +54,28 @@ describe("FileKnowledgeRepository", () => {
     const profile = await runWithRepo((repo) => repo.getProfile());
     expect(profile.gaps.map((gap) => gap.id)).toEqual(["gap-quiz-3"]);
     expect(profile.gaps[0]?.sourceArtifactId).toBe("quiz-2");
-    expect(profile.totalAttempts).toBe(1);
+    expect(profile.totalAttempts).toBe(0);
+  });
+
+  it("increments totalAttempts only when an attempt is completed", async () => {
+    await runWithRepo((repo) => repo.recordGaps([makeGap("gap-1", "quiz-1")]));
+    const afterGaps = await runWithRepo((repo) => repo.getProfile());
+    expect(afterGaps.totalAttempts).toBe(0);
+
+    await runWithRepo((repo) => repo.recordCompletedAttempt());
+    const afterAttempt = await runWithRepo((repo) => repo.getProfile());
+    expect(afterAttempt.totalAttempts).toBe(1);
+    expect(afterAttempt.gaps).toHaveLength(1);
+  });
+
+  it("removes gaps that belong to a deleted PDF", async () => {
+    await runWithRepo((repo) => repo.recordGaps([
+      { ...makeGap("gap-pdf", "quiz-1"), sourceMaterialId: "pdf-1" },
+      makeGap("gap-other", "quiz-2")
+    ]));
+
+    await runWithRepo((repo) => repo.removeGapsByMaterialId("pdf-1"));
+    const profile = await runWithRepo((repo) => repo.getProfile());
+    expect(profile.gaps.map((gap) => gap.id)).toEqual(["gap-other"]);
   });
 });
