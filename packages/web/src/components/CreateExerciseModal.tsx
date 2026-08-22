@@ -45,6 +45,7 @@ export function buildExercisePrompt({ kind, questionCount, material, scope, page
     `Crea exactamente ${questionCount} preguntas para un ${exerciseName} ${source} del PDF «${material.title}».`,
     format,
     "Respeta exactamente el número solicitado y usa el comando artifacts create para guardar el recurso.",
+    `Incluye sourceMaterialId \"${material.id}\" en el JSON del artefacto.`,
     "Después presenta únicamente el widget generado con una introducción breve de una o dos frases: no enumeres preguntas, opciones, soluciones, JSON ni IDs en el texto del chat y no pidas responder con Q1: A."
   ].join(" ");
 }

@@ -29,9 +29,9 @@ interface ArtifactWorkspaceProps {
   readonly onOpenPdf?: ((materialId: string) => void) | undefined;
 }
 
-export function ArtifactWorkspace({ artifactId, onAskTutorAboutQuestion }: ArtifactWorkspaceProps) {
+export function ArtifactWorkspace({ artifactId, onAskTutorAboutQuestion, onOpenPdf }: ArtifactWorkspaceProps) {
   if (artifactId === null) return <EmptyWorkspace />;
-  return <ArtifactDetail artifactId={artifactId} onAskTutorAboutQuestion={onAskTutorAboutQuestion} />;
+  return <ArtifactDetail artifactId={artifactId} onAskTutorAboutQuestion={onAskTutorAboutQuestion} onOpenPdf={onOpenPdf} />;
 }
 
 function EmptyWorkspace() {
@@ -47,7 +47,7 @@ function EmptyWorkspace() {
   );
 }
 
-function ArtifactDetail({ artifactId, onAskTutorAboutQuestion }: { readonly artifactId: string; readonly onAskTutorAboutQuestion?: ArtifactWorkspaceProps["onAskTutorAboutQuestion"] }) {
+function ArtifactDetail({ artifactId, onAskTutorAboutQuestion, onOpenPdf }: { readonly artifactId: string; readonly onAskTutorAboutQuestion?: ArtifactWorkspaceProps["onAskTutorAboutQuestion"]; readonly onOpenPdf?: ArtifactWorkspaceProps["onOpenPdf"] }) {
   const query = artifactQuery(artifactId);
   const artifact = useAtomValue(query);
   const refresh = useAtomRefresh(query);
@@ -57,7 +57,7 @@ function ArtifactDetail({ artifactId, onAskTutorAboutQuestion }: { readonly arti
         onInitial: () => <div className="flex h-64 items-center justify-center gap-3 text-slate-400"><div className="size-5 animate-spin rounded-full border-2 border-indigo-500 border-t-transparent" /><p className="text-sm">Cargando recurso…</p></div>,
         onError: () => <ArtifactLoadError onRetry={refresh} />,
         onDefect: () => <ArtifactLoadError onRetry={refresh} />,
-        onSuccess: ({ value }) => <ArtifactContent key={value.id} artifact={value} onAskTutorAboutQuestion={onAskTutorAboutQuestion} />
+        onSuccess: ({ value }) => <ArtifactContent key={value.id} artifact={value} onAskTutorAboutQuestion={onAskTutorAboutQuestion} onOpenPdf={onOpenPdf} />
       })}
     </main>
   );
@@ -67,27 +67,40 @@ function ArtifactLoadError({ onRetry }: { readonly onRetry: () => void }) {
   return <div className="flex min-h-64 items-center justify-center text-center"><div className="max-w-sm"><span className="material-symbols-outlined text-3xl text-red-500" aria-hidden="true">error</span><h2 className="mt-2 text-base font-semibold text-slate-900 dark:text-slate-100">No se pudo abrir el recurso</h2><p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Comprueba la conexión y vuelve a intentarlo.</p><button type="button" className="ui-secondary-action mt-4" onClick={onRetry}>Reintentar</button></div></div>;
 }
 
-function ArtifactContent({ artifact, onAskTutorAboutQuestion }: { readonly artifact: Artifact; readonly onAskTutorAboutQuestion?: ArtifactWorkspaceProps["onAskTutorAboutQuestion"] }) {
+function ArtifactContent({ artifact, onAskTutorAboutQuestion, onOpenPdf }: { readonly artifact: Artifact; readonly onAskTutorAboutQuestion?: ArtifactWorkspaceProps["onAskTutorAboutQuestion"]; readonly onOpenPdf?: ArtifactWorkspaceProps["onOpenPdf"] }) {
+  const openSourcePdf = artifact.sourceMaterialId !== undefined && onOpenPdf !== undefined
+    ? () => onOpenPdf(artifact.sourceMaterialId!)
+    : undefined;
   switch (artifact.kind) {
-    case "note": return <NoteViewer key={artifact.id} artifact={artifact} />;
-    case "quiz": return <QuizWorkspace key={artifact.id} artifact={artifact} onAskTutorAboutQuestion={onAskTutorAboutQuestion} />;
-    case "test": return <ExamWorkspace key={artifact.id} artifact={artifact} onAskTutorAboutQuestion={onAskTutorAboutQuestion} />;
+    case "note": return <NoteViewer key={artifact.id} artifact={artifact} onOpenPdf={openSourcePdf} />;
+    case "quiz": return <QuizWorkspace key={artifact.id} artifact={artifact} onAskTutorAboutQuestion={onAskTutorAboutQuestion} onOpenPdf={openSourcePdf} />;
+    case "test": return <ExamWorkspace key={artifact.id} artifact={artifact} onAskTutorAboutQuestion={onAskTutorAboutQuestion} onOpenPdf={openSourcePdf} />;
   }
 }
 
-function NoteViewer({ artifact }: { readonly artifact: Extract<Artifact, { readonly kind: "note" }> }) {
+function OpenSourcePdfButton({ onOpenPdf }: { readonly onOpenPdf?: (() => void) | undefined }) {
+  if (onOpenPdf === undefined) return null;
+  return (
+    <button type="button" onClick={onOpenPdf} className="flex min-h-9 items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1 text-xs font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 dark:border-slate-800 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100">
+      <span className="material-symbols-outlined text-xs">picture_as_pdf</span>
+      <span>Abrir PDF</span>
+    </button>
+  );
+}
+
+function NoteViewer({ artifact, onOpenPdf }: { readonly artifact: Extract<Artifact, { readonly kind: "note" }>; readonly onOpenPdf?: (() => void) | undefined }) {
   const [copied, setCopied] = useState(false);
   const copyNote = () => { void navigator.clipboard.writeText(artifact.markdown); setCopied(true); setTimeout(() => setCopied(false), 2000); };
   return (
     <article className="mx-auto max-w-3xl rounded-xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900/90 sm:p-8">
-      <div className="mb-4 flex items-center justify-between gap-4"><div className="flex items-center gap-2"><span className="grid size-7 place-items-center rounded-lg bg-indigo-50 text-indigo-600 dark:bg-indigo-600/20 dark:text-indigo-400"><span className="material-symbols-outlined text-sm">description</span></span><span className="text-xs font-bold uppercase tracking-widest text-indigo-600 dark:text-indigo-400">Nota de estudio</span></div><button type="button" onClick={copyNote} className="flex min-h-9 items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1 text-xs font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 dark:border-slate-800 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100"><span className="material-symbols-outlined text-xs">{copied ? "check" : "content_copy"}</span><span>{copied ? "Copiado" : "Copiar"}</span></button></div>
+      <div className="mb-4 flex items-center justify-between gap-4"><div className="flex items-center gap-2"><span className="grid size-7 place-items-center rounded-lg bg-indigo-50 text-indigo-600 dark:bg-indigo-600/20 dark:text-indigo-400"><span className="material-symbols-outlined text-sm">description</span></span><span className="text-xs font-bold uppercase tracking-widest text-indigo-600 dark:text-indigo-400">Nota de estudio</span></div><div className="flex items-center gap-2"><OpenSourcePdfButton onOpenPdf={onOpenPdf} /><button type="button" onClick={copyNote} className="flex min-h-9 items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1 text-xs font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 dark:border-slate-800 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100"><span className="material-symbols-outlined text-xs">{copied ? "check" : "content_copy"}</span><span>{copied ? "Copiado" : "Copiar"}</span></button></div></div>
       <h2 className="mb-6 font-display text-2xl font-bold text-slate-900 dark:text-slate-100 sm:text-3xl">{artifact.title}</h2>
       <div className="prose max-w-none space-y-4 leading-relaxed text-slate-700 dark:prose-invert dark:text-slate-300"><Streamdown>{artifact.markdown}</Streamdown></div>
     </article>
   );
 }
 
-function QuizWorkspace({ artifact, onAskTutorAboutQuestion }: { readonly artifact: QuizArtifact; readonly onAskTutorAboutQuestion?: ArtifactWorkspaceProps["onAskTutorAboutQuestion"] }) {
+function QuizWorkspace({ artifact, onAskTutorAboutQuestion, onOpenPdf }: { readonly artifact: QuizArtifact; readonly onAskTutorAboutQuestion?: ArtifactWorkspaceProps["onAskTutorAboutQuestion"]; readonly onOpenPdf?: (() => void) | undefined }) {
   const [answers, setAnswers] = useState<Answers>({});
   const [attempt, setAttempt] = useState<ArtifactAttempt | null>(null);
   const [error, setError] = useState<string | undefined>();
@@ -96,29 +109,25 @@ function QuizWorkspace({ artifact, onAskTutorAboutQuestion }: { readonly artifac
   const unansweredQuestions = useMemo(() => artifact.questions.filter((question) => !isAnswerProvided(answers[question.id])), [answers, artifact.questions]);
 
   const setAnswer = (questionId: string, value: string) => {
-    if (attempt !== null) return;
+    if (attempt !== null || isSubmitting) return;
     const nextAnswers = { ...answers, [questionId]: value };
     setAnswers(nextAnswers);
 
     const isAllCompleted = artifact.questions.every((q) => isAnswerProvided(nextAnswers[q.id]));
-    const built = buildSubmitInput(artifact, nextAnswers);
+    if (!isAllCompleted) return;
 
-    if (isAllCompleted) {
-      setIsSubmitting(true);
-      setError(undefined);
-      submitAttempt(built)
-        .then((result) => {
-          setAttempt(result);
-        })
-        .catch(() => {
-          setError("No se pudo guardar el resultado final. Comprueba la conexión.");
-        })
-        .finally(() => {
-          setIsSubmitting(false);
-        });
-    } else {
-      void submitAttempt(built).catch(() => {});
-    }
+    setIsSubmitting(true);
+    setError(undefined);
+    submitAttempt(buildSubmitInput(artifact, nextAnswers))
+      .then((result) => {
+        setAttempt(result);
+      })
+      .catch(() => {
+        setError("No se pudo guardar el resultado final. Comprueba la conexión.");
+      })
+      .finally(() => {
+        setIsSubmitting(false);
+      });
   };
 
   const reset = () => { setAnswers({}); setAttempt(null); setError(undefined); };
@@ -126,10 +135,10 @@ function QuizWorkspace({ artifact, onAskTutorAboutQuestion }: { readonly artifac
   return (
     <article className="mx-auto max-w-3xl pb-32 sm:pb-40">
       <header className="mb-5 rounded-2xl border border-purple-200 bg-gradient-to-br from-purple-50 via-white to-fuchsia-50 p-5 shadow-sm dark:border-purple-900/60 dark:from-purple-950/50 dark:via-slate-900/95 dark:to-fuchsia-950/30 sm:p-6">
-        <div className="flex flex-wrap items-start justify-between gap-4"><div><div className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-purple-600 dark:text-purple-300"><span className="grid size-8 place-items-center rounded-xl bg-purple-600 text-white shadow-sm"><span className="material-symbols-outlined text-base">quiz</span></span>Quiz de práctica</div><h2 className="font-display text-2xl font-bold text-slate-950 dark:text-slate-50 sm:text-3xl">{artifact.title}</h2><p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-600 dark:text-slate-300">Responde a tu ritmo. Recibirás la explicación inmediatamente y las lagunas se guardarán automáticamente en tu perfil.</p></div><div className="rounded-xl border border-purple-200 bg-white/80 px-3 py-2 text-right text-xs dark:border-purple-800/60 dark:bg-purple-950/40"><span className="block font-mono text-lg font-bold text-purple-700 dark:text-purple-200">{artifact.questions.length}</span><span className="text-slate-500 dark:text-slate-400">preguntas</span></div></div>
-        <div className="mt-5 flex flex-wrap items-center gap-2 text-xs text-slate-600 dark:text-slate-300"><span className="rounded-full bg-purple-100 px-2.5 py-1 font-semibold text-purple-700 dark:bg-purple-900/60 dark:text-purple-200">Feedback inmediato</span><span className="rounded-full bg-white/80 px-2.5 py-1 dark:bg-slate-900/70">Auto-guardado activo</span><span>{artifact.questions.length - unansweredQuestions.length}/{artifact.questions.length} respondidas</span></div>
+        <div className="flex flex-wrap items-start justify-between gap-4"><div><div className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-purple-600 dark:text-purple-300"><span className="grid size-8 place-items-center rounded-xl bg-purple-600 text-white shadow-sm"><span className="material-symbols-outlined text-base">quiz</span></span>Quiz de práctica</div><h2 className="font-display text-2xl font-bold text-slate-950 dark:text-slate-50 sm:text-3xl">{artifact.title}</h2><p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-600 dark:text-slate-300">Responde a tu ritmo. Recibirás la explicación inmediatamente; las lagunas se guardan al terminar el quiz.</p></div><div className="flex flex-col items-end gap-2"><OpenSourcePdfButton onOpenPdf={onOpenPdf} /><div className="rounded-xl border border-purple-200 bg-white/80 px-3 py-2 text-right text-xs dark:border-purple-800/60 dark:bg-purple-950/40"><span className="block font-mono text-lg font-bold text-purple-700 dark:text-purple-200">{artifact.questions.length}</span><span className="text-slate-500 dark:text-slate-400">preguntas</span></div></div></div>
+        <div className="mt-5 flex flex-wrap items-center gap-2 text-xs text-slate-600 dark:text-slate-300"><span className="rounded-full bg-purple-100 px-2.5 py-1 font-semibold text-purple-700 dark:bg-purple-900/60 dark:text-purple-200">Feedback inmediato</span><span className="rounded-full bg-white/80 px-2.5 py-1 dark:bg-slate-900/70">Resultado al completar</span><span>{artifact.questions.length - unansweredQuestions.length}/{artifact.questions.length} respondidas</span></div>
       </header>
-      <div className="grid gap-4">{artifact.questions.map((question, index) => <PracticeQuestionCard key={`${question.id}-${index}`} index={index} question={question} value={answers[question.id] ?? ""} disabled={attempt !== null || isAnswerProvided(answers[question.id])} correction={attempt?.status === "graded" ? attempt.corrections.find((item) => item.questionId === question.id) : undefined} onChange={(value) => setAnswer(question.id, value)} onAskTutorAboutQuestion={onAskTutorAboutQuestion} />)}</div>
+      <div className="grid gap-4">{artifact.questions.map((question, index) => <PracticeQuestionCard key={`${question.id}-${index}`} index={index} question={question} value={answers[question.id] ?? ""} disabled={attempt !== null || isAnswerProvided(answers[question.id])} correction={attempt?.status === "graded" ? attempt.corrections.find((item) => item.questionId === question.id) : undefined} persisted={attempt?.status === "graded"} onChange={(value) => setAnswer(question.id, value)} onAskTutorAboutQuestion={onAskTutorAboutQuestion} />)}</div>
       {error !== undefined && <ErrorMessage>{error}</ErrorMessage>}
       {attempt?.status === "graded" ? (
         <PracticeResult attempt={attempt} onRetry={reset} />
@@ -139,8 +148,8 @@ function QuizWorkspace({ artifact, onAskTutorAboutQuestion }: { readonly artifac
             <span className="material-symbols-outlined text-sm text-purple-500 animate-pulse">auto_mode</span>
             <span>
               {unansweredQuestions.length === 1
-                ? "Te queda 1 pregunta. Al responderla se guardará tu resultado y lagunas automáticamente."
-                : `Te quedan ${unansweredQuestions.length} pregunta(s) por responder. Las respuestas y lagunas se guardan automáticamente.`}
+                ? "Te queda 1 pregunta. Al responderla se guardará tu resultado y las lagunas."
+                : `Te quedan ${unansweredQuestions.length} pregunta(s) por responder. El resultado se guarda al completar el quiz.`}
             </span>
           </div>
           {isSubmitting && (
@@ -155,7 +164,7 @@ function QuizWorkspace({ artifact, onAskTutorAboutQuestion }: { readonly artifac
   );
 }
 
-function PracticeQuestionCard({ index, question, value, disabled, correction, onChange, onAskTutorAboutQuestion }: { readonly index: number; readonly question: QuizQuestion; readonly value: string; readonly disabled: boolean; readonly correction: QuestionCorrection | undefined; readonly onChange: (value: string) => void; readonly onAskTutorAboutQuestion?: ArtifactWorkspaceProps["onAskTutorAboutQuestion"] }) {
+function PracticeQuestionCard({ index, question, value, disabled, correction, persisted, onChange, onAskTutorAboutQuestion }: { readonly index: number; readonly question: QuizQuestion; readonly value: string; readonly disabled: boolean; readonly correction: QuestionCorrection | undefined; readonly persisted: boolean; readonly onChange: (value: string) => void; readonly onAskTutorAboutQuestion?: ArtifactWorkspaceProps["onAskTutorAboutQuestion"] }) {
   const cardRef = useRef<HTMLElement | null>(null);
   const answered = isAnswerProvided(value);
   const isCorrect = answered && questionCorrect(question, value);
@@ -174,9 +183,9 @@ function PracticeQuestionCard({ index, question, value, disabled, correction, on
       ref={(el) => { cardRef.current = el; }}
       className={`scroll-mt-6 rounded-2xl border bg-white p-5 shadow-sm transition-all duration-200 dark:bg-slate-900/90 sm:p-6 ${answered ? isCorrect ? "border-emerald-300 dark:border-emerald-800/70" : "border-amber-300 dark:border-amber-800/70" : "border-slate-200 dark:border-slate-800"}`}
     >
-      <div className="mb-4 flex items-start justify-between gap-4"><div><span className="mb-1 block font-mono text-xs font-semibold uppercase tracking-wider text-purple-600 dark:text-purple-400">Pregunta {index + 1} · {question.type === "multiple-choice" ? "opción múltiple" : "verdadero o falso"}</span><h3 className="font-display text-base font-semibold leading-snug text-slate-900 dark:text-slate-100 sm:text-lg">{question.prompt}</h3></div>{answered && <span className={`rounded-full px-3 py-1 text-xs font-bold ${isCorrect ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300" : "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300"}`}>{isCorrect ? "Correcto" : "Laguna registrada"}</span>}</div>
+      <div className="mb-4 flex items-start justify-between gap-4"><div><span className="mb-1 block font-mono text-xs font-semibold uppercase tracking-wider text-purple-600 dark:text-purple-400">Pregunta {index + 1} · {question.type === "multiple-choice" ? "opción múltiple" : "verdadero o falso"}</span><h3 className="font-display text-base font-semibold leading-snug text-slate-900 dark:text-slate-100 sm:text-lg">{question.prompt}</h3></div>{answered && <span className={`rounded-full px-3 py-1 text-xs font-bold ${isCorrect ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300" : "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300"}`}>{isCorrect ? "Correcto" : persisted ? "Laguna registrada" : "Incorrecta"}</span>}</div>
       {question.type === "multiple-choice" ? <PracticeMultipleChoice question={question} value={value} disabled={disabled} onChange={onChange} /> : <PracticeTrueFalse value={value} disabled={disabled} onChange={onChange} />}
-      {correction !== undefined ? <CorrectionDetails correction={correction} question={question} studentAnswer={value} onAskTutorAboutQuestion={onAskTutorAboutQuestion} /> : answered ? <PracticeFeedback question={question} value={value} isCorrect={isCorrect} /> : null}
+      {correction !== undefined ? <CorrectionDetails correction={correction} question={question} studentAnswer={value} onAskTutorAboutQuestion={onAskTutorAboutQuestion} /> : answered ? <PracticeFeedback question={question} value={value} isCorrect={isCorrect} persisted={persisted} /> : null}
     </section>
   );
 }
@@ -189,7 +198,7 @@ function PracticeTrueFalse({ value, disabled, onChange }: { readonly value: stri
   return <div className="grid grid-cols-2 gap-3 max-sm:grid-cols-1">{(["true", "false"] as const).map((nextValue) => { const selected = value === nextValue; return <label key={nextValue} className={`flex cursor-pointer items-center gap-2 rounded-xl border p-3.5 text-sm font-semibold transition ${selected ? "border-purple-500 bg-purple-50 text-purple-900 dark:bg-purple-950/40 dark:text-purple-100" : "border-slate-200 bg-slate-50/60 text-slate-700 hover:border-purple-300 dark:border-slate-800 dark:bg-slate-950/50 dark:text-slate-300"}`}><input type="radio" name={`practice-${nextValue}`} value={nextValue} checked={selected} disabled={disabled} onChange={() => onChange(nextValue)} className="accent-purple-600" /><span>{nextValue === "true" ? "Verdadero" : "Falso"}</span></label>; })}</div>;
 }
 
-function PracticeFeedback({ question, value, isCorrect }: { readonly question: QuizQuestion; readonly value: string; readonly isCorrect: boolean }) {
+function PracticeFeedback({ question, value, isCorrect, persisted }: { readonly question: QuizQuestion; readonly value: string; readonly isCorrect: boolean; readonly persisted: boolean }) {
   const correctAnswer = question.type === "multiple-choice" ? optionText(question, question.correctOptionId) : question.correctAnswer ? "Verdadero" : "Falso";
   return (
     <div className={`mt-4 rounded-xl border p-4 text-sm ${isCorrect ? "border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-200" : "border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200"}`}>
@@ -200,7 +209,7 @@ function PracticeFeedback({ question, value, isCorrect }: { readonly question: Q
           <span>Tu respuesta: {question.type === "multiple-choice" ? optionText(question, value) : value === "true" ? "Verdadero" : "Falso"}</span>
           <span className="flex items-center gap-1 font-semibold text-amber-700 dark:text-amber-300">
             <span className="material-symbols-outlined text-[14px]">psychology_alt</span>
-            Guardada en lagunas
+            {persisted ? "Guardada en lagunas" : "Se guardará en lagunas al terminar"}
           </span>
         </div>
       )}
@@ -268,7 +277,7 @@ function PracticeResult({ attempt, onRetry }: { readonly attempt: Extract<Artifa
   );
 }
 
-function ExamWorkspace({ artifact, onAskTutorAboutQuestion }: { readonly artifact: TestArtifact; readonly onAskTutorAboutQuestion?: ArtifactWorkspaceProps["onAskTutorAboutQuestion"] }) {
+function ExamWorkspace({ artifact, onAskTutorAboutQuestion, onOpenPdf }: { readonly artifact: TestArtifact; readonly onAskTutorAboutQuestion?: ArtifactWorkspaceProps["onAskTutorAboutQuestion"]; readonly onOpenPdf?: (() => void) | undefined }) {
   const initialSeconds = Math.max(300, artifact.questions.length * 90);
   const [answers, setAnswers] = useState<Answers>({});
   const [flaggedQuestions, setFlaggedQuestions] = useState<ReadonlySet<string>>(() => new Set());
@@ -306,7 +315,7 @@ function ExamWorkspace({ artifact, onAskTutorAboutQuestion }: { readonly artifac
 
   return (
     <article className="mx-auto max-w-4xl pb-32 sm:pb-40">
-      <header className="mb-4 border border-slate-300 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-950"><div className="border-b-4 border-slate-800 px-5 py-5 dark:border-slate-200 sm:px-8"><div className="flex flex-wrap items-start justify-between gap-4"><div><p className="text-[11px] font-bold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">Evaluación oficial · Simulacro de examen</p><h2 className="mt-2 font-serif text-2xl font-bold tracking-tight text-slate-950 dark:text-slate-50 sm:text-3xl">{artifact.title}</h2><p className="mt-2 text-xs text-slate-500 dark:text-slate-400">Material base: recurso de estudio seleccionado · Ponderación: 10 puntos</p></div><div className="border border-slate-300 px-4 py-3 text-right dark:border-slate-700"><span className="block text-[10px] font-bold uppercase tracking-widest text-slate-500">Candidato</span><span className="font-serif text-sm font-semibold text-slate-800 dark:text-slate-200">Alumno</span></div></div></div><div className="sticky top-0 z-20 flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-slate-50/95 px-5 py-3 backdrop-blur dark:border-slate-800 dark:bg-slate-900/95 sm:px-8"><div className={`flex items-center gap-2 rounded-lg border px-3 py-2 font-mono text-sm font-bold ${timerTone === "urgent" ? "border-red-300 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-950/60 dark:text-red-300" : timerTone === "warning" ? "border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950/60 dark:text-amber-300" : "border-slate-300 bg-white text-slate-700 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"}`}><span className="material-symbols-outlined text-base">timer</span><span>{isExpired ? "Tiempo agotado" : formatTimer(timeLeft)}</span></div><div className="flex flex-wrap items-center gap-3 text-xs font-semibold text-slate-600 dark:text-slate-300"><span><strong className="text-slate-900 dark:text-slate-100">{artifact.questions.length - unansweredQuestions.length}</strong> respondidas</span><span><strong className="text-slate-900 dark:text-slate-100">{unansweredQuestions.length}</strong> pendientes</span><span><strong className="text-amber-600 dark:text-amber-400">{flaggedQuestions.size}</strong> marcadas</span></div></div></header>
+      <header className="mb-4 border border-slate-300 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-950"><div className="border-b-4 border-slate-800 px-5 py-5 dark:border-slate-200 sm:px-8"><div className="flex flex-wrap items-start justify-between gap-4"><div><p className="text-[11px] font-bold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">Evaluación oficial · Simulacro de examen</p><h2 className="mt-2 font-serif text-2xl font-bold tracking-tight text-slate-950 dark:text-slate-50 sm:text-3xl">{artifact.title}</h2><p className="mt-2 text-xs text-slate-500 dark:text-slate-400">Material base: recurso de estudio seleccionado · Ponderación: 10 puntos</p></div><div className="flex flex-col items-end gap-2"><OpenSourcePdfButton onOpenPdf={onOpenPdf} /><div className="border border-slate-300 px-4 py-3 text-right dark:border-slate-700"><span className="block text-[10px] font-bold uppercase tracking-widest text-slate-500">Candidato</span><span className="font-serif text-sm font-semibold text-slate-800 dark:text-slate-200">Alumno</span></div></div></div></div><div className="sticky top-0 z-20 flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-slate-50/95 px-5 py-3 backdrop-blur dark:border-slate-800 dark:bg-slate-900/95 sm:px-8"><div className={`flex items-center gap-2 rounded-lg border px-3 py-2 font-mono text-sm font-bold ${timerTone === "urgent" ? "border-red-300 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-950/60 dark:text-red-300" : timerTone === "warning" ? "border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950/60 dark:text-amber-300" : "border-slate-300 bg-white text-slate-700 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"}`}><span className="material-symbols-outlined text-base">timer</span><span>{isExpired ? "Tiempo agotado" : formatTimer(timeLeft)}</span></div><div className="flex flex-wrap items-center gap-3 text-xs font-semibold text-slate-600 dark:text-slate-300"><span><strong className="text-slate-900 dark:text-slate-100">{artifact.questions.length - unansweredQuestions.length}</strong> respondidas</span><span><strong className="text-slate-900 dark:text-slate-100">{unansweredQuestions.length}</strong> pendientes</span><span><strong className="text-amber-600 dark:text-amber-400">{flaggedQuestions.size}</strong> marcadas</span></div></div></header>
       <div className="mb-4 flex items-center gap-2 overflow-x-auto rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900/90"><span className="mr-1 shrink-0 text-[11px] font-bold uppercase tracking-widest text-slate-500">Navegación</span>{artifact.questions.map((question, index) => { const answered = isAnswerProvided(answers[question.id]); const flagged = flaggedQuestions.has(question.id); return <button key={`${question.id}-${index}`} type="button" onClick={() => setActiveQuestionIndex(index)} disabled={attempt !== null} aria-label={`Ir a la pregunta ${index + 1}`} className={`relative grid size-8 shrink-0 place-items-center rounded-md border text-xs font-bold transition ${index === activeQuestionIndex ? "border-indigo-600 bg-indigo-600 text-white" : flagged ? "border-amber-400 bg-amber-50 text-amber-700 dark:border-amber-700 dark:bg-amber-950/50 dark:text-amber-300" : answered ? "border-sky-300 bg-sky-50 text-sky-700 dark:border-sky-800 dark:bg-sky-950/50 dark:text-sky-300" : "border-slate-300 bg-white text-slate-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-400"}`}>{index + 1}{flagged && <span className="absolute -right-1 -top-1 size-2 rounded-full bg-amber-500" />}</button>; })}</div>
       {activeQuestion && <ExamQuestionCard index={activeQuestionIndex} totalQuestions={artifact.questions.length} question={activeQuestion} value={answers[activeQuestion.id] ?? ""} disabled={attempt !== null} flagged={flaggedQuestions.has(activeQuestion.id)} correction={attempt?.status === "graded" ? attempt.corrections.find((item) => item.questionId === activeQuestion.id) : undefined} onChange={(value) => setAnswer(activeQuestion.id, value)} onToggleFlag={() => toggleFlag(activeQuestion.id)} onAskTutorAboutQuestion={onAskTutorAboutQuestion} />}
       <div className="mt-4 flex flex-wrap items-center justify-between gap-3"><Button variant="secondary" disabled={activeQuestionIndex === 0 || attempt !== null} onClick={() => setActiveQuestionIndex((current) => Math.max(0, current - 1))} leadingIcon={<span className="material-symbols-outlined text-sm">arrow_back</span>}>Anterior</Button>{attempt === null ? <Button onClick={() => void submitExam(false)} disabled={isSubmitting || isExpired} loading={isSubmitting} trailingIcon={<span className="material-symbols-outlined text-sm">send</span>}>Entregar y Calificar Examen</Button> : <Button variant="secondary" onClick={reset} leadingIcon={<span className="material-symbols-outlined text-sm">refresh</span>}>Repetir simulacro</Button>}<Button variant="secondary" disabled={activeQuestionIndex >= artifact.questions.length - 1 || attempt !== null} onClick={() => setActiveQuestionIndex((current) => Math.min(artifact.questions.length - 1, current + 1))} trailingIcon={<span className="material-symbols-outlined text-sm">arrow_forward</span>}>Siguiente</Button></div>
@@ -335,7 +344,7 @@ function ExamActa({ artifact, attempt, elapsedSeconds }: { readonly artifact: Te
   const scoreOnTen = attempt.maxScore === 0 ? 0 : (attempt.score / attempt.maxScore) * 10;
   const distinction = scoreOnTen < 5 ? "No apto" : scoreOnTen < 7 ? "Aprobado" : scoreOnTen < 9 ? "Notable" : "Sobresaliente";
   const incorrectCount = attempt.corrections.filter((correction) => correction.questionType === "short-answer" ? correction.score < correction.maxScore : !correction.correct).length;
-  return <section className="mt-6 border-2 border-slate-800 bg-white p-5 shadow-sm dark:border-slate-200 dark:bg-slate-950 sm:p-8"><div className="border-b-2 border-slate-800 pb-4 dark:border-slate-200"><p className="text-[11px] font-bold uppercase tracking-[0.22em] text-slate-500">Acta oficial de calificación</p><div className="mt-2 flex flex-wrap items-end justify-between gap-4"><div><h3 className="font-serif text-2xl font-bold text-slate-950 dark:text-slate-50">{distinction}</h3><p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{artifact.title}</p></div><div className="text-right"><span className="block font-serif text-4xl font-bold text-indigo-700 dark:text-indigo-300">{scoreOnTen.toFixed(1)}<small className="text-lg">/10</small></span><span className="text-xs text-slate-500">{percentage}% global</span></div></div></div><div className="grid gap-3 py-4 text-sm text-slate-700 dark:text-slate-300 sm:grid-cols-3"><div><span className="block text-xs uppercase tracking-wider text-slate-500">Tiempo invertido</span><strong>{formatDuration(elapsedSeconds)}</strong></div><div><span className="block text-xs uppercase tracking-wider text-slate-500">Preguntas</span><strong>{attempt.score}/{attempt.maxScore} correctas</strong></div><div><span className="block text-xs uppercase tracking-wider text-slate-500">Lagunas generadas</span><strong>{incorrectCount}</strong></div></div><div className="border-t border-slate-200 pt-4 dark:border-slate-800"><h4 className="mb-3 text-xs font-bold uppercase tracking-widest text-slate-500">Desglose de la prueba</h4><div className="grid gap-2">{artifact.questions.map((question, index) => { const correction = attempt.corrections.find((item) => item.questionId === question.id); const correct = correction !== undefined && (correction.questionType === "short-answer" ? correction.score >= correction.maxScore : correction.correct); return <div key={`${question.id}-${index}`} className="flex items-start gap-3 rounded-lg border border-slate-200 px-3 py-2 text-xs dark:border-slate-800"><span className={`material-symbols-outlined mt-0.5 text-sm ${correct ? "text-emerald-500" : "text-red-500"}`}>{correct ? "check_circle" : "cancel"}</span><span className="flex-1 text-slate-700 dark:text-slate-300">{index + 1}. {question.prompt}</span><span className="font-semibold text-slate-500">{correct ? "Correcta" : "Revisar"}</span></div>; })}</div></div></section>;
+  return <section className="mt-6 border-2 border-slate-800 bg-white p-5 shadow-sm dark:border-slate-200 dark:bg-slate-950 sm:p-8"><div className="border-b-2 border-slate-800 pb-4 dark:border-slate-200"><p className="text-[11px] font-bold uppercase tracking-[0.22em] text-slate-500">Acta oficial de calificación</p><div className="mt-2 flex flex-wrap items-end justify-between gap-4"><div><h3 className="font-serif text-2xl font-bold text-slate-950 dark:text-slate-50">{distinction}</h3><p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{artifact.title}</p></div><div className="text-right"><span className="block font-serif text-4xl font-bold text-indigo-700 dark:text-indigo-300">{scoreOnTen.toFixed(1)}<small className="text-lg">/10</small></span><span className="text-xs text-slate-500">{percentage}% global</span></div></div></div><div className="grid gap-3 py-4 text-sm text-slate-700 dark:text-slate-300 sm:grid-cols-3"><div><span className="block text-xs uppercase tracking-wider text-slate-500">Tiempo invertido</span><strong>{formatDuration(elapsedSeconds)}</strong></div><div><span className="block text-xs uppercase tracking-wider text-slate-500">Puntuación</span><strong>{attempt.score}/{attempt.maxScore} puntos</strong></div><div><span className="block text-xs uppercase tracking-wider text-slate-500">Lagunas generadas</span><strong>{incorrectCount}</strong></div></div><div className="border-t border-slate-200 pt-4 dark:border-slate-800"><h4 className="mb-3 text-xs font-bold uppercase tracking-widest text-slate-500">Desglose de la prueba</h4><div className="grid gap-2">{artifact.questions.map((question, index) => { const correction = attempt.corrections.find((item) => item.questionId === question.id); const correct = correction !== undefined && (correction.questionType === "short-answer" ? correction.score >= correction.maxScore : correction.correct); return <div key={`${question.id}-${index}`} className="flex items-start gap-3 rounded-lg border border-slate-200 px-3 py-2 text-xs dark:border-slate-800"><span className={`material-symbols-outlined mt-0.5 text-sm ${correct ? "text-emerald-500" : "text-red-500"}`}>{correct ? "check_circle" : "cancel"}</span><span className="flex-1 text-slate-700 dark:text-slate-300">{index + 1}. {question.prompt}</span><span className="font-semibold text-slate-500">{correct ? "Correcta" : "Revisar"}</span></div>; })}</div></div></section>;
 }
 
 function ExamSubmitDialog({ open, unansweredCount, flaggedCount, onCancel, onConfirm }: { readonly open: boolean; readonly unansweredCount: number; readonly flaggedCount: number; readonly onCancel: () => void; readonly onConfirm: () => void }) {

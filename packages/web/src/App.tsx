@@ -1,10 +1,8 @@
-import { useAtomRefresh, useAtomSet, useAtomValue } from "@effect/atom-react";
+import { useAtomSet, useAtomValue } from "@effect/atom-react";
 import type { PdfMaterial } from "@proxus/shared";
 import * as AsyncResult from "effect/unstable/reactivity/AsyncResult";
 import {
   type KeyboardEvent as ReactKeyboardEvent,
-  type RefObject,
-  type ReactNode,
   lazy,
   Suspense,
   useCallback,
@@ -24,7 +22,6 @@ import { IconButton } from "./components/ui/IconButton.tsx";
 import { useToast } from "./components/ui/Toast.tsx";
 import {
   deleteMaterialAction,
-  materialQuery,
   materialsQuery
 } from "./domain/materials/atoms.ts";
 import {
@@ -46,11 +43,15 @@ import { ConversationalOnboarding } from "./components/ConversationalOnboarding.
 import { UserProfileModal } from "./components/UserProfileModal.tsx";
 import { CreateExerciseModal, type ExerciseRequest } from "./components/CreateExerciseModal.tsx";
 import { MISTAKE_TUTOR_PROMPT_PREFIX } from "./components/chat/types.ts";
+import { type ActiveTab, getDeletedMaterialNavigation } from "./components/workspace/navigation.ts";
+import { NoPdfSelected, StudyHome } from "./components/workspace/StudyHome.tsx";
+import { ResponsivePanel } from "./components/workspace/ResponsivePanel.tsx";
+import { SelectedMaterialPdfViewer } from "./components/workspace/SelectedMaterialPdfViewer.tsx";
+import { WorkspaceTab } from "./components/workspace/WorkspaceTab.tsx";
 
 const ArtifactWorkspace = lazy(() => import("./components/ArtifactWorkspace.tsx").then(m => ({ default: m.ArtifactWorkspace })));
 const KnowledgeGapsPanel = lazy(() => import("./components/KnowledgeGapsPanel.tsx").then(m => ({ default: m.KnowledgeGapsPanel })));
 const MindMapViewer = lazy(() => import("./components/MindMapViewer.tsx").then(m => ({ default: m.MindMapViewer })));
-const PdfSplitViewer = lazy(() => import("./components/PdfSplitViewer.tsx").then(m => ({ default: m.PdfSplitViewer })));
 
 function LazyFallback() {
   return (
@@ -61,7 +62,6 @@ function LazyFallback() {
   );
 }
 
-type ActiveTab = "workspace" | "mindmap" | "pdf" | "gaps";
 type Theme = "dark" | "light";
 
 const TAB_ORDER: readonly ActiveTab[] = ["workspace", "mindmap", "pdf", "gaps"];
@@ -821,251 +821,5 @@ export function App() {
   );
 }
 
-function WorkspaceTab({ id, label, icon, active, disabled = false, badge, onClick, onKeyDown, isLight }: {
-  readonly id: ActiveTab;
-  readonly label: string;
-  readonly icon: string;
-  readonly active: boolean;
-  readonly disabled?: boolean;
-  readonly badge?: number | undefined;
-  readonly onClick: () => void;
-  readonly onKeyDown: (event: ReactKeyboardEvent<HTMLButtonElement>) => void;
-  readonly isLight: boolean;
-}) {
-  return (
-    <button
-      id={`workspace-tab-${id}`}
-      type="button"
-      role="tab"
-      aria-controls="workspace-panel"
-      aria-selected={active}
-      tabIndex={active ? 0 : -1}
-      disabled={disabled}
-      onClick={onClick}
-      onKeyDown={onKeyDown}
-      title={badge && badge > 0 ? `${label} (${badge})` : label}
-      className={`flex min-h-8 items-center gap-1.5 rounded-lg px-2 sm:px-2.5 py-1.5 text-xs font-medium transition-all duration-150 disabled:opacity-40 shrink-0 ${
-        active
-          ? "bg-indigo-600 text-white shadow-xs font-semibold"
-          : isLight
-          ? "text-slate-600 hover:bg-white hover:text-slate-900"
-          : "text-slate-400 hover:bg-slate-900 hover:text-slate-100"
-      }`}
-    >
-      <span className="material-symbols-outlined text-[16px] shrink-0">{icon}</span>
-      <span className="hidden sm:inline">{label}</span>
-      {badge !== undefined && badge > 0 && (
-        <span
-          className={`rounded-full px-1.5 py-0.2 text-[10px] font-bold ${
-            active
-              ? "bg-white/25 text-white"
-              : "bg-red-500/15 text-red-500 dark:bg-red-500/20 dark:text-red-400"
-          }`}
-        >
-          {badge}
-        </span>
-      )}
-    </button>
-  );
-}
+export { getDeletedMaterialNavigation } from "./components/workspace/navigation.ts";
 
-function StudyHome({ recentMaterial, onOpenMaterial, onOpenTutor, onUpload }: {
-  readonly recentMaterial: PdfMaterial | null;
-  readonly onOpenMaterial: (id: string) => void;
-  readonly onOpenTutor: () => void;
-  readonly onUpload: () => void;
-}) {
-  return (
-    <main className="flex h-full items-center justify-center overflow-y-auto p-6 sm:p-10">
-      <section className="w-full max-w-2xl">
-        <p className="mb-2 text-sm font-medium text-indigo-600 dark:text-indigo-400">Espacio de estudio</p>
-        <h1 className="max-w-xl text-3xl font-semibold tracking-tight text-slate-950 dark:text-slate-50 sm:text-4xl">¿Qué quieres repasar hoy?</h1>
-        <p className="mt-3 max-w-xl text-sm leading-6 text-slate-600 dark:text-slate-400">Continúa con tus apuntes o pide al tutor que prepare una explicación, un quiz o una nota de estudio.</p>
-        <div className="mt-8 flex flex-wrap gap-3">
-          {recentMaterial && <button type="button" className="ui-primary-action min-h-10" onClick={() => onOpenMaterial(recentMaterial.id)}><span className="material-symbols-outlined text-[18px]">history</span>Continuar con {recentMaterial.title}</button>}
-          <button type="button" className="ui-secondary-action" onClick={onOpenTutor}><span className="material-symbols-outlined text-[18px]">forum</span>Abrir tutor</button>
-          <button type="button" className="ui-quiet-action" onClick={onUpload}>Subir otro PDF</button>
-        </div>
-      </section>
-    </main>
-  );
-}
-
-function NoPdfSelected({ recentMaterial, onOpenRecent, onUpload }: {
-  readonly recentMaterial: PdfMaterial | null;
-  readonly onOpenRecent: () => void;
-  readonly onUpload: () => void;
-}) {
-  return (
-    <main className="flex h-full items-center justify-center p-8 text-center">
-      <div className="max-w-sm">
-        <span className="material-symbols-outlined mb-3 text-4xl text-slate-400">picture_as_pdf</span>
-        <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Selecciona un PDF</h2>
-        <p className="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400">Abre un material de tu biblioteca para consultar sus páginas.</p>
-        <div className="mt-5 flex justify-center gap-2">
-          {recentMaterial && <button type="button" className="ui-primary-action" onClick={onOpenRecent}>Abrir el más reciente</button>}
-          <button type="button" className="ui-secondary-action" onClick={onUpload}>Subir PDF</button>
-        </div>
-      </div>
-    </main>
-  );
-}
-
-function ResponsivePanel({ side, label, open, onClose, width, laptopWidth, isWide, returnFocusRef, fallbackFocusRef, children }: {
-  readonly side: "left" | "right";
-  readonly label: string;
-  readonly open: boolean;
-  readonly onClose: () => void;
-  readonly width: number;
-  readonly laptopWidth: number;
-  readonly isWide: boolean;
-  readonly returnFocusRef: RefObject<HTMLElement | null>;
-  readonly fallbackFocusRef: RefObject<HTMLElement | null>;
-  readonly children: ReactNode;
-}) {
-  const panelRef = useRef<HTMLDivElement>(null);
-  const isDesktopChat = isWide && side === "right";
-  const [isDesktopChatMounted, setIsDesktopChatMounted] = useState(open);
-  const [isDesktopChatVisible, setIsDesktopChatVisible] = useState(open);
-
-  useEffect(() => {
-    if (!isDesktopChat) return;
-
-    if (open) {
-      setIsDesktopChatMounted(true);
-      const frame = window.requestAnimationFrame(() => setIsDesktopChatVisible(true));
-      return () => window.cancelAnimationFrame(frame);
-    }
-
-    setIsDesktopChatVisible(false);
-    const timeout = window.setTimeout(() => setIsDesktopChatMounted(false), 260);
-    return () => window.clearTimeout(timeout);
-  }, [isDesktopChat, open]);
-
-  useEffect(() => {
-    if (isWide || !open) return;
-    const panel = panelRef.current;
-    if (!panel) return;
-    const previousFocus = returnFocusRef.current
-      ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null);
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    const focusables = () => Array.from(panel.querySelectorAll<HTMLElement>('button:not(:disabled), [href], input:not(:disabled), textarea:not(:disabled), select:not(:disabled), [tabindex]:not([tabindex="-1"])')).filter((element) => !element.hasAttribute("hidden"));
-    requestAnimationFrame(() => focusables()[0]?.focus());
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.defaultPrevented) return;
-      if (event.key === "Escape") {
-        event.preventDefault();
-        onClose();
-        return;
-      }
-      if (event.key !== "Tab") return;
-      const items = focusables();
-      if (items.length === 0) return;
-      const first = items[0];
-      const last = items[items.length - 1];
-      if (!panel.contains(document.activeElement)) {
-        // A top-level native dialog (delete/upload) may be opened from this
-        // drawer. Its modal focus scope takes precedence over the drawer trap.
-        if (document.querySelector("dialog[open]")) {
-          return;
-        }
-        event.preventDefault();
-        (event.shiftKey ? last : first)?.focus();
-        return;
-      }
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last?.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first?.focus();
-      }
-    };
-    document.addEventListener("keydown", handleKeyDown);
-    return () => {
-      document.removeEventListener("keydown", handleKeyDown);
-      document.body.style.overflow = previousOverflow;
-      requestAnimationFrame(() => {
-        const canRestorePrevious = previousFocus?.isConnected
-          && previousFocus.closest("[inert], [aria-hidden='true']") === null;
-        (canRestorePrevious ? previousFocus : fallbackFocusRef.current)?.focus();
-      });
-    };
-  }, [fallbackFocusRef, isWide, onClose, open, returnFocusRef]);
-
-  if (isDesktopChat && !isDesktopChatMounted) {
-    return null;
-  }
-
-  const panelIsOpen = isDesktopChat ? isDesktopChatVisible : open;
-
-  return (
-    <>
-      <button type="button" tabIndex={-1} aria-hidden="true" onClick={onClose} className={`fixed inset-0 z-40 bg-slate-950/55 backdrop-blur-[2px] transition-opacity min-[1440px]:hidden ${open ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"}`} />
-      <div
-        ref={panelRef}
-        role={isWide ? undefined : "dialog"}
-        aria-modal={isWide ? undefined : true}
-        aria-label={label}
-        aria-hidden={!isWide && !open ? true : undefined}
-        inert={!isWide && !open ? true : undefined}
-        style={{ width: `${isWide ? width : laptopWidth}px` }}
-        className={`fixed inset-y-0 z-50 h-full max-w-[calc(100vw-3rem)] shrink-0 overflow-hidden bg-[var(--panel-bg)] transition-transform duration-[240ms] ease-out will-change-transform min-[1440px]:static min-[1440px]:z-auto min-[1440px]:max-w-none ${side === "left" ? "left-0 min-[1440px]:translate-x-0" : "right-0"} ${panelIsOpen ? "translate-x-0" : side === "left" ? "-translate-x-full" : "translate-x-full"}`}
-      >
-        <IconButton label={`Cerrar ${label.toLowerCase()}`} variant="ghost" onClick={onClose} className="absolute right-3 top-3 z-[60] min-[1440px]:hidden"><span className="material-symbols-outlined text-[18px]">close</span></IconButton>
-        {children}
-      </div>
-    </>
-  );
-}
-
-function SelectedMaterialPdfViewer({
-  materialId,
-  initialPage,
-  onClose,
-  onAskAboutPage,
-  onAskAboutSelection
-}: {
-  readonly materialId: string;
-  readonly initialPage?: number | undefined;
-  readonly onClose?: (() => void) | undefined;
-  readonly onAskAboutPage?: ((materialTitle: string, page: number) => void) | undefined;
-  readonly onAskAboutSelection?: ((text: string, page: number, material: PdfMaterial) => void) | undefined;
-}) {
-  const query = materialQuery(materialId);
-  const result = useAtomValue(query);
-  const refresh = useAtomRefresh(query);
-  return AsyncResult.matchWithError(result, {
-    onInitial: () => <div className="flex h-full items-center justify-center gap-3 text-slate-400"><span className="ui-spinner" /><p className="text-sm">Cargando PDF…</p></div>,
-    onError: () => <LoadError onRetry={refresh} />,
-    onDefect: () => <LoadError onRetry={refresh} />,
-    onSuccess: ({ value }: { value: PdfMaterial }) => (
-      <Suspense fallback={<LazyFallback />}>
-        <PdfSplitViewer
-          material={value}
-          initialPage={initialPage}
-          onClose={onClose}
-          onAskAboutPage={onAskAboutPage}
-          onAskAboutSelection={onAskAboutSelection}
-        />
-      </Suspense>
-    )
-  });
-}
-
-function LoadError({ onRetry }: { readonly onRetry: () => void }) {
-  return (
-    <div className="flex h-full items-center justify-center p-6 text-center"><div className="max-w-sm"><span className="material-symbols-outlined text-3xl text-red-500">error</span><h2 className="mt-2 text-base font-semibold text-slate-900 dark:text-slate-100">No se pudo abrir el PDF</h2><p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Comprueba la conexión y vuelve a intentarlo.</p><button type="button" className="ui-secondary-action mt-4" onClick={onRetry}>Reintentar</button></div></div>
-  );
-}
-
-
-export function getDeletedMaterialNavigation(
-  selectedMaterialId: string | null,
-  deletedMaterialId: string
-) {
-  return selectedMaterialId === deletedMaterialId
-    ? { selectedMaterialId: null, pdfPage: 1, activeTab: "workspace" as const }
-    : null;
-}

@@ -3,6 +3,7 @@ import type { MaterialPageImages, PageImage, PdfMaterial, PdfWord } from "@proxu
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { renderMaterialPagesAction } from "../domain/materials/atoms.ts";
+import { getPdfPageCacheKey, selectionHighlightsFromRects, type SelectionHighlight } from "./pdf/selection-highlights.ts";
 
 interface PdfSplitViewerProps {
   readonly material: PdfMaterial;
@@ -15,64 +16,6 @@ interface PdfSplitViewerProps {
 // Module-level cache to keep rendered page images and word bounds across tab changes, renders and remounts
 const pageCache = new Map<string, PageImage>();
 const inFlightRequests = new Map<string, Promise<void>>();
-
-interface SelectionHighlight {
-  readonly left: number;
-  readonly top: number;
-  readonly width: number;
-  readonly height: number;
-}
-
-function selectionHighlightsFromRects(
-  rects: readonly DOMRect[],
-  containerRect: DOMRect
-): readonly SelectionHighlight[] {
-  const rawRects = rects
-    .filter((rect) => rect.width > 0 && rect.height > 0)
-    .map((rect) => ({
-      left: rect.left - containerRect.left,
-      top: rect.top - containerRect.top,
-      right: rect.right - containerRect.left,
-      bottom: rect.bottom - containerRect.top,
-      height: rect.height
-    }))
-    .sort((left, right) => left.top - right.top || left.left - right.left);
-
-  const merged: Array<{
-    left: number;
-    top: number;
-    right: number;
-    bottom: number;
-    height: number;
-  }> = [];
-
-  for (const rect of rawRects) {
-    const previous = merged[merged.length - 1];
-    const sameLine = previous && Math.abs(rect.top - previous.top) <= Math.max(3, rect.height * 0.45);
-    const closeEnough = previous && rect.left - previous.right <= Math.max(10, rect.height * 1.75);
-
-    if (previous && sameLine && closeEnough) {
-      previous.left = Math.min(previous.left, rect.left);
-      previous.top = Math.min(previous.top, rect.top);
-      previous.right = Math.max(previous.right, rect.right);
-      previous.bottom = Math.max(previous.bottom, rect.bottom);
-      previous.height = Math.max(previous.height, rect.height);
-    } else {
-      merged.push({ ...rect });
-    }
-  }
-
-  return merged.map((rect) => ({
-    left: Math.max(0, (rect.left / containerRect.width) * 100),
-    top: Math.max(0, (rect.top / containerRect.height) * 100),
-    width: Math.min(100, ((rect.right - rect.left) / containerRect.width) * 100),
-    height: Math.min(100, ((rect.bottom - rect.top) / containerRect.height) * 100)
-  }));
-}
-
-function getCacheKey(materialId: string, page: number): string {
-  return `${materialId}::${page}`;
-}
 
 export function PdfSplitViewer({
   material,
@@ -87,7 +30,7 @@ export function PdfSplitViewer({
   const [loadedPages, setLoadedPages] = useState<Record<number, PageImage>>(() => {
     const initial: Record<number, PageImage> = {};
     for (let p = 1; p <= material.pageCount; p++) {
-      const cached = pageCache.get(getCacheKey(material.id, p));
+      const cached = pageCache.get(getPdfPageCacheKey(material.id, p));
       if (cached) {
         initial[p] = cached;
       }
@@ -139,7 +82,7 @@ export function PdfSplitViewer({
   useEffect(() => {
     const fromCache: Record<number, PageImage> = {};
     for (let p = 1; p <= material.pageCount; p++) {
-      const cached = pageCache.get(getCacheKey(material.id, p));
+      const cached = pageCache.get(getPdfPageCacheKey(material.id, p));
       if (cached) {
         fromCache[p] = cached;
       }
@@ -150,11 +93,11 @@ export function PdfSplitViewer({
 
   // Fetch a list of pages with deduplication
   const fetchPagesBatch = useCallback(async (pagesToFetch: number[]): Promise<void> => {
-    const missing = pagesToFetch.filter((p) => !pageCache.has(getCacheKey(material.id, p)));
+    const missing = pagesToFetch.filter((p) => !pageCache.has(getPdfPageCacheKey(material.id, p)));
     if (missing.length === 0) return;
 
     // Filter out pages that are already in-flight
-    const needsRequest = missing.filter((p) => !inFlightRequests.has(getCacheKey(material.id, p)));
+    const needsRequest = missing.filter((p) => !inFlightRequests.has(getPdfPageCacheKey(material.id, p)));
 
     if (needsRequest.length > 0) {
       const promise = (async () => {
@@ -168,7 +111,7 @@ export function PdfSplitViewer({
             const newlyLoaded: Record<number, PageImage> = {};
             for (const item of response.pages) {
               if (item?.data) {
-                pageCache.set(getCacheKey(material.id, item.page), item);
+                pageCache.set(getPdfPageCacheKey(material.id, item.page), item);
                 newlyLoaded[item.page] = item;
               }
             }
@@ -186,20 +129,20 @@ export function PdfSplitViewer({
           }
         } finally {
           for (const p of needsRequest) {
-            inFlightRequests.delete(getCacheKey(material.id, p));
+            inFlightRequests.delete(getPdfPageCacheKey(material.id, p));
           }
         }
       })();
 
       for (const p of needsRequest) {
-        inFlightRequests.set(getCacheKey(material.id, p), promise);
+        inFlightRequests.set(getPdfPageCacheKey(material.id, p), promise);
       }
 
       await promise;
     } else {
       // Wait for existing in-flight promises
       const existingPromises = missing
-        .map((p) => inFlightRequests.get(getCacheKey(material.id, p)))
+        .map((p) => inFlightRequests.get(getPdfPageCacheKey(material.id, p)))
         .filter((p): p is Promise<void> => Boolean(p));
 
       if (existingPromises.length > 0) {
@@ -207,7 +150,7 @@ export function PdfSplitViewer({
         if (isMountedRef.current) {
           const updated: Record<number, PageImage> = {};
           for (const p of missing) {
-            const item = pageCache.get(getCacheKey(material.id, p));
+            const item = pageCache.get(getPdfPageCacheKey(material.id, p));
             if (item) updated[p] = item;
           }
           setLoadedPages((prev) => ({ ...prev, ...updated }));
@@ -221,7 +164,7 @@ export function PdfSplitViewer({
     let active = true;
 
     const load = async () => {
-      const currentCache = pageCache.get(getCacheKey(material.id, currentPage));
+      const currentCache = pageCache.get(getPdfPageCacheKey(material.id, currentPage));
       if (!currentCache) {
         setLoadingPage(true);
         setError(null);
@@ -319,7 +262,7 @@ export function PdfSplitViewer({
     // Extract exact words with proper spacing. The visual layer is word-based
     // as well: a line-sized selectable element paints a much wider rectangle
     // than the actual glyphs, especially on headings and bullet points.
-    const pageItem = loadedPages[currentPage] ?? pageCache.get(getCacheKey(material.id, currentPage));
+    const pageItem = loadedPages[currentPage] ?? pageCache.get(getPdfPageCacheKey(material.id, currentPage));
     let extractedText = "";
 
     if (pageItem?.words && pageItem.words.length > 0) {
@@ -481,7 +424,7 @@ export function PdfSplitViewer({
   };
 
   const currentPageData = useMemo(() => {
-    return loadedPages[currentPage] ?? pageCache.get(getCacheKey(material.id, currentPage));
+    return loadedPages[currentPage] ?? pageCache.get(getPdfPageCacheKey(material.id, currentPage));
   }, [currentPage, loadedPages, material.id]);
 
   const currentImage = currentPageData?.data;
@@ -767,7 +710,7 @@ export function PdfSplitViewer({
         {/* Thumbnails Sidebar */}
         <aside className="w-20 sm:w-28 shrink-0 border-r border-slate-200 dark:border-slate-800/80 bg-slate-100/60 dark:bg-slate-900/50 overflow-y-auto p-2 flex flex-col gap-2 pb-24">
           {Array.from({ length: material.pageCount }, (_, i) => i + 1).map((pageNum) => {
-            const pageItem = loadedPages[pageNum] ?? pageCache.get(getCacheKey(material.id, pageNum));
+            const pageItem = loadedPages[pageNum] ?? pageCache.get(getPdfPageCacheKey(material.id, pageNum));
             const thumbImage = pageItem?.data;
             const isSelected = currentPage === pageNum;
 

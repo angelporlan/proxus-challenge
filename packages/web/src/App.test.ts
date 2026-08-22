@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getDeletedMaterialNavigation } from "./App.tsx";
+import { getDeletedMaterialNavigation } from "./components/workspace/navigation.ts";
 import {
   applyAtomicMentionDeletion,
   attachedDocsAfterTextChange,

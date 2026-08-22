@@ -200,8 +200,10 @@ function InlineQuizSolver({
     setSelectedAnswers(nextAnswers);
     setShowExplanation(true);
 
+    const answeredAll = quiz.questions.every((q) => nextAnswers[q.id] !== undefined);
+    if (!answeredAll) return;
+
     const answersPayload = quiz.questions
-      .filter((q) => nextAnswers[q.id] !== undefined)
       .map((q) => {
         const val = nextAnswers[q.id];
         if (q.type === "true-false") {

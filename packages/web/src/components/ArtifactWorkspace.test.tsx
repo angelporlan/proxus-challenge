@@ -124,6 +124,8 @@ describe("ArtifactWorkspace", () => {
     render(<ArtifactWorkspace artifactId={quiz.id} />);
     await user.click(screen.getByText("Primera opción"));
 
+    expect(mocks.submitAttempt).not.toHaveBeenCalled();
+
     await vi.waitFor(() => {
       expect(HTMLElement.prototype.scrollIntoView).toHaveBeenCalledWith({
         behavior: "smooth",

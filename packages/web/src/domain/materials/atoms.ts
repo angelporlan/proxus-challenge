@@ -49,7 +49,7 @@ export const deleteMaterialAction = apiRuntime.fn(
         params: { id }
       })
     ).pipe(Effect.withSpan("materials.delete", { kind: "client" })),
-  { reactivityKeys: ["materials"] }
+  { reactivityKeys: ["materials", "artifacts", "knowledge"] }
 );
 
 export const generateMaterialMindMapAction = apiRuntime.fn(

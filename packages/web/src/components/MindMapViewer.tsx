@@ -14,6 +14,7 @@ import {
   getNodeDimensions,
   computeSubtreeHeight
 } from "../domain/mindmap/tree-layout.ts";
+import { useMindMapViewport } from "../hooks/useMindMapViewport.ts";
 
 export type { MindMapNode };
 
@@ -98,15 +99,19 @@ export function MindMapViewer({
   const [selectedNode, setSelectedNode] = useState<MindMapNode | null>(currentMindMap);
   const [isDrawerOpen, setIsDrawerOpen] = useState<boolean>(true);
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set());
-
-  // Infinite Canvas Pan & Zoom (Starts with a comfortable auto-fitted scale)
-  const [zoom, setZoom] = useState<number>(0.52);
-  const [pan, setPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
-  const [isPanning, setIsPanning] = useState(false);
   const [showMinimap, setShowMinimap] = useState(true);
+  const {
+    pan,
+    setPan,
+    zoom,
+    setZoom,
+    handleMouseDown,
+    handleMouseMove,
+    handleMouseUp,
+    handleWheel
+  } = useMindMapViewport(0.52);
 
   const canvasRef = useRef<HTMLDivElement>(null);
-  const panStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const drawerToggleRef = useRef<HTMLButtonElement>(null);
 
   const isLight = theme === "light";
@@ -118,7 +123,16 @@ export function MindMapViewer({
     try {
       await generateMindMap(activeMaterialId);
     } catch (error: unknown) {
-      setGenerationError(error instanceof Error ? error.message : "No se pudo generar el esquema.");
+      const tagged = typeof error === "object" && error !== null && "message" in error
+        ? String((error as { message: unknown }).message)
+        : undefined;
+      setGenerationError(
+        error instanceof Error
+          ? error.message
+          : tagged && tagged.length > 0
+            ? tagged
+            : "No se pudo generar el esquema. Prueba de nuevo o usa un PDF más corto."
+      );
     } finally {
       setIsGenerating(false);
     }
@@ -150,48 +164,6 @@ export function MindMapViewer({
       return next;
     });
   };
-
-  // Canvas Pan Handlers
-  const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
-    const target = e.target as HTMLElement;
-    if (target.closest("button") || target.closest(".mindmap-node") || target.closest("aside")) {
-      return;
-    }
-    setIsPanning(true);
-    panStartRef.current = {
-      x: e.clientX - pan.x,
-      y: e.clientY - pan.y
-    };
-  };
-
-  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!isPanning) return;
-    setPan({
-      x: e.clientX - panStartRef.current.x,
-      y: e.clientY - panStartRef.current.y
-    });
-  };
-
-  const handleMouseUp = () => {
-    setIsPanning(false);
-  };
-
-  const handleWheel = (e: React.WheelEvent<HTMLDivElement>) => {
-    if (e.ctrlKey || e.metaKey) {
-      e.preventDefault();
-      const zoomFactor = e.deltaY < 0 ? 1.08 : 0.92;
-      setZoom((z) => Math.max(0.30, Math.min(2.0, Number((z * zoomFactor).toFixed(2)))));
-    } else {
-      setPan((p) => ({
-        x: p.x - e.deltaX * 0.9,
-        y: p.y - e.deltaY * 0.9
-      }));
-    }
-  };
-
-  // ---------------------------------------------------------------------------
-  // Compute Complete Dendritic Layout Coordinates
-  // ---------------------------------------------------------------------------
 
   const { allNodes, allConnectors } = useMemo(() => {
     if (!currentMindMap) {
