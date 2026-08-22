@@ -478,6 +478,10 @@
 
   .ui-thinking-dot--2 { animation-delay: 140ms; }
   .ui-thinking-dot--3 { animation-delay: 280ms; }
+
+  .ui-progress-spin {
+    animation: ui-spin 900ms linear infinite;
+  }
 }
 
 @keyframes ui-spin { to { transform: rotate(360deg); } }

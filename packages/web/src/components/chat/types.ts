@@ -58,17 +58,18 @@ export const starterPrompts = [
     mode: "explanatory" as TutorMode | undefined
   },
   {
-    icon: "school",
-    label: "Tutor Socrático",
-    description: "Aprende deduciendo con preguntas guía",
-    prompt: "Guíame con preguntas socráticas paso a paso para que razone por mí mismo este tema.",
-    mode: "socratic" as TutorMode | undefined
+    icon: "psychology_alt",
+    label: "Rescate de lagunas",
+    description: "Genera un ejercicio focalizado en tus fallos pasados para dominarlos",
+    prompt: "Revisa las lagunas de conocimiento que tengo registradas en mi perfil, consulta los materiales donde fallé y genera un quiz de refuerzo específico para resolver mis dudas pendientes.",
+    setup: "gap-rescue-count" as const,
+    mode: undefined as TutorMode | undefined
   },
   {
-    icon: "schema",
-    label: "Esquema conceptual",
-    description: "Estructura jerárquica con ideas clave",
-    prompt: "Genera un esquema estructurado con las ideas principales y secundarias de este tema.",
+    icon: "route",
+    label: "Plan de estudio inteligente",
+    description: "Diagnostica tu temario y crea una ruta de aprendizaje por hitos",
+    prompt: "Analiza mis materiales subidos y mis lagunas actuales, y genera una nota de estudio estructurada con un plan de aprendizaje, orden de prioridades y recomendaciones para dominar el temario.",
     mode: undefined as TutorMode | undefined
   }
 ] as const;

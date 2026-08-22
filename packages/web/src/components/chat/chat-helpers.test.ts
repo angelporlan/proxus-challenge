@@ -53,12 +53,72 @@ describe("groupChatItems", () => {
 });
 
 describe("extractArtifactIds", () => {
-  it("collects unique UUIDs from assistant text and associated tools", () => {
-    const id = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
-    const ids = extractArtifactIds(`Revisa ${id}`, [
-      { role: "tool-result", name: "cli", result: { id }, isFailure: false }
+  const createdId = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
+  const previousQuizId = "bbbbbbbb-cccc-dddd-eeee-ffffffffffff";
+
+  it("collects only artifacts created in this turn", () => {
+    const ids = extractArtifactIds(`Revisa ${createdId}`, [
+      { role: "tool-call", name: "cli", input: { input: "artifacts create '{}'" } },
+      { role: "tool-result", name: "cli", result: { kind: "quiz", id: createdId }, isFailure: false }
     ]);
-    expect(ids).toEqual([id]);
+    expect(ids).toEqual([createdId]);
+  });
+
+  it("does not turn knowledge-gap ids into widgets for previous quizzes", () => {
+    const ids = extractArtifactIds("He preparado un quiz de refuerzo.", [
+      { role: "tool-call", name: "cli", input: { input: "knowledge gaps" } },
+      {
+        role: "tool-result",
+        name: "cli",
+        result: `1. [gap-${previousQuizId}-q1] Topic: CV\n   Question: "¿Cuál es el correo?"`,
+        isFailure: false
+      },
+      { role: "tool-call", name: "cli", input: { input: `artifacts create '{"kind":"quiz"}'` } },
+      { role: "tool-result", name: "cli", result: { kind: "quiz", id: createdId, title: "Refuerzo" }, isFailure: false }
+    ]);
+    expect(ids).toEqual([createdId]);
+  });
+
+  it("ignores artifacts list, show, and UUIDs quoted in assistant text", () => {
+    const listed = extractArtifactIds(`Abre ${previousQuizId}`, [
+      { role: "tool-call", name: "cli", input: { input: "artifacts list" } },
+      {
+        role: "tool-result",
+        name: "cli",
+        result: `- ${previousQuizId}: Quiz CV (quiz)\n- ${createdId}: Plan (note)`,
+        isFailure: false
+      }
+    ]);
+    expect(listed).toEqual([]);
+
+    const shown = extractArtifactIds("Aquí tienes el quiz anterior.", [
+      { role: "tool-call", name: "cli", input: { input: `artifacts show ${previousQuizId}` } },
+      { role: "tool-result", name: "cli", result: { kind: "quiz", id: previousQuizId, title: "Quiz CV" }, isFailure: false }
+    ]);
+    expect(shown).toEqual([]);
+  });
+
+  it("pairs batched tool calls with results in order", () => {
+    const ids = extractArtifactIds("He preparado el refuerzo.", [
+      { role: "tool-call", name: "cli", input: { input: "knowledge gaps" } },
+      { role: "tool-call", name: "cli", input: { input: "artifacts create '{}'" } },
+      {
+        role: "tool-result",
+        name: "cli",
+        result: `1. [gap-${previousQuizId}-q1] Topic: Relatividad`,
+        isFailure: false
+      },
+      { role: "tool-result", name: "cli", result: { kind: "quiz", id: createdId }, isFailure: false }
+    ]);
+    expect(ids).toEqual([createdId]);
+  });
+
+  it("detects create calls that pass the artifact body as CLI params", () => {
+    const ids = extractArtifactIds("He guardado el plan.", [
+      { role: "tool-call", name: "cli", input: { kind: "note", title: "Plan", markdown: "# Plan" } },
+      { role: "tool-result", name: "cli", result: { kind: "note", id: createdId, title: "Plan" }, isFailure: false }
+    ]);
+    expect(ids).toEqual([createdId]);
   });
 });
 

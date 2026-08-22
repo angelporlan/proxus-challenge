@@ -41,7 +41,8 @@ Proxo es un tutor académico adaptativo diseñado para aprendizaje activo. Sus c
 1. `packages/server/src/domain/agents/academic-tutor/skills/use-uploaded-materials.ts`: Inspección visual de páginas PDF.
 2. `packages/server/src/domain/agents/academic-tutor/skills/search-materials.ts`: Búsqueda léxica y localización de páginas en PDFs.
 3. `packages/server/src/domain/agents/academic-tutor/skills/create-study-artifacts.ts`: Creación de notas, quizzes y exámenes.
-4. `packages/server/src/domain/agents/academic-tutor/skills/review-knowledge-gaps.ts`: Detección y repaso de lagunas del alumno.
+4. `packages/server/src/domain/agents/academic-tutor/skills/review-knowledge-gaps.ts`: Detección de lagunas y quiz de refuerzo (rescate).
+5. `packages/server/src/domain/agents/academic-tutor/skills/adaptive-study-plan.ts`: Diagnóstico del temario y nota-roadmap de estudio.
 
 ### Comandos CLI del Dominio
 

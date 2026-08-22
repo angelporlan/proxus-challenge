@@ -83,7 +83,8 @@ Este documento recopila y categoriza en detalle todas las funcionalidades, optim
   1. `use-uploaded-materials`: Inspección visual de páginas PDF.
   2. `search-materials`: Búsqueda textual y filtrado de fragmentos.
   3. `create-study-artifacts`: Creación de notas, quizzes y tests autocorregibles.
-  4. `review-knowledge-gaps`: Detección, repaso y dominio de debilidades del estudiante.
+  4. `review-knowledge-gaps`: Detección, quiz de refuerzo (rescate de lagunas) y dominio de debilidades.
+  5. `adaptive-study-plan`: Diagnóstico de biblioteca + lagunas y nota-roadmap persistida.
 
 ---
 

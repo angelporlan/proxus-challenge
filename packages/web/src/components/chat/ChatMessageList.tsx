@@ -1,4 +1,4 @@
-import type { RefObject } from "react";
+import { useState, type RefObject } from "react";
 import { Streamdown } from "streamdown";
 import "streamdown/styles.css";
 import { splitMentionParts } from "../../hooks/useMentions.ts";
@@ -8,6 +8,8 @@ import { extractArtifactIds } from "./group-chat-items.ts";
 import { cleanAssistantContent, parseUserContent } from "./parse-user-content.ts";
 import { ReasoningFlowBox, TutorThinkingBubble } from "./ChatReasoning.tsx";
 import { RecommendationChips } from "./RecommendationChips.tsx";
+import { GapRescueCountPicker } from "./GapRescueCountPicker.tsx";
+import { buildGapRescueDisplay, buildGapRescuePrompt } from "./gap-rescue.ts";
 import { starterPrompts, type AssistantReveal, type ChatItem, type ChatMaterial, type TutorMode, type TutorRecommendation } from "./types.ts";
 
 export function ChatMessageList({
@@ -37,6 +39,8 @@ export function ChatMessageList({
   readonly onSetTutorMode: (mode: TutorMode) => void;
   readonly onSelectArtifact?: ((id: string) => void) | undefined;
 }) {
+  const [starterSetup, setStarterSetup] = useState<"gap-rescue-count" | null>(null);
+
   return (
     <section
       className={`chat-message-scroll relative flex min-h-0 flex-col overflow-y-auto px-3 py-4 sm:px-5 sm:py-6 lg:px-6 ${
@@ -69,9 +73,19 @@ export function ChatMessageList({
               isLight ? "text-slate-600" : "text-slate-400"
             }`}
           >
-            Tu tutor de estudio con IA. Pregúntame sobre tus apuntes, genera exámenes y esquemas o resuelve dudas difíciles.
+            Tu tutor de estudio con IA. Pregúntame sobre tus apuntes, genera quizzes, rescata lagunas o diseña un plan de estudio.
           </p>
 
+          {starterSetup === "gap-rescue-count" ? (
+            <GapRescueCountPicker
+              isLight={isLight}
+              onBack={() => setStarterSetup(null)}
+              onSelect={(count) => {
+                setStarterSetup(null);
+                void onSubmit(buildGapRescuePrompt(count), buildGapRescueDisplay(count));
+              }}
+            />
+          ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-left">
             {starterPrompts.map((item, idx) => (
               <button
@@ -85,6 +99,10 @@ export function ChatMessageList({
                 onClick={() => {
                   if (item.mode) {
                     onSetTutorMode(item.mode);
+                  }
+                  if ("setup" in item && item.setup === "gap-rescue-count") {
+                    setStarterSetup("gap-rescue-count");
+                    return;
                   }
                   void onSubmit(item.prompt);
                 }}
@@ -104,7 +122,7 @@ export function ChatMessageList({
                     {item.label}
                   </strong>
                   <span
-                    className={`block text-[11px] line-clamp-1 mt-0.5 ${
+                    className={`block text-[11px] line-clamp-2 mt-0.5 ${
                       isLight ? "text-slate-500" : "text-slate-400"
                     }`}
                   >
@@ -114,6 +132,7 @@ export function ChatMessageList({
               </button>
             ))}
           </div>
+          )}
           </div>
         ) : (
           groupedItems.map((item, index) => {

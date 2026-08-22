@@ -111,7 +111,10 @@ export function ReasoningFlowBox({
                   : "bg-indigo-600/20 text-indigo-400"
               }`}
             >
-              <span className="material-symbols-outlined text-sm" aria-hidden="true">
+              <span
+                className={`material-symbols-outlined text-sm ${isThinking ? "ui-progress-spin" : ""}`}
+                aria-hidden="true"
+              >
                 {isThinking ? "progress_activity" : "check_circle"}
               </span>
             </span>

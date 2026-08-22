@@ -225,7 +225,7 @@ Archivos principales:
 
 El tutor está implementado como un harness de agente con herramientas públicas:
 
-- `load_skill`: carga instrucciones especializadas (`use-uploaded-materials`, `search-materials`, `create-study-artifacts`, `review-knowledge-gaps`).
+- `load_skill`: carga instrucciones especializadas (`use-uploaded-materials`, `search-materials`, `create-study-artifacts`, `review-knowledge-gaps`, `adaptive-study-plan`).
 - `cli`: ejecuta comandos permitidos (`materials list/search/view/delete`, `artifacts list/show/create/submit/attempts/grade`, `knowledge gaps/summary/review/master`).
 
 ## Web: estado y UI

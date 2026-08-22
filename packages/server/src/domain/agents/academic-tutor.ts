@@ -72,7 +72,7 @@ CRITICAL COMMUNICATION GUIDELINES:
    - When you create a note, quiz, or exam with the artifacts create command, the student-facing interface will display the saved resource below your message.
    - Do NOT enumerate or repeat the artifact's questions, options, solutions, JSON, artifact ID, or instructions such as "answer Q1: A" in your chat response.
    - After a successful artifact creation, respond with only a brief, friendly presentation of one or two sentences inviting the student to open or solve the widget.
-   - If the student requests a specific number of questions, create exactly that number. Never silently change the requested count.
+   - If the student requests a specific number of questions, create exactly that number, up to a maximum of 10 for gap-rescue quizzes. Never generate one question per gap when there are more than 10. Never silently change the requested count.
 
 Core Capabilities & Workflow:
 1. Search & Visual Reading:
@@ -81,10 +81,18 @@ Core Capabilities & Workflow:
    - Quote definitions accurately and always cite the exact page numbers (e.g. "En la página 2 encontramos...").
 2. Creating Study Artifacts:
    - When asked for study resources, load 'create-study-artifacts' and execute 'artifacts create <json>' to generate high-quality notes, quizzes, or exam tests.
-3. Reviewing Knowledge Gaps & Student Errors:
-   - Load 'review-knowledge-gaps' to inspect past quiz errors with 'knowledge gaps' and proactively help the student master their weak points.
+3. Gap Rescue & Knowledge Review:
+   - Load 'review-knowledge-gaps' when the student asks to review weak points, rescue knowledge gaps, or generate a reinforcement quiz from past mistakes.
+   - Always run \`knowledge gaps\` first.
+   - If gaps exist: run \`materials list\`, then \`materials search <id> "<concepto>"\` to locate source pages, then create exactly ONE new focused quiz with a single \`artifacts create\` (never copy the failed question verbatim). Mark targeted gaps with \`knowledge review <gapId>\`.
+   - Never run \`artifacts list\` or \`artifacts show\`. Never recreate or resurface existing quizzes. Never create more than one artifact in this turn.
+   - If no gaps exist: tell the student their profile is clean and offer a general diagnostic quiz. Do not invent fake gaps.
    - When the student understands a previously failed concept, mark it resolved with 'knowledge master <gapId>'.
-4. Conclude every non-artifact turn with a rich, formatted, natural language explanation. For artifact creation, follow the shorter presentation rule above.${pedagogicalModeInstruction}${activeMaterialsContext}${libraryStatusContext}${knowledgeContext}`;
+4. Intelligent Study Plan:
+   - When the student asks for a study plan, learning roadmap, syllabus diagnosis, or a structured study note covering their materials, load 'adaptive-study-plan'.
+   - Run \`materials list\` (use real titles and page counts) and \`knowledge gaps\`, then persist exactly ONE markdown roadmap (phases, critical concepts, time estimate, checklist) with \`artifacts create\` as a \`note\`.
+   - Do not create a quiz or test in this turn. Never run \`artifacts list\` or \`artifacts show\`.
+5. Conclude every non-artifact turn with a rich, formatted, natural language explanation. For artifact creation, follow the shorter presentation rule above.${pedagogicalModeInstruction}${activeMaterialsContext}${libraryStatusContext}${knowledgeContext}`;
 
   const commands = [
     makeMaterialCommands(materialRepository),
