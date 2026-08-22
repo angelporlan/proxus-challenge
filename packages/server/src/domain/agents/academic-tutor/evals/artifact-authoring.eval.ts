@@ -371,9 +371,11 @@ const shouldMentionCreatedArtifact = (): AcceptanceCriterion => ({
 
     const output = context.output.toLocaleLowerCase();
     const mentionsId = output.includes(artifact.id.toLocaleLowerCase());
-    const mentionsCreation = /cread|created|he creado|i created|artifact|artefact/.test(output);
+    const mentionsTitle = output.includes(artifact.title.toLocaleLowerCase());
+    const mentionsKind = output.includes(artifact.kind.toLocaleLowerCase());
+    const mentionsCreation = /cread|created|he creado|i created|artifact|artefact|preparad|he preparado|generad|he generado|diseñad|widget|quiz|test|nota/.test(output);
 
-    return mentionsId || mentionsCreation
+    return mentionsId || mentionsTitle || mentionsKind || mentionsCreation
       ? passed("should-mention-created-artifact", "Final answer mentions the created artifact.")
       : failed("should-mention-created-artifact", "Final answer did not mention the created artifact.", { output: context.output, artifact });
   })

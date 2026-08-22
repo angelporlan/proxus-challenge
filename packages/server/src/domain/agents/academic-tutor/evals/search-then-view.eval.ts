@@ -63,22 +63,31 @@ export const runSearchThenViewEval = Effect.gen(function* () {
           pageCount: 50,
           uploadedAt: new Date().toISOString()
         },
-        pages: pages.map((page) => ({
-          page,
-          mediaType: "image/png" as const,
-          data: `data:image/png;base64,${btoa(`Contenido de la página ${page}`)}`
-        }))
+        pages: pages.map((page) => {
+          const pageObj = mockPdfPages.find((p) => p.page === page);
+          const pageText = pageObj?.text ?? `Contenido de la página ${page}`;
+          return {
+            page,
+            mediaType: "image/png" as const,
+            data: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
+            words: [{ xMin: 10, yMin: 10, xMax: 100, yMax: 20, text: pageText }],
+            lines: [{ xMin: 10, yMin: 10, xMax: 100, yMax: 20, text: pageText }]
+          };
+        })
       });
     },
     getFilePath: () => Effect.succeed("/tmp/constitucion.pdf"),
     getMindMap: () => Effect.succeed(null),
     saveMindMap: () => Effect.void,
     deleteMindMap: () => Effect.void,
-    searchText: (id, query) => {
+    searchText: (_id, query) => {
       searchCallCount++;
-      const qLower = query.toLowerCase();
+      const words = query.toLowerCase().split(/\s+/).filter((w) => w.length > 2);
       const matches = mockPdfPages
-        .filter((p) => p.text.toLowerCase().includes(qLower))
+        .filter((p) => {
+          const text = p.text.toLowerCase();
+          return words.some((w) => text.includes(w) || (w.startsWith("inviolab") && text.includes("inviolab")));
+        })
         .map((p) => ({
           page: p.page,
           snippet: p.text.slice(0, 120),

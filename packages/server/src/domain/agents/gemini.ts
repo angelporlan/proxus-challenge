@@ -360,19 +360,44 @@ export const GeminiLanguageModelLive = Layer.effect(
       generateText: (options) =>
         Effect.tryPromise({
           try: async (signal) => {
-            const response = await fetch(geminiUrl(config.model, config.apiKey), {
-              method: "POST",
-              headers: { "content-type": "application/json" },
-              body: JSON.stringify(requestBody(options)),
-              signal
-            });
+            let attempts = 0;
+            const maxAttempts = 4;
+            while (attempts < maxAttempts) {
+              attempts++;
+              const response = await fetch(geminiUrl(config.model, config.apiKey), {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify(requestBody(options)),
+                signal
+              });
 
-            if (!response.ok) {
-              throw new Error(await response.text());
+              if (response.status === 429 && attempts < maxAttempts) {
+                const responseText = await response.text().catch(() => "");
+                let delayMs = attempts * 5000;
+                try {
+                  const parsed = JSON.parse(responseText);
+                  const retryInfo = parsed?.error?.details?.find((d: any) => d?.["@type"]?.includes("RetryInfo"));
+                  if (typeof retryInfo?.retryDelay === "string") {
+                    const match = /^(\d+)/.exec(retryInfo.retryDelay.trim());
+                    if (match && match[1]) {
+                      delayMs = Math.min((Number(match[1]) + 1) * 1000, 30000);
+                    }
+                  }
+                } catch {
+                  // Fall back to default delayMs
+                }
+                await new Promise((resolve) => setTimeout(resolve, delayMs));
+                continue;
+              }
+
+              if (!response.ok) {
+                throw new Error(await response.text());
+              }
+
+              const json = decodeGeminiResponse(await response.json());
+              return toResponseParts(json.candidates?.[0]?.content?.parts ?? [], options.tools);
             }
-
-            const json = decodeGeminiResponse(await response.json());
-            return toResponseParts(json.candidates?.[0]?.content?.parts ?? [], options.tools);
+            throw new Error("Exceeded maximum retry attempts for Gemini request.");
           },
           catch: (cause) => toAiError(cause instanceof Error ? cause.message : String(cause))
         }),
