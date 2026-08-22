@@ -142,17 +142,6 @@ export function Sidebar({
             </span>
             <span>Subir PDF</span>
           </button>
-          {onCreateExercise && (
-            <button
-              type="button"
-              onClick={() => onCreateExercise()}
-              className="flex min-h-8 items-center gap-1 rounded-lg border border-purple-200 bg-purple-50 px-2.5 py-1 text-xs font-semibold text-purple-700 shadow-xs transition hover:bg-purple-100 dark:border-purple-800/60 dark:bg-purple-950/40 dark:text-purple-300 dark:hover:bg-purple-900/50"
-              title="Configurar un quiz o simulacro"
-            >
-              <span className="material-symbols-outlined text-[15px]" aria-hidden="true">auto_awesome</span>
-              <span className="hidden sm:inline">Crear ejercicio</span>
-            </button>
-          )}
         </div>
 
         {AsyncResult.matchWithError(materials, {
@@ -347,17 +336,30 @@ export function Sidebar({
               Recursos de estudio
             </h2>
           </div>
-          {AsyncResult.match(artifacts, {
-            onInitial: () => null,
-            onFailure: () => null,
-            onSuccess: ({ value }) => (
-              <span className={`text-[11px] font-mono font-medium px-2 py-0.5 rounded-full ${
-                isLight ? "bg-slate-100 text-slate-600" : "bg-slate-800 text-slate-400"
-              }`}>
-                {value.artifacts.length}
-              </span>
-            )
-          })}
+          <div className="flex items-center gap-1.5">
+            {onCreateExercise && (
+              <button
+                type="button"
+                onClick={() => onCreateExercise()}
+                className="flex min-h-7 items-center gap-1 rounded-lg border border-purple-200 bg-purple-50 px-2 py-1 text-xs font-semibold text-purple-700 shadow-2xs transition hover:bg-purple-100 active:scale-95 dark:border-purple-800/60 dark:bg-purple-950/40 dark:text-purple-300 dark:hover:bg-purple-900/50"
+                title="Configurar un quiz o simulacro"
+              >
+                <span className="material-symbols-outlined text-[14px]" aria-hidden="true">auto_awesome</span>
+                <span>Crear ejercicio</span>
+              </button>
+            )}
+            {AsyncResult.match(artifacts, {
+              onInitial: () => null,
+              onFailure: () => null,
+              onSuccess: ({ value }) => (
+                <span className={`text-[11px] font-mono font-medium px-2 py-0.5 rounded-full ${
+                  isLight ? "bg-slate-100 text-slate-600" : "bg-slate-800 text-slate-400"
+                }`}>
+                  {value.artifacts.length}
+                </span>
+              )
+            })}
+          </div>
         </div>
 
         {AsyncResult.matchWithError(artifacts, {
