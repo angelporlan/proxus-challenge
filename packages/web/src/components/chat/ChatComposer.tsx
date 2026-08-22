@@ -87,20 +87,21 @@ export function ChatComposer({
 
   return (
     <footer
-      className={`border-t p-3 sm:p-4 backdrop-blur transition-colors ${
-        isLight ? "border-slate-200 bg-white/80" : "border-slate-800/80 bg-slate-950/80"
+      className={`border-t px-3 py-3 sm:px-4 sm:py-4 lg:px-6 backdrop-blur transition-colors ${
+        isLight ? "border-slate-200/70 bg-slate-50/80" : "border-slate-800/80 bg-slate-950/80"
       }`}
     >
-      <form
-        onSubmit={(event) => {
-          event.preventDefault();
-          if (isListening) stopListening();
-          void onSubmit(input);
-        }}
-        className={`relative rounded-[26px] border-2 border-[#8b5cf6] p-3 shadow-[0_0_20px_rgba(139,92,246,0.18)] focus-within:shadow-[0_0_28px_rgba(139,92,246,0.35)] transition-all ${
-          isLight ? "bg-white text-slate-900" : "bg-[#0b101b] text-slate-100"
-        }`}
-      >
+      <div className="mx-auto w-full max-w-6xl">
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (isListening) stopListening();
+            void onSubmit(input);
+          }}
+          className={`relative rounded-[26px] border-2 border-[#8b5cf6] p-3 shadow-[0_0_20px_rgba(139,92,246,0.18)] focus-within:shadow-[0_0_28px_rgba(139,92,246,0.35)] transition-all ${
+            isLight ? "bg-white text-slate-900" : "bg-[#0b101b] text-slate-100"
+          }`}
+        >
         <input
           ref={fileInputRef}
           type="file"
@@ -297,7 +298,8 @@ export function ChatComposer({
             </button>
           </div>
         </div>
-      </form>
+        </form>
+      </div>
     </footer>
   );
 }

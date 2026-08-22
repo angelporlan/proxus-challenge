@@ -96,9 +96,6 @@ export function App() {
   const [chatAttachments, setChatAttachments] = useState<
     readonly { readonly id: string; readonly title: string; readonly pageCount?: number }[] | undefined
   >(undefined);
-  const [isChatMaximized, setIsChatMaximized] = useState(false);
-  const [isChatClosing, setIsChatClosing] = useState(false);
-
   const [isLibraryOpen, setIsLibraryOpen] = useState(false);
   const [isTutorOpen, setIsTutorOpen] = useState(() => {
     if (typeof window === "undefined") return true;
@@ -133,30 +130,6 @@ export function App() {
   const tutorTriggerRef = useRef<HTMLElement | null>(null);
   const libraryFallbackRef = useRef<HTMLButtonElement>(null);
   const tutorFallbackRef = useRef<HTMLButtonElement>(null);
-
-  const handleOpenFullscreenChat = useCallback(() => {
-    setIsChatClosing(false);
-    setIsChatMaximized(true);
-  }, []);
-
-  const handleCloseFullscreenChat = useCallback(() => {
-    setIsChatClosing(true);
-    setTimeout(() => {
-      setIsChatMaximized(false);
-      setIsChatClosing(false);
-    }, 280);
-  }, []);
-
-  useEffect(() => {
-    if (!isChatMaximized) return;
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        handleCloseFullscreenChat();
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isChatMaximized, handleCloseFullscreenChat]);
 
   const profileResult = useAtomValue(knowledgeProfileQuery);
   const activeGapsCount = AsyncResult.match(profileResult, {
@@ -752,15 +725,13 @@ export function App() {
       <ResponsivePanel
         side="right"
         label="Tutor de estudio"
-        open={isTutorOpen || isChatMaximized}
-        onClose={isChatMaximized ? handleCloseFullscreenChat : closeTutor}
+        open={isTutorOpen}
+        onClose={closeTutor}
         width={layoutWidths.chat}
         laptopWidth={480}
         isWide={isWideLayout}
         returnFocusRef={tutorTriggerRef}
         fallbackFocusRef={tutorFallbackRef}
-        isFullscreen={isChatMaximized}
-        isClosing={isChatClosing}
       >
         <Chat
           prefillPrompt={chatPrompt}
@@ -773,13 +744,10 @@ export function App() {
           }}
           onSelectArtifact={(id) => {
             handleSelectArtifact(id);
-            if (isChatMaximized) handleCloseFullscreenChat();
-            else if (!isWideLayout) setIsTutorOpen(false);
+            if (!isWideLayout) setIsTutorOpen(false);
           }}
-          onClose={isChatMaximized ? handleCloseFullscreenChat : closeTutor}
+          onClose={closeTutor}
           theme={theme}
-          isMaximized={isChatMaximized}
-          onToggleMaximize={isChatMaximized ? handleCloseFullscreenChat : handleOpenFullscreenChat}
           onOpenProfile={() => setIsUserProfileModalOpen(true)}
         />
       </ResponsivePanel>
@@ -943,7 +911,7 @@ function NoPdfSelected({ recentMaterial, onOpenRecent, onUpload }: {
   );
 }
 
-function ResponsivePanel({ side, label, open, onClose, width, laptopWidth, isWide, returnFocusRef, fallbackFocusRef, isFullscreen, isClosing, children }: {
+function ResponsivePanel({ side, label, open, onClose, width, laptopWidth, isWide, returnFocusRef, fallbackFocusRef, children }: {
   readonly side: "left" | "right";
   readonly label: string;
   readonly open: boolean;
@@ -953,14 +921,12 @@ function ResponsivePanel({ side, label, open, onClose, width, laptopWidth, isWid
   readonly isWide: boolean;
   readonly returnFocusRef: RefObject<HTMLElement | null>;
   readonly fallbackFocusRef: RefObject<HTMLElement | null>;
-  readonly isFullscreen?: boolean | undefined;
-  readonly isClosing?: boolean | undefined;
   readonly children: ReactNode;
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if ((isWide && !isFullscreen) || !open) return;
+    if (isWide || !open) return;
     const panel = panelRef.current;
     if (!panel) return;
     const previousFocus = returnFocusRef.current
@@ -1009,36 +975,10 @@ function ResponsivePanel({ side, label, open, onClose, width, laptopWidth, isWid
         (canRestorePrevious ? previousFocus : fallbackFocusRef.current)?.focus();
       });
     };
-  }, [fallbackFocusRef, isFullscreen, isWide, onClose, open, returnFocusRef]);
+  }, [fallbackFocusRef, isWide, onClose, open, returnFocusRef]);
 
-  if (isWide && side === "right" && !open && !isFullscreen) {
+  if (isWide && side === "right" && !open) {
     return null;
-  }
-
-  if (isFullscreen) {
-    return (
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label={label}
-        className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden"
-      >
-        <div
-          className={`absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity duration-300 ${
-            isClosing ? "opacity-0" : "opacity-100"
-          }`}
-          onClick={onClose}
-        />
-        <div
-          ref={panelRef}
-          className={`relative z-10 flex flex-col h-full w-full overflow-hidden shadow-2xl ${
-            isClosing ? "ui-chat-collapse" : "ui-chat-expand"
-          }`}
-        >
-          {children}
-        </div>
-      </div>
-    );
   }
 
   return (

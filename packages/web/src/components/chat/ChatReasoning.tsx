@@ -11,7 +11,7 @@ export function TutorThinkingBubble({
   readonly mode?: TutorMode | undefined;
 }) {
   return (
-    <div className="ui-enter flex items-start gap-2.5" aria-label="Proxo está pensando" role="status">
+    <div className="ui-enter flex w-full max-w-3xl items-start gap-2.5" aria-label="Proxo está pensando" role="status">
       <ProxoFrameAnimation
         mode={mode}
         state="thinking"

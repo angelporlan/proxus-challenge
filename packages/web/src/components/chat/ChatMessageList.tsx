@@ -36,13 +36,14 @@ export function ChatMessageList({
 }) {
   return (
     <section
-      className={`chat-message-scroll relative flex flex-col gap-4 overflow-y-auto p-4 sm:p-6 ${
+      className={`chat-message-scroll relative flex min-h-0 flex-col overflow-y-auto px-3 py-4 sm:px-5 sm:py-6 lg:px-6 ${
         isLight ? "bg-slate-50/80" : "bg-[#090d16]"
       }`}
       aria-live="polite"
     >
-      {groupedItems.length === 0 ? (
-        <div className="m-auto w-full max-w-2xl text-center py-6">
+      <div className="mx-auto flex min-h-full w-full max-w-6xl flex-col gap-5 lg:gap-6">
+        {groupedItems.length === 0 ? (
+          <div className="m-auto w-full max-w-2xl py-6 text-center">
           <div className="relative mx-auto mb-3 inline-block">
             <ProxoFrameAnimation
               mode={tutorMode}
@@ -110,13 +111,13 @@ export function ChatMessageList({
               </button>
             ))}
           </div>
-        </div>
-      ) : (
-        groupedItems.map((item, index) => {
+          </div>
+        ) : (
+          groupedItems.map((item, index) => {
           if (item.kind === "user") {
             const { docs, text } = parseUserContent(item.message.content, availableMaterials);
             return (
-              <article key={index} className="ui-enter flex flex-col gap-1 max-w-2xl self-end items-end">
+              <article key={index} className="ui-enter flex w-full max-w-3xl flex-col items-end gap-1 self-end">
                 <span className="text-[11px] font-mono font-semibold uppercase tracking-wider text-indigo-500 px-1">
                   Tú
                 </span>
@@ -180,7 +181,7 @@ export function ChatMessageList({
             : extractArtifactIds(item.message.content, item.associatedTools);
 
           return (
-            <article key={index} className="ui-enter flex max-w-3xl self-start items-start gap-2.5">
+            <article key={index} className="ui-enter flex w-full max-w-4xl self-start items-start gap-2.5">
               <ProxoFrameAnimation
                 mode={tutorMode}
                 state={isCurrentlyWriting ? "talking" : "idle"}
@@ -269,14 +270,15 @@ export function ChatMessageList({
               </div>
             </article>
           );
-        })
-      )}
+          })
+        )}
 
-      {isSending && !isTutorWriting && groupedItems.at(-1)?.kind !== "tools" && (
-        <TutorThinkingBubble isLight={isLight} mode={tutorMode} />
-      )}
+        {isSending && !isTutorWriting && groupedItems.at(-1)?.kind !== "tools" && (
+          <TutorThinkingBubble isLight={isLight} mode={tutorMode} />
+        )}
 
-      <div ref={messagesEndRef} />
+        <div ref={messagesEndRef} />
+      </div>
     </section>
   );
 }

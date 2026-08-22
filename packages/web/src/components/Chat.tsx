@@ -29,9 +29,7 @@ export function Chat({
   prefillAttachments,
   onClearPrefill,
   onSelectArtifact,
-  theme = "dark",
-  isMaximized = false,
-  onToggleMaximize
+  theme = "dark"
 }: ChatProps = {}) {
   const isLight = theme === "light";
   const [input, setInput] = useState("");
@@ -171,7 +169,6 @@ export function Chat({
     >
       <ChatHeader
         isLight={isLight}
-        isMaximized={isMaximized}
         isHistoryOpen={isHistoryOpen}
         sessions={sessions}
         currentSessionId={currentSessionId}
@@ -180,7 +177,6 @@ export function Chat({
         onToggleHistory={() => setIsHistoryOpen((v) => !v)}
         onSelectSession={handleSelectSession}
         onDeleteSession={handleDeleteSession}
-        onToggleMaximize={onToggleMaximize}
       />
 
       <ChatMessageList
@@ -197,55 +193,57 @@ export function Chat({
         onSelectArtifact={onSelectArtifact}
       />
 
-      {error !== undefined && (
-        <div
-          role="alert"
-          aria-live="assertive"
-          className={`mx-4 mb-2 rounded-lg border p-3 text-xs ${
-            isLight
-              ? "border-red-200 bg-red-50 text-red-700"
-              : "border-red-900 bg-red-950/40 text-red-200"
-          }`}
-        >
-          {error}
-        </div>
-      )}
+      <div className="min-w-0">
+        {error !== undefined && (
+          <div
+            role="alert"
+            aria-live="assertive"
+            className={`mx-auto mb-2 w-[calc(100%-2rem)] max-w-6xl rounded-lg border p-3 text-xs ${
+              isLight
+                ? "border-red-200 bg-red-50 text-red-700"
+                : "border-red-900 bg-red-950/40 text-red-200"
+            }`}
+          >
+            {error}
+          </div>
+        )}
 
-      <ChatComposer
-        isLight={isLight}
-        input={input}
-        setInput={setInput}
-        tutorMode={tutorMode}
-        setTutorMode={setTutorMode}
-        attachedDocs={attachedDocs}
-        setAttachedDocs={setAttachedDocs}
-        availableMaterials={availableMaterials}
-        isSending={isSending}
-        isTutorWriting={isTutorWriting}
-        isUploading={isUploading}
-        isListening={isListening}
-        audioLevels={audioLevels}
-        isMentionOpen={isMentionOpen}
-        setIsMentionOpen={setIsMentionOpen}
-        mentionQuery={mentionQuery}
-        setMentionQuery={setMentionQuery}
-        selectedMentionIndex={selectedMentionIndex}
-        setSelectedMentionIndex={setSelectedMentionIndex}
-        filteredMentionMaterials={filteredMentionMaterials}
-        handleSelectMentionDoc={handleSelectMentionDoc}
-        handleRemoveAttachedDoc={handleRemoveAttachedDoc}
-        magIaRef={magIaRef}
-        mentionRef={mentionRef}
-        backdropRef={backdropRef}
-        textareaRef={textareaRef}
-        fileInputRef={fileInputRef}
-        isMagIaOpen={isMagIaOpen}
-        setIsMagIaOpen={setIsMagIaOpen}
-        onSubmit={(prompt) => void submit(prompt)}
-        onFileChange={(event) => void handleDirectFileUpload(event)}
-        toggleListening={toggleListening}
-        stopListening={stopListening}
-      />
+        <ChatComposer
+          isLight={isLight}
+          input={input}
+          setInput={setInput}
+          tutorMode={tutorMode}
+          setTutorMode={setTutorMode}
+          attachedDocs={attachedDocs}
+          setAttachedDocs={setAttachedDocs}
+          availableMaterials={availableMaterials}
+          isSending={isSending}
+          isTutorWriting={isTutorWriting}
+          isUploading={isUploading}
+          isListening={isListening}
+          audioLevels={audioLevels}
+          isMentionOpen={isMentionOpen}
+          setIsMentionOpen={setIsMentionOpen}
+          mentionQuery={mentionQuery}
+          setMentionQuery={setMentionQuery}
+          selectedMentionIndex={selectedMentionIndex}
+          setSelectedMentionIndex={setSelectedMentionIndex}
+          filteredMentionMaterials={filteredMentionMaterials}
+          handleSelectMentionDoc={handleSelectMentionDoc}
+          handleRemoveAttachedDoc={handleRemoveAttachedDoc}
+          magIaRef={magIaRef}
+          mentionRef={mentionRef}
+          backdropRef={backdropRef}
+          textareaRef={textareaRef}
+          fileInputRef={fileInputRef}
+          isMagIaOpen={isMagIaOpen}
+          setIsMagIaOpen={setIsMagIaOpen}
+          onSubmit={(prompt) => void submit(prompt)}
+          onFileChange={(event) => void handleDirectFileUpload(event)}
+          toggleListening={toggleListening}
+          stopListening={stopListening}
+        />
+      </div>
     </section>
   );
 }
