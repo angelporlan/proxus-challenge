@@ -83,6 +83,7 @@ function ArtifactDetail({
         onDefect: () => <ArtifactLoadError onRetry={refresh} />,
         onSuccess: ({ value }) => (
           <ArtifactContent
+            key={value.id}
             artifact={value}
             onAskTutorAboutQuestion={onAskTutorAboutQuestion}
           />
@@ -122,11 +123,12 @@ function ArtifactContent({
 }) {
   switch (artifact.kind) {
     case "note":
-      return <NoteViewer artifact={artifact} />;
+      return <NoteViewer key={artifact.id} artifact={artifact} />;
     case "quiz":
     case "test":
       return (
         <ExerciseSolver
+          key={artifact.id}
           artifact={artifact}
           onAskTutorAboutQuestion={onAskTutorAboutQuestion}
         />

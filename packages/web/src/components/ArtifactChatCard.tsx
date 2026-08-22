@@ -43,6 +43,7 @@ export function ArtifactChatCard({
         onDefect: () => null,
         onSuccess: ({ value: artifact }) => (
           <ArtifactCardView
+            key={artifact.id}
             artifact={artifact}
             isSaved={isSaved}
             onToggleSave={toggleSave}
