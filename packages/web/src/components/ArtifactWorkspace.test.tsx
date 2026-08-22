@@ -69,16 +69,16 @@ describe("ArtifactWorkspace", () => {
 
     const { rerender } = render(<ArtifactWorkspace artifactId={firstQuiz.id} />);
 
-    await user.click(await screen.findByRole("radio", { name: "Primera A" }));
-    await user.click(screen.getByRole("button", { name: "Finalizar y Corregir" }));
+    await user.click(await screen.findByText("Primera A"));
+    await user.click(screen.getByRole("button", { name: "Corregir quiz" }));
 
     expect(await screen.findByText("Respuesta correcta:")).toBeInTheDocument();
-    expect(screen.getByRole("radio", { name: "Primera A" })).toBeChecked();
+    expect(screen.getByDisplayValue("a")).toBeChecked();
 
     rerender(<ArtifactWorkspace artifactId={secondQuiz.id} />);
 
     expect(await screen.findByText("Pregunta del segundo quiz")).toBeInTheDocument();
-    expect(screen.getByRole("radio", { name: "Segunda A" })).not.toBeChecked();
+    expect(screen.getByDisplayValue("a")).not.toBeChecked();
     expect(screen.queryByText("Explicación propia del primer quiz")).not.toBeInTheDocument();
   });
 });

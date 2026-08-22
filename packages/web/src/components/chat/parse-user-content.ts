@@ -87,11 +87,25 @@ export function parseUserContent(
   };
 }
 
-export function cleanAssistantContent(raw: string): string {
+export function cleanAssistantContent(raw: string, options: { readonly hasArtifactWidget?: boolean } = {}): string {
   if (!raw) return "";
   const trimmed = raw.trim();
   if (/^(?:Tool call\s+)?[a-zA-Z0-9_-]+\s*:\s*(?:json=)?\{/i.test(trimmed)) {
     return "He preparado el recurso solicitado. Puedes revisarlo a continuación:";
   }
-  return raw.replace(/^(?:Tool call\s+)?[a-zA-Z0-9_-]+\s*:\s*(?:json=)?\{[^\n]+\}\n*/gi, "").trim() || raw;
+  const cleaned = raw.replace(/^(?:Tool call\s+)?[a-zA-Z0-9_-]+\s*:\s*(?:json=)?\{[^\n]+\}\n*/gi, "").trim() || raw;
+  if (!options.hasArtifactWidget) return cleaned;
+
+  const questionDumpPattern = /(?:^|\n)\s*(?:pregunta\s*\d+|q\d+\s*[:.)]|respuesta\s+correcta|opciones?\s*:|art(?:ifact|e?fact)\s*(?:id| creado)|responde\s+(?:con|las)|[A-D][.)]\s+)/i;
+  if (!questionDumpPattern.test(cleaned)) return cleaned;
+
+  const presentation = cleaned
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+    .filter((line) => !/^(?:pregunta\s*\d+|q\d+\s*[:.)]|respuesta\s+correcta|opciones?\s*:|art(?:ifact|e?fact)\s*(?:id| creado)|responde\s+(?:con|las)|[A-D][.)]\s+)/i.test(line))
+    .join(" ")
+    .trim();
+
+  return presentation || "He preparado el ejercicio. Puedes resolverlo en el widget interactivo que aparece a continuación:";
 }

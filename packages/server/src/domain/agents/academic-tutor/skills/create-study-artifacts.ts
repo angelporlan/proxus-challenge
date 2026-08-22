@@ -13,6 +13,11 @@ export const CreateStudyArtifactsSkill = AgentSkill.make({
     "- `quiz`: title plus auto-gradable multiple-choice / true-false questions.",
     "- `test`: title plus questions. Tests may include multiple-choice, true-false, and short-answer questions.",
     "",
+    "Generation rules:",
+    "- Respect the exact number of questions requested by the student. If no number is given, use 3 for a quiz and 10 for a test.",
+    "- The web interface automatically renders an interactive widget after `artifacts create` succeeds.",
+    "- After creating an artifact, write only a brief one- or two-sentence presentation. Do not repeat questions, options, solutions, JSON, artifact IDs, or tell the student to answer in chat with Q1: A.",
+    "",
     "Available CLI commands:",
     "- `artifacts list [note|quiz|test]`: list saved artifacts.",
     "- `artifacts show <artifactId>`: show an artifact JSON.",
@@ -36,7 +41,7 @@ export const CreateStudyArtifactsSkill = AgentSkill.make({
     "Workflow:",
     "1. For artifacts based on uploaded materials, inspect the uploaded material first.",
     "2. Create a compact artifact that directly matches the user's request.",
-    "3. Use stable question ids like `q1`, `q2`, `q3`.",
+    "3. Use unique stable question ids like `q1`, `q2`, `q3` within each artifact.",
     "4. For quizzes, prefer true-false and multiple-choice because grading is deterministic.",
     "5. When a user submits answers, save the attempt and then grade it."
   ].join("\n")

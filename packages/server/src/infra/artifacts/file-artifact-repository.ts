@@ -224,6 +224,14 @@ export const FileArtifactRepository = {
         return yield* new ArtifactNotFound({ artifactId: id });
       }
       yield* fs.remove(filePath).pipe(Effect.mapError(mapStorageError));
+
+      // Knowledge gaps belong to the artifact that generated them. Remove them
+      // together with the artifact so deleted quizzes/tests do not leave stale gaps.
+      if (Option.isSome(knowledgeRepoOption)) {
+        yield* knowledgeRepoOption.value.removeGapsByArtifactId(id).pipe(
+          Effect.catch(() => Effect.void)
+        );
+      }
     });
 
     return {

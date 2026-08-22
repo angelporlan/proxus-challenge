@@ -119,6 +119,18 @@ export const FileKnowledgeRepository = {
       return updatedGap;
     });
 
+    const removeGapsByArtifactId = (artifactId: string) => Effect.gen(function* () {
+      const current = yield* readProfile();
+      const remainingGaps = current.gaps.filter((gap) => gap.sourceArtifactId !== artifactId);
+
+      if (remainingGaps.length !== current.gaps.length) {
+        yield* writeProfile({
+          ...current,
+          gaps: remainingGaps
+        });
+      }
+    });
+
     const clearProfile = () => writeProfile(defaultProfile);
 
     const listActiveGaps = () => readProfile().pipe(
@@ -129,6 +141,7 @@ export const FileKnowledgeRepository = {
       getProfile,
       recordGaps,
       updateGapStatus,
+      removeGapsByArtifactId,
       clearProfile,
       listActiveGaps
     };

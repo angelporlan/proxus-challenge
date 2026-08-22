@@ -44,6 +44,7 @@ import {
 import { clearAllStoredSessions } from "./domain/sessions/storage.ts";
 import { ConversationalOnboarding } from "./components/ConversationalOnboarding.tsx";
 import { UserProfileModal } from "./components/UserProfileModal.tsx";
+import { CreateExerciseModal, type ExerciseRequest } from "./components/CreateExerciseModal.tsx";
 
 const ArtifactWorkspace = lazy(() => import("./components/ArtifactWorkspace.tsx").then(m => ({ default: m.ArtifactWorkspace })));
 const KnowledgeGapsPanel = lazy(() => import("./components/KnowledgeGapsPanel.tsx").then(m => ({ default: m.KnowledgeGapsPanel })));
@@ -105,6 +106,8 @@ export function App() {
   });
   const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [recentlyUploadedId, setRecentlyUploadedId] = useState<string | null>(null);
+  const [isCreateExerciseOpen, setIsCreateExerciseOpen] = useState(false);
+  const [exerciseMaterialId, setExerciseMaterialId] = useState<string | null>(null);
 
   const [pendingDeletion, setPendingDeletion] = useState<PdfMaterial | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -247,6 +250,11 @@ export function App() {
     }
   };
 
+  const openCreateExercise = (materialId?: string) => {
+    setExerciseMaterialId(materialId ?? null);
+    setIsCreateExerciseOpen(true);
+  };
+
   const handleSelectArtifact = (artifactId: string) => {
     setSelectedArtifactId(artifactId);
     setActiveTab("workspace");
@@ -259,6 +267,16 @@ export function App() {
     setPdfPage(page);
     setActiveTab("pdf");
     setIsLibraryOpen(false);
+  };
+
+  const handleGenerateExercise = (request: ExerciseRequest) => {
+    setIsCreateExerciseOpen(false);
+    setExerciseMaterialId(null);
+    openTutor(request.prompt, [{
+      id: request.material.id,
+      title: request.material.title,
+      pageCount: request.material.pageCount
+    }]);
   };
 
   const handleUploaded = (material: PdfMaterial) => {
@@ -566,6 +584,7 @@ export function App() {
             setIsLibraryOpen(false);
           }}
           onAskTutor={(prompt) => openTutor(prompt)}
+          onCreateExercise={openCreateExercise}
           onRequestUpload={() => setIsUploadOpen(true)}
           onRequestDelete={requestDelete}
           onRequestDeleteArtifact={requestDeleteArtifact}
@@ -805,6 +824,17 @@ export function App() {
       />
 
       <DocumentUploadModal isOpen={isUploadOpen} onClose={() => setIsUploadOpen(false)} onUploaded={handleUploaded} />
+
+      <CreateExerciseModal
+        isOpen={isCreateExerciseOpen}
+        materials={materialsList}
+        initialMaterialId={exerciseMaterialId}
+        onClose={() => {
+          setIsCreateExerciseOpen(false);
+          setExerciseMaterialId(null);
+        }}
+        onGenerate={handleGenerateExercise}
+      />
 
       <MaterialDeleteDialog
         material={pendingDeletion}

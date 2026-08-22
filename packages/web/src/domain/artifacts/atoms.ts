@@ -55,5 +55,5 @@ export const deleteArtifactAction = apiRuntime.fn(
         params: { id }
       })
     ).pipe(Effect.withSpan("artifacts.delete", { kind: "client" })),
-  { reactivityKeys: ["artifacts"] }
+  { reactivityKeys: ["artifacts", "knowledge"] }
 );

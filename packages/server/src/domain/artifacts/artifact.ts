@@ -373,8 +373,14 @@ const gradeQuizAttempt = (
   const corrections: AutoQuestionCorrection[] = [];
 
   for (const answer of attempt.answers) {
-    const question = yield* findQuestion(artifact.questions, answer.questionId);
-    corrections.push(yield* correctAutoQuestion(question, answer));
+    yield* findQuestion(artifact.questions, answer.questionId);
+  }
+
+  for (const question of artifact.questions) {
+    const answer = attempt.answers.find((candidate) => candidate.questionId === question.id);
+    corrections.push(answer === undefined
+      ? correctMissingAutoQuestion(question)
+      : yield* correctAutoQuestion(question, answer));
   }
 
   const { score, maxScore } = scoreAutoCorrections(corrections);
@@ -395,8 +401,14 @@ const gradeTestAttempt = (
   const corrections: QuestionCorrection[] = [];
 
   for (const answer of attempt.answers) {
-    const question = yield* findQuestion(artifact.questions, answer.questionId);
-    corrections.push(yield* correctQuestion(question, answer));
+    yield* findQuestion(artifact.questions, answer.questionId);
+  }
+
+  for (const question of artifact.questions) {
+    const answer = attempt.answers.find((candidate) => candidate.questionId === question.id);
+    corrections.push(answer === undefined
+      ? correctMissingQuestion(question)
+      : yield* correctQuestion(question, answer));
   }
 
   const { score, maxScore } = scoreQuestionCorrections(corrections);
@@ -452,6 +464,29 @@ const correctAutoQuestion = (
   }
 };
 
+const correctMissingAutoQuestion = (question: QuizQuestion): AutoQuestionCorrection => {
+  switch (question.type) {
+    case "multiple-choice":
+      return {
+        questionType: "multiple-choice",
+        questionId: question.id,
+        correct: false,
+        selectedOptionId: "",
+        correctOptionId: question.correctOptionId,
+        explanation: question.explanation
+      };
+    case "true-false":
+      return {
+        questionType: "true-false",
+        questionId: question.id,
+        correct: false,
+        answer: false,
+        correctAnswer: question.correctAnswer,
+        explanation: question.explanation
+      };
+  }
+};
+
 const correctQuestion = (
   question: TestQuestion,
   answer: TestAnswer
@@ -474,6 +509,20 @@ const correctQuestion = (
   }
 
   return correctAutoQuestion(question, answer as QuizAnswer);
+};
+
+const correctMissingQuestion = (question: TestQuestion): QuestionCorrection => {
+  if (question.type === "short-answer") {
+    return {
+      questionType: "short-answer",
+      questionId: question.id,
+      score: 0,
+      maxScore: question.maxScore,
+      feedback: `No answer submitted. Expected: ${question.expectedAnswer}`
+    };
+  }
+
+  return correctMissingAutoQuestion(question);
 };
 
 const normalizeAnswer = (answer: string) => answer.trim().toLocaleLowerCase();

@@ -222,8 +222,8 @@ export function ChatMessageList({
                   <div className="prose dark:prose-invert max-w-none text-sm space-y-2">
                     <Streamdown>
                       {isCurrentlyWriting
-                        ? cleanAssistantContent(item.message.content).slice(0, assistantReveal?.visibleLength ?? 0)
-                        : cleanAssistantContent(item.message.content)}
+                        ? cleanAssistantContent(item.message.content, { hasArtifactWidget: artifactIds.length > 0 }).slice(0, assistantReveal?.visibleLength ?? 0)
+                        : cleanAssistantContent(item.message.content, { hasArtifactWidget: artifactIds.length > 0 })}
                     </Streamdown>
                     {isCurrentlyWriting && (
                       <span
@@ -247,7 +247,7 @@ export function ChatMessageList({
                     </div>
                   )}
 
-                  {index === groupedItems.length - 1 && !isCurrentlyWriting && (
+                  {artifactIds.length === 0 && index === groupedItems.length - 1 && !isCurrentlyWriting && (
                     <div
                       className={`mt-4 flex flex-wrap items-center gap-2 border-t pt-3 ${
                         isLight ? "border-slate-100" : "border-slate-800/80"

@@ -13,6 +13,7 @@ export interface KnowledgeRepository {
   readonly getProfile: () => Effect.Effect<KnowledgeProfile, KnowledgeRepositoryError>;
   readonly recordGaps: (gaps: readonly KnowledgeGap[]) => Effect.Effect<KnowledgeProfile, KnowledgeRepositoryError>;
   readonly updateGapStatus: (id: string, status: KnowledgeGapStatus) => Effect.Effect<KnowledgeGap, GapNotFound | KnowledgeRepositoryError>;
+  readonly removeGapsByArtifactId: (artifactId: string) => Effect.Effect<void, KnowledgeRepositoryError>;
   readonly clearProfile: () => Effect.Effect<void, KnowledgeRepositoryError>;
   readonly listActiveGaps: () => Effect.Effect<readonly KnowledgeGap[], KnowledgeRepositoryError>;
 }

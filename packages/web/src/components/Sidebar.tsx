@@ -14,6 +14,7 @@ interface SidebarProps {
   readonly onSelectMaterial?: ((materialId: string) => void) | undefined;
   readonly onOpenMindMap?: ((materialId: string) => void) | undefined;
   readonly onAskTutor?: ((prompt: string) => void) | undefined;
+  readonly onCreateExercise?: ((materialId?: string) => void) | undefined;
   readonly onRequestUpload: () => void;
   readonly onRequestDelete: (material: PdfMaterial, trigger?: HTMLButtonElement) => void;
   readonly onRequestDeleteArtifact?: ((artifact: { readonly id: string; readonly title: string; readonly kind: "note" | "quiz" | "test" }, trigger?: HTMLButtonElement) => void) | undefined;
@@ -30,6 +31,7 @@ export function Sidebar({
   onSelectMaterial,
   onOpenMindMap,
   onAskTutor,
+  onCreateExercise,
   onRequestUpload,
   onRequestDelete,
   onRequestDeleteArtifact,
@@ -140,6 +142,17 @@ export function Sidebar({
             </span>
             <span>Subir PDF</span>
           </button>
+          {onCreateExercise && (
+            <button
+              type="button"
+              onClick={() => onCreateExercise()}
+              className="flex min-h-8 items-center gap-1 rounded-lg border border-purple-200 bg-purple-50 px-2.5 py-1 text-xs font-semibold text-purple-700 shadow-xs transition hover:bg-purple-100 dark:border-purple-800/60 dark:bg-purple-950/40 dark:text-purple-300 dark:hover:bg-purple-900/50"
+              title="Configurar un quiz o simulacro"
+            >
+              <span className="material-symbols-outlined text-[15px]" aria-hidden="true">auto_awesome</span>
+              <span className="hidden sm:inline">Crear ejercicio</span>
+            </button>
+          )}
         </div>
 
         {AsyncResult.matchWithError(materials, {
@@ -276,6 +289,23 @@ export function Sidebar({
                             <span className="material-symbols-outlined text-[17px]" aria-hidden="true">
                               chat
                             </span>
+                          </button>
+                        )}
+
+                        {onCreateExercise && (
+                          <button
+                            type="button"
+                            className={`grid size-8 place-items-center rounded-lg transition ${
+                              isLight
+                                ? "text-purple-600 hover:bg-purple-50 hover:text-purple-700"
+                                : "text-purple-300 hover:bg-purple-950/60 hover:text-purple-200"
+                            }`}
+                            onClick={() => onCreateExercise(material.id)}
+                            disabled={isDeleting}
+                            aria-label={`Crear un ejercicio con ${material.title}`}
+                            title="Crear quiz o simulacro"
+                          >
+                            <span className="material-symbols-outlined text-[17px]" aria-hidden="true">quiz</span>
                           </button>
                         )}
 

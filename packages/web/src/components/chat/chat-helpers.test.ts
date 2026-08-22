@@ -65,4 +65,11 @@ describe("cleanAssistantContent", () => {
       "He preparado el recurso solicitado. Puedes revisarlo a continuación:"
     );
   });
+
+  it("keeps only a short presentation when the interactive artifact is present", () => {
+    expect(cleanAssistantContent(
+      "He creado tu quiz.\n\nPregunta 1: ¿Qué opción es correcta?\nA) Una\nB) Dos\nRespuesta correcta: B\nResponde con Q1: B.",
+      { hasArtifactWidget: true }
+    )).toBe("He creado tu quiz.");
+  });
 });
