@@ -1,9 +1,10 @@
 import type { AgentMessage } from "@proxus/shared";
-import type { ChatItem } from "./types.ts";
+import { MISTAKE_TUTOR_PROMPT_PREFIX, type ChatItem } from "./types.ts";
 
 export function groupChatItems(messages: readonly AgentMessage[]): readonly ChatItem[] {
   const items: ChatItem[] = [];
   let currentTools: AgentMessage[] = [];
+  let hideArtifactWidgetsForNextAssistant = false;
 
   const flushTools = () => {
     if (currentTools.length > 0) {
@@ -18,6 +19,7 @@ export function groupChatItems(messages: readonly AgentMessage[]): readonly Chat
   for (const msg of messages) {
     if (msg.role === "user") {
       flushTools();
+      hideArtifactWidgetsForNextAssistant = msg.content.trimStart().startsWith(MISTAKE_TUTOR_PROMPT_PREFIX);
       items.push({ kind: "user", message: msg as AgentMessage & { role: "user" } });
     } else if (msg.role === "tool-call" || msg.role === "tool-result") {
       currentTools.push(msg);
@@ -27,7 +29,8 @@ export function groupChatItems(messages: readonly AgentMessage[]): readonly Chat
       items.push({
         kind: "assistant",
         message: msg as AgentMessage & { role: "assistant" },
-        associatedTools: toolsForTurn
+        associatedTools: toolsForTurn,
+        hideArtifactWidgets: hideArtifactWidgetsForNextAssistant
       });
     }
   }

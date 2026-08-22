@@ -11,6 +11,7 @@ export interface ExerciseRequest {
   readonly material: PdfMaterial;
   readonly scope: ExerciseScope;
   readonly pageSelection?: string | undefined;
+  readonly displayPrompt: string;
   readonly prompt: string;
 }
 
@@ -22,7 +23,16 @@ interface CreateExerciseModalProps {
   readonly onGenerate: (request: ExerciseRequest) => void;
 }
 
-export function buildExercisePrompt({ kind, questionCount, material, scope, pageSelection }: Omit<ExerciseRequest, "prompt">): string {
+export function buildExerciseDisplayPrompt({ kind, questionCount, material, scope, pageSelection }: Omit<ExerciseRequest, "displayPrompt" | "prompt">): string {
+  const exerciseName = kind === "quiz" ? "quiz" : "simulacro de examen";
+  const source = scope === "pages" && pageSelection
+    ? `del PDF «${material.title}», centrado en las páginas ${pageSelection}`
+    : `del PDF «${material.title}»`;
+
+  return `Genera un ${exerciseName} de ${questionCount} preguntas ${source} con esta configuración.`;
+}
+
+export function buildExercisePrompt({ kind, questionCount, material, scope, pageSelection }: Omit<ExerciseRequest, "displayPrompt" | "prompt">): string {
   const exerciseName = kind === "quiz" ? "quiz de práctica" : "simulacro de examen";
   const format = kind === "quiz"
     ? "Usa preguntas de opción múltiple o verdadero/falso y añade una explicación pedagógica a cada una."
@@ -81,6 +91,7 @@ export function CreateExerciseModal({ isOpen, materials, initialMaterialId, onCl
       material: selectedMaterial,
       scope,
       pageSelection: normalizedPages,
+      displayPrompt: buildExerciseDisplayPrompt({ kind, questionCount, material: selectedMaterial, scope, pageSelection: normalizedPages }),
       prompt: buildExercisePrompt({ kind, questionCount, material: selectedMaterial, scope, pageSelection: normalizedPages })
     });
   };

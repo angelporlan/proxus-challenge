@@ -25,6 +25,7 @@ export type { ChatProps, TutorMode } from "./chat/types.ts";
 
 export function Chat({
   prefillPrompt,
+  autoSubmitPrompt,
   prefillAttachments,
   onClearPrefill,
   onSelectArtifact,
@@ -46,6 +47,7 @@ export function Chat({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const consumedAutoSubmitPromptRef = useRef<string | null>(null);
 
   const {
     sessions,
@@ -135,22 +137,29 @@ export function Chat({
   }, [setIsMentionOpen]);
 
   useEffect(() => {
-    if (prefillPrompt && !isSending) {
-      setInput(prefillPrompt);
-      if (prefillAttachments && prefillAttachments.length > 0) {
-        setAttachedDocs((prev) => {
-          const next = [...prev];
-          for (const att of prefillAttachments) {
-            if (!next.some((d) => d.id === att.id)) {
-              next.push(att);
-            }
-          }
-          return next;
-        });
-      }
-      onClearPrefill?.();
+    if (!autoSubmitPrompt) {
+      consumedAutoSubmitPromptRef.current = null;
     }
-  }, [prefillPrompt, prefillAttachments, isSending, onClearPrefill]);
+    if (!prefillPrompt || isSending || isTutorWriting || (autoSubmitPrompt && consumedAutoSubmitPromptRef.current === autoSubmitPrompt)) return;
+
+    const mergedAttachments: AttachedDoc[] = [...attachedDocs];
+    for (const att of prefillAttachments ?? []) {
+      if (!mergedAttachments.some((doc) => doc.id === att.id)) {
+        mergedAttachments.push(att);
+      }
+    }
+
+    if (autoSubmitPrompt) {
+      consumedAutoSubmitPromptRef.current = autoSubmitPrompt;
+      onClearPrefill?.();
+      void submit(autoSubmitPrompt, prefillPrompt, mergedAttachments);
+      return;
+    }
+
+    setInput(prefillPrompt);
+    setAttachedDocs(mergedAttachments);
+    onClearPrefill?.();
+  }, [autoSubmitPrompt, isSending, isTutorWriting, onClearPrefill, prefillAttachments, prefillPrompt]);
 
   const groupedItems = useMemo(() => groupChatItems(messages), [messages]);
 

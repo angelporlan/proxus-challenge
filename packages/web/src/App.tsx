@@ -45,6 +45,7 @@ import { clearAllStoredSessions } from "./domain/sessions/storage.ts";
 import { ConversationalOnboarding } from "./components/ConversationalOnboarding.tsx";
 import { UserProfileModal } from "./components/UserProfileModal.tsx";
 import { CreateExerciseModal, type ExerciseRequest } from "./components/CreateExerciseModal.tsx";
+import { MISTAKE_TUTOR_PROMPT_PREFIX } from "./components/chat/types.ts";
 
 const ArtifactWorkspace = lazy(() => import("./components/ArtifactWorkspace.tsx").then(m => ({ default: m.ArtifactWorkspace })));
 const KnowledgeGapsPanel = lazy(() => import("./components/KnowledgeGapsPanel.tsx").then(m => ({ default: m.KnowledgeGapsPanel })));
@@ -91,6 +92,7 @@ export function App() {
   const [pdfPage, setPdfPage] = useState(1);
   const [activeTab, setActiveTab] = useState<ActiveTab>("workspace");
   const [chatPrompt, setChatPrompt] = useState<string | null>(null);
+  const [chatAutoSubmitPrompt, setChatAutoSubmitPrompt] = useState<string | null>(null);
   const [chatAttachments, setChatAttachments] = useState<
     readonly { readonly id: string; readonly title: string; readonly pageCount?: number }[] | undefined
   >(undefined);
@@ -236,12 +238,14 @@ export function App() {
 
   const openTutor = (
     prompt?: string,
-    attachments?: readonly { readonly id: string; readonly title: string; readonly pageCount?: number }[]
+    attachments?: readonly { readonly id: string; readonly title: string; readonly pageCount?: number }[],
+    options?: { readonly autoSubmitPrompt?: string | undefined }
   ) => {
     tutorTriggerRef.current = document.activeElement instanceof HTMLElement
       ? document.activeElement
       : null;
-    if (prompt) setChatPrompt(prompt);
+    setChatPrompt(prompt ?? null);
+    setChatAutoSubmitPrompt(options?.autoSubmitPrompt ?? null);
     if (attachments) setChatAttachments(attachments);
     setIsLibraryOpen(false);
     setIsTutorOpen(true);
@@ -272,11 +276,15 @@ export function App() {
   const handleGenerateExercise = (request: ExerciseRequest) => {
     setIsCreateExerciseOpen(false);
     setExerciseMaterialId(null);
-    openTutor(request.prompt, [{
-      id: request.material.id,
-      title: request.material.title,
-      pageCount: request.material.pageCount
-    }]);
+    openTutor(
+      request.displayPrompt,
+      [{
+        id: request.material.id,
+        title: request.material.title,
+        pageCount: request.material.pageCount
+      }],
+      { autoSubmitPrompt: request.prompt }
+    );
   };
 
   const handleUploaded = (material: PdfMaterial) => {
@@ -464,12 +472,12 @@ export function App() {
     explanation?: string | undefined;
   }) => {
     const prompt =
-      `He fallado esta pregunta y necesito entender el error:\n\n` +
+      `${MISTAKE_TUTOR_PROMPT_PREFIX}\n\n` +
       `Pregunta: "${context.question}"\n` +
       `Mi respuesta: "${context.studentAnswer}"\n` +
       (context.correctAnswer ? `Respuesta correcta: "${context.correctAnswer}"\n` : "") +
       (context.explanation ? `Explicación: "${context.explanation}"\n\n` : "\n") +
-      "¿Por qué mi razonamiento fue incorrecto y cómo debería enfocar este concepto?";
+      "¿Por qué mi razonamiento fue incorrecto y cómo debería enfocar este concepto? No generes un quiz ni un simulacro para esta consulta; responde únicamente con la explicación del fallo.";
     openTutor(prompt);
   };
 
@@ -671,7 +679,7 @@ export function App() {
           id="workspace-panel"
           role="tabpanel"
           aria-labelledby={`workspace-tab-${activeTab}`}
-          className="min-h-0 flex-1 overflow-hidden ui-view-enter"
+          className="min-h-0 min-w-0 flex-1 overflow-hidden ui-view-enter"
           key={activeTab}
         >
           {activeTab === "gaps" ? (
@@ -763,9 +771,11 @@ export function App() {
       >
         <Chat
           prefillPrompt={chatPrompt}
+          autoSubmitPrompt={chatAutoSubmitPrompt}
           prefillAttachments={chatAttachments}
           onClearPrefill={() => {
             setChatPrompt(null);
+            setChatAutoSubmitPrompt(null);
             setChatAttachments(undefined);
           }}
           onSelectArtifact={(id) => {

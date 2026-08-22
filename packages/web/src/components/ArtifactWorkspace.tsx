@@ -10,7 +10,7 @@ import type {
   TestArtifact,
   TestQuestion
 } from "@proxus/shared";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Streamdown } from "streamdown";
 import * as AsyncResult from "effect/unstable/reactivity/AsyncResult";
 import { artifactQuery, submitArtifactAttemptAction } from "../domain/artifacts/atoms.ts";
@@ -52,7 +52,7 @@ function ArtifactDetail({ artifactId, onAskTutorAboutQuestion }: { readonly arti
   const artifact = useAtomValue(query);
   const refresh = useAtomRefresh(query);
   return (
-    <main className="h-full min-w-0 overflow-y-auto p-4 sm:p-6">
+    <main className="flex h-full min-h-0 min-w-0 flex-col overflow-y-auto overscroll-contain scroll-smooth scroll-py-6 p-4 pb-24 sm:p-6">
       {AsyncResult.matchWithError(artifact, {
         onInitial: () => <div className="flex h-64 items-center justify-center gap-3 text-slate-400"><div className="size-5 animate-spin rounded-full border-2 border-indigo-500 border-t-transparent" /><p className="text-sm">Cargando recurso…</p></div>,
         onError: () => <ArtifactLoadError onRetry={refresh} />,
@@ -94,33 +94,87 @@ function QuizWorkspace({ artifact, onAskTutorAboutQuestion }: { readonly artifac
   const [isSubmitting, setIsSubmitting] = useState(false);
   const submitAttempt = useAtomSet(submitArtifactAttemptAction, { mode: "promise" });
   const unansweredQuestions = useMemo(() => artifact.questions.filter((question) => !isAnswerProvided(answers[question.id])), [answers, artifact.questions]);
-  const setAnswer = (questionId: string, value: string) => { if (attempt === null) setAnswers((current) => ({ ...current, [questionId]: value })); };
-  const submit = async () => {
-    if (unansweredQuestions.length > 0 || isSubmitting || attempt !== null) return;
-    setIsSubmitting(true); setError(undefined);
-    try { setAttempt(await submitAttempt(buildSubmitInput(artifact, answers))); } catch { setError("No se pudo guardar el resultado. Comprueba la conexión e inténtalo de nuevo."); } finally { setIsSubmitting(false); }
+
+  const setAnswer = (questionId: string, value: string) => {
+    if (attempt !== null) return;
+    const nextAnswers = { ...answers, [questionId]: value };
+    setAnswers(nextAnswers);
+
+    const isAllCompleted = artifact.questions.every((q) => isAnswerProvided(nextAnswers[q.id]));
+    const built = buildSubmitInput(artifact, nextAnswers);
+
+    if (isAllCompleted) {
+      setIsSubmitting(true);
+      setError(undefined);
+      submitAttempt(built)
+        .then((result) => {
+          setAttempt(result);
+        })
+        .catch(() => {
+          setError("No se pudo guardar el resultado final. Comprueba la conexión.");
+        })
+        .finally(() => {
+          setIsSubmitting(false);
+        });
+    } else {
+      void submitAttempt(built).catch(() => {});
+    }
   };
+
   const reset = () => { setAnswers({}); setAttempt(null); setError(undefined); };
 
   return (
-    <article className="mx-auto max-w-3xl pb-12">
+    <article className="mx-auto max-w-3xl pb-32 sm:pb-40">
       <header className="mb-5 rounded-2xl border border-purple-200 bg-gradient-to-br from-purple-50 via-white to-fuchsia-50 p-5 shadow-sm dark:border-purple-900/60 dark:from-purple-950/50 dark:via-slate-900/95 dark:to-fuchsia-950/30 sm:p-6">
-        <div className="flex flex-wrap items-start justify-between gap-4"><div><div className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-purple-600 dark:text-purple-300"><span className="grid size-8 place-items-center rounded-xl bg-purple-600 text-white shadow-sm"><span className="material-symbols-outlined text-base">quiz</span></span>Quiz de práctica</div><h2 className="font-display text-2xl font-bold text-slate-950 dark:text-slate-50 sm:text-3xl">{artifact.title}</h2><p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-600 dark:text-slate-300">Responde a tu ritmo. Recibirás la explicación inmediatamente para reforzar cada concepto.</p></div><div className="rounded-xl border border-purple-200 bg-white/80 px-3 py-2 text-right text-xs dark:border-purple-800/60 dark:bg-purple-950/40"><span className="block font-mono text-lg font-bold text-purple-700 dark:text-purple-200">{artifact.questions.length}</span><span className="text-slate-500 dark:text-slate-400">preguntas</span></div></div>
-        <div className="mt-5 flex flex-wrap items-center gap-2 text-xs text-slate-600 dark:text-slate-300"><span className="rounded-full bg-purple-100 px-2.5 py-1 font-semibold text-purple-700 dark:bg-purple-900/60 dark:text-purple-200">Feedback inmediato</span><span className="rounded-full bg-white/80 px-2.5 py-1 dark:bg-slate-900/70">Sin límite de tiempo</span><span>{artifact.questions.length - unansweredQuestions.length}/{artifact.questions.length} respondidas</span></div>
+        <div className="flex flex-wrap items-start justify-between gap-4"><div><div className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-purple-600 dark:text-purple-300"><span className="grid size-8 place-items-center rounded-xl bg-purple-600 text-white shadow-sm"><span className="material-symbols-outlined text-base">quiz</span></span>Quiz de práctica</div><h2 className="font-display text-2xl font-bold text-slate-950 dark:text-slate-50 sm:text-3xl">{artifact.title}</h2><p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-600 dark:text-slate-300">Responde a tu ritmo. Recibirás la explicación inmediatamente y las lagunas se guardarán automáticamente en tu perfil.</p></div><div className="rounded-xl border border-purple-200 bg-white/80 px-3 py-2 text-right text-xs dark:border-purple-800/60 dark:bg-purple-950/40"><span className="block font-mono text-lg font-bold text-purple-700 dark:text-purple-200">{artifact.questions.length}</span><span className="text-slate-500 dark:text-slate-400">preguntas</span></div></div>
+        <div className="mt-5 flex flex-wrap items-center gap-2 text-xs text-slate-600 dark:text-slate-300"><span className="rounded-full bg-purple-100 px-2.5 py-1 font-semibold text-purple-700 dark:bg-purple-900/60 dark:text-purple-200">Feedback inmediato</span><span className="rounded-full bg-white/80 px-2.5 py-1 dark:bg-slate-900/70">Auto-guardado activo</span><span>{artifact.questions.length - unansweredQuestions.length}/{artifact.questions.length} respondidas</span></div>
       </header>
       <div className="grid gap-4">{artifact.questions.map((question, index) => <PracticeQuestionCard key={`${question.id}-${index}`} index={index} question={question} value={answers[question.id] ?? ""} disabled={attempt !== null || isAnswerProvided(answers[question.id])} correction={attempt?.status === "graded" ? attempt.corrections.find((item) => item.questionId === question.id) : undefined} onChange={(value) => setAnswer(question.id, value)} onAskTutorAboutQuestion={onAskTutorAboutQuestion} />)}</div>
       {error !== undefined && <ErrorMessage>{error}</ErrorMessage>}
-      {attempt?.status === "graded" ? <PracticeResult attempt={attempt} onRetry={reset} /> : <footer className="mt-6 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-purple-200 bg-white p-4 dark:border-purple-900/60 dark:bg-slate-900/80"><div className="text-xs text-slate-500 dark:text-slate-400">{unansweredQuestions.length === 0 ? "Todo listo para revisar tu resultado." : `Te quedan ${unansweredQuestions.length} pregunta(s).`}</div><Button onClick={() => void submit()} disabled={unansweredQuestions.length > 0 || isSubmitting} loading={isSubmitting} leadingIcon={<span className="material-symbols-outlined text-sm">auto_awesome</span>}>Corregir quiz</Button></footer>}
+      {attempt?.status === "graded" ? (
+        <PracticeResult attempt={attempt} onRetry={reset} />
+      ) : (
+        <footer className="mt-6 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-purple-200 bg-white p-4 dark:border-purple-900/60 dark:bg-slate-900/80">
+          <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+            <span className="material-symbols-outlined text-sm text-purple-500 animate-pulse">auto_mode</span>
+            <span>
+              {unansweredQuestions.length === 1
+                ? "Te queda 1 pregunta. Al responderla se guardará tu resultado y lagunas automáticamente."
+                : `Te quedan ${unansweredQuestions.length} pregunta(s) por responder. Las respuestas y lagunas se guardan automáticamente.`}
+            </span>
+          </div>
+          {isSubmitting && (
+            <span className="flex items-center gap-1.5 text-xs font-semibold text-purple-600 dark:text-purple-400">
+              <span className="size-3 animate-spin rounded-full border-2 border-purple-500 border-t-transparent" />
+              Guardando resultado…
+            </span>
+          )}
+        </footer>
+      )}
     </article>
   );
 }
 
 function PracticeQuestionCard({ index, question, value, disabled, correction, onChange, onAskTutorAboutQuestion }: { readonly index: number; readonly question: QuizQuestion; readonly value: string; readonly disabled: boolean; readonly correction: QuestionCorrection | undefined; readonly onChange: (value: string) => void; readonly onAskTutorAboutQuestion?: ArtifactWorkspaceProps["onAskTutorAboutQuestion"] }) {
+  const cardRef = useRef<HTMLElement | null>(null);
   const answered = isAnswerProvided(value);
   const isCorrect = answered && questionCorrect(question, value);
+
+  useEffect(() => {
+    if (answered && cardRef.current) {
+      const timer = setTimeout(() => {
+        cardRef.current?.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
+      }, 60);
+      return () => clearTimeout(timer);
+    }
+  }, [answered]);
+
   return (
-    <section className={`rounded-2xl border bg-white p-5 shadow-sm transition dark:bg-slate-900/90 sm:p-6 ${answered ? isCorrect ? "border-emerald-300 dark:border-emerald-800/70" : "border-amber-300 dark:border-amber-800/70" : "border-slate-200 dark:border-slate-800"}`}>
-      <div className="mb-4 flex items-start justify-between gap-4"><div><span className="mb-1 block font-mono text-xs font-semibold uppercase tracking-wider text-purple-600 dark:text-purple-400">Pregunta {index + 1} · {question.type === "multiple-choice" ? "opción múltiple" : "verdadero o falso"}</span><h3 className="font-display text-base font-semibold leading-snug text-slate-900 dark:text-slate-100 sm:text-lg">{question.prompt}</h3></div>{answered && <span className={`rounded-full px-3 py-1 text-xs font-bold ${isCorrect ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300" : "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300"}`}>{isCorrect ? "Correcto" : "Repasar"}</span>}</div>
+    <section
+      ref={(el) => { cardRef.current = el; }}
+      className={`scroll-mt-6 rounded-2xl border bg-white p-5 shadow-sm transition-all duration-200 dark:bg-slate-900/90 sm:p-6 ${answered ? isCorrect ? "border-emerald-300 dark:border-emerald-800/70" : "border-amber-300 dark:border-amber-800/70" : "border-slate-200 dark:border-slate-800"}`}
+    >
+      <div className="mb-4 flex items-start justify-between gap-4"><div><span className="mb-1 block font-mono text-xs font-semibold uppercase tracking-wider text-purple-600 dark:text-purple-400">Pregunta {index + 1} · {question.type === "multiple-choice" ? "opción múltiple" : "verdadero o falso"}</span><h3 className="font-display text-base font-semibold leading-snug text-slate-900 dark:text-slate-100 sm:text-lg">{question.prompt}</h3></div>{answered && <span className={`rounded-full px-3 py-1 text-xs font-bold ${isCorrect ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300" : "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300"}`}>{isCorrect ? "Correcto" : "Laguna registrada"}</span>}</div>
       {question.type === "multiple-choice" ? <PracticeMultipleChoice question={question} value={value} disabled={disabled} onChange={onChange} /> : <PracticeTrueFalse value={value} disabled={disabled} onChange={onChange} />}
       {correction !== undefined ? <CorrectionDetails correction={correction} question={question} studentAnswer={value} onAskTutorAboutQuestion={onAskTutorAboutQuestion} /> : answered ? <PracticeFeedback question={question} value={value} isCorrect={isCorrect} /> : null}
     </section>
@@ -137,13 +191,81 @@ function PracticeTrueFalse({ value, disabled, onChange }: { readonly value: stri
 
 function PracticeFeedback({ question, value, isCorrect }: { readonly question: QuizQuestion; readonly value: string; readonly isCorrect: boolean }) {
   const correctAnswer = question.type === "multiple-choice" ? optionText(question, question.correctOptionId) : question.correctAnswer ? "Verdadero" : "Falso";
-  return <div className={`mt-4 rounded-xl border p-4 text-sm ${isCorrect ? "border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-200" : "border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200"}`}><p className="font-bold">{isCorrect ? "¡Correcto!" : `La respuesta correcta es: ${correctAnswer}`}</p><p className="mt-1 leading-relaxed">{question.explanation}</p>{!isCorrect && value !== "" && <span className="mt-2 block text-xs opacity-80">Tu respuesta: {question.type === "multiple-choice" ? optionText(question, value) : value === "true" ? "Verdadero" : "Falso"}</span>}</div>;
+  return (
+    <div className={`mt-4 rounded-xl border p-4 text-sm ${isCorrect ? "border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-200" : "border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200"}`}>
+      <p className="font-bold">{isCorrect ? "¡Correcto!" : `La respuesta correcta es: ${correctAnswer}`}</p>
+      <p className="mt-1 leading-relaxed">{question.explanation}</p>
+      {!isCorrect && value !== "" && (
+        <div className="mt-2 flex items-center justify-between gap-2 border-t border-amber-200/80 pt-2 text-xs opacity-90 dark:border-amber-800/60">
+          <span>Tu respuesta: {question.type === "multiple-choice" ? optionText(question, value) : value === "true" ? "Verdadero" : "Falso"}</span>
+          <span className="flex items-center gap-1 font-semibold text-amber-700 dark:text-amber-300">
+            <span className="material-symbols-outlined text-[14px]">psychology_alt</span>
+            Guardada en lagunas
+          </span>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function PracticeResult({ attempt, onRetry }: { readonly attempt: Extract<ArtifactAttempt, { readonly status: "graded" }>; readonly onRetry: () => void }) {
   const percentage = attempt.maxScore === 0 ? 0 : Math.round((attempt.score / attempt.maxScore) * 100);
   const incorrect = attempt.corrections.filter((correction) => correction.questionType === "short-answer" ? correction.score < correction.maxScore : !correction.correct).length;
-  return <section className="mt-6 rounded-2xl border border-purple-200 bg-purple-50/70 p-6 dark:border-purple-900/60 dark:bg-purple-950/25"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-widest text-purple-600 dark:text-purple-300">Resultado del quiz</p><p className="mt-1 font-display text-3xl font-bold text-slate-900 dark:text-slate-100">{attempt.score}/{attempt.maxScore} <span className="text-base font-medium text-slate-500">({percentage}%)</span></p></div><span className="rounded-full bg-white px-3 py-1 text-xs font-bold text-purple-700 dark:bg-slate-900 dark:text-purple-200">{incorrect === 0 ? "Dominado" : `${incorrect} para repasar`}</span></div><p className="mt-3 text-sm leading-relaxed text-slate-700 dark:text-slate-300">{incorrect === 0 ? "Buen trabajo. Puedes avanzar al siguiente concepto." : "Revisa las explicaciones marcadas y vuelve a intentarlo para consolidar el concepto."}</p><Button variant="secondary" className="mt-5" onClick={onRetry} leadingIcon={<span className="material-symbols-outlined text-sm">refresh</span>}>Reintentar quiz</Button></section>;
+  const resultRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      resultRef.current?.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
+    }, 80);
+    return () => clearTimeout(timer);
+  }, []);
+
+  return (
+    <section
+      ref={(el) => { resultRef.current = el; }}
+      className="scroll-mt-6 mt-6 rounded-2xl border border-purple-200 bg-purple-50/70 p-6 dark:border-purple-900/60 dark:bg-purple-950/25 animate-in fade-in slide-in-from-bottom-2 duration-300 shadow-sm"
+    >
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-widest text-purple-600 dark:text-purple-300">
+            🎉 Quiz completado · Resultado final
+          </p>
+          <p className="mt-1 font-display text-3xl font-bold text-slate-900 dark:text-slate-100">
+            {attempt.score}/{attempt.maxScore} <span className="text-base font-medium text-slate-500">({percentage}%)</span>
+          </p>
+        </div>
+        <span className={`rounded-full px-3 py-1 text-xs font-bold ${
+          incorrect === 0
+            ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
+            : "bg-purple-100 text-purple-700 dark:bg-purple-900/60 dark:text-purple-200"
+        }`}>
+          {incorrect === 0 ? "Dominado" : `${incorrect} para repasar`}
+        </span>
+      </div>
+
+      {incorrect > 0 ? (
+        <div className="mt-4 flex items-center gap-2 rounded-xl border border-amber-300 bg-amber-50 p-3.5 text-xs text-amber-900 dark:border-amber-800/60 dark:bg-amber-950/40 dark:text-amber-200">
+          <span className="material-symbols-outlined text-[18px] text-amber-600 shrink-0">psychology_alt</span>
+          <span>
+            <strong>{incorrect} laguna(s) de conocimiento guardada(s):</strong> Se han añadido a tu perfil de repaso con Proxo para repasarlas cuando quieras en la pestaña <em>Lagunas</em>.
+          </span>
+        </div>
+      ) : (
+        <p className="mt-3 text-sm leading-relaxed text-slate-700 dark:text-slate-300">
+          ¡Excelente trabajo! Has respondido todas las preguntas correctamente.
+        </p>
+      )}
+
+      <Button
+        variant="secondary"
+        className="mt-5"
+        onClick={onRetry}
+        leadingIcon={<span className="material-symbols-outlined text-sm">refresh</span>}
+      >
+        Reintentar quiz
+      </Button>
+    </section>
+  );
 }
 
 function ExamWorkspace({ artifact, onAskTutorAboutQuestion }: { readonly artifact: TestArtifact; readonly onAskTutorAboutQuestion?: ArtifactWorkspaceProps["onAskTutorAboutQuestion"] }) {
@@ -183,7 +305,7 @@ function ExamWorkspace({ artifact, onAskTutorAboutQuestion }: { readonly artifac
   const timerTone = timeLeft < 60 ? "urgent" : timeLeft < 180 ? "warning" : "normal";
 
   return (
-    <article className="mx-auto max-w-4xl pb-12">
+    <article className="mx-auto max-w-4xl pb-32 sm:pb-40">
       <header className="mb-4 border border-slate-300 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-950"><div className="border-b-4 border-slate-800 px-5 py-5 dark:border-slate-200 sm:px-8"><div className="flex flex-wrap items-start justify-between gap-4"><div><p className="text-[11px] font-bold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">Evaluación oficial · Simulacro de examen</p><h2 className="mt-2 font-serif text-2xl font-bold tracking-tight text-slate-950 dark:text-slate-50 sm:text-3xl">{artifact.title}</h2><p className="mt-2 text-xs text-slate-500 dark:text-slate-400">Material base: recurso de estudio seleccionado · Ponderación: 10 puntos</p></div><div className="border border-slate-300 px-4 py-3 text-right dark:border-slate-700"><span className="block text-[10px] font-bold uppercase tracking-widest text-slate-500">Candidato</span><span className="font-serif text-sm font-semibold text-slate-800 dark:text-slate-200">Alumno</span></div></div></div><div className="sticky top-0 z-20 flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-slate-50/95 px-5 py-3 backdrop-blur dark:border-slate-800 dark:bg-slate-900/95 sm:px-8"><div className={`flex items-center gap-2 rounded-lg border px-3 py-2 font-mono text-sm font-bold ${timerTone === "urgent" ? "border-red-300 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-950/60 dark:text-red-300" : timerTone === "warning" ? "border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950/60 dark:text-amber-300" : "border-slate-300 bg-white text-slate-700 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"}`}><span className="material-symbols-outlined text-base">timer</span><span>{isExpired ? "Tiempo agotado" : formatTimer(timeLeft)}</span></div><div className="flex flex-wrap items-center gap-3 text-xs font-semibold text-slate-600 dark:text-slate-300"><span><strong className="text-slate-900 dark:text-slate-100">{artifact.questions.length - unansweredQuestions.length}</strong> respondidas</span><span><strong className="text-slate-900 dark:text-slate-100">{unansweredQuestions.length}</strong> pendientes</span><span><strong className="text-amber-600 dark:text-amber-400">{flaggedQuestions.size}</strong> marcadas</span></div></div></header>
       <div className="mb-4 flex items-center gap-2 overflow-x-auto rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900/90"><span className="mr-1 shrink-0 text-[11px] font-bold uppercase tracking-widest text-slate-500">Navegación</span>{artifact.questions.map((question, index) => { const answered = isAnswerProvided(answers[question.id]); const flagged = flaggedQuestions.has(question.id); return <button key={`${question.id}-${index}`} type="button" onClick={() => setActiveQuestionIndex(index)} disabled={attempt !== null} aria-label={`Ir a la pregunta ${index + 1}`} className={`relative grid size-8 shrink-0 place-items-center rounded-md border text-xs font-bold transition ${index === activeQuestionIndex ? "border-indigo-600 bg-indigo-600 text-white" : flagged ? "border-amber-400 bg-amber-50 text-amber-700 dark:border-amber-700 dark:bg-amber-950/50 dark:text-amber-300" : answered ? "border-sky-300 bg-sky-50 text-sky-700 dark:border-sky-800 dark:bg-sky-950/50 dark:text-sky-300" : "border-slate-300 bg-white text-slate-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-400"}`}>{index + 1}{flagged && <span className="absolute -right-1 -top-1 size-2 rounded-full bg-amber-500" />}</button>; })}</div>
       {activeQuestion && <ExamQuestionCard index={activeQuestionIndex} totalQuestions={artifact.questions.length} question={activeQuestion} value={answers[activeQuestion.id] ?? ""} disabled={attempt !== null} flagged={flaggedQuestions.has(activeQuestion.id)} correction={attempt?.status === "graded" ? attempt.corrections.find((item) => item.questionId === activeQuestion.id) : undefined} onChange={(value) => setAnswer(activeQuestion.id, value)} onToggleFlag={() => toggleFlag(activeQuestion.id)} onAskTutorAboutQuestion={onAskTutorAboutQuestion} />}

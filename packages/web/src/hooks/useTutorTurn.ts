@@ -68,9 +68,14 @@ export function useTutorTurn({
 
   const clearReveal = () => setAssistantReveal(null);
 
-  const submit = async (nextInput: string) => {
+  const submit = async (
+    nextInput: string,
+    displayInput = nextInput,
+    attachedDocsOverride?: readonly AttachedDoc[]
+  ) => {
     const trimmed = nextInput.trim();
-    if ((trimmed.length === 0 && attachedDocs.length === 0) || isSending || isTutorWriting) {
+    const activeAttachedDocs = attachedDocsOverride ?? attachedDocs;
+    if ((trimmed.length === 0 && activeAttachedDocs.length === 0) || isSending || isTutorWriting) {
       return;
     }
 
@@ -81,9 +86,9 @@ export function useTutorTurn({
     abortControllerRef.current = controller;
 
     const finalPrompt = trimmed || "Explícame los conceptos clave de este documento.";
-    const activeMaterialIds = attachedDocs.map((d) => d.id);
-    const documentReferences = attachedDocs.map((d) => d.title);
-    const optimisticUserMessage: AgentMessage = { role: "user", content: finalPrompt };
+    const activeMaterialIds = activeAttachedDocs.map((d) => d.id);
+    const documentReferences = activeAttachedDocs.map((d) => d.title);
+    const optimisticUserMessage: AgentMessage = { role: "user", content: displayInput.trim() || finalPrompt };
 
     setAttachedDocs([]);
     setInput("");

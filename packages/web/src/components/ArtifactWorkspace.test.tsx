@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { userEvent } from "@testing-library/user-event";
 import { AsyncResult } from "effect/unstable/reactivity";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ArtifactAttempt, QuizArtifact } from "@proxus/shared";
 
 const mocks = vi.hoisted(() => ({
@@ -40,6 +40,17 @@ const makeQuiz = (id: string, prompt: string, firstOptionText: string, secondOpt
 });
 
 describe("ArtifactWorkspace", () => {
+  beforeEach(() => {
+    mocks.artifactResults.clear();
+    mocks.submitAttempt.mockReset();
+    if (typeof HTMLElement.prototype.scrollIntoView !== "function") {
+      Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
+        configurable: true,
+        value: vi.fn()
+      });
+    }
+  });
+
   it("reinicia respuestas y correcciones al cambiar de quiz", async () => {
     const user = userEvent.setup();
     const firstQuiz = makeQuiz("quiz-1", "Pregunta del primer quiz", "Primera A", "Primera B");
@@ -70,15 +81,55 @@ describe("ArtifactWorkspace", () => {
     const { rerender } = render(<ArtifactWorkspace artifactId={firstQuiz.id} />);
 
     await user.click(await screen.findByText("Primera A"));
-    await user.click(screen.getByRole("button", { name: "Corregir quiz" }));
 
     expect(await screen.findByText("Respuesta correcta:")).toBeInTheDocument();
     expect(screen.getByDisplayValue("a")).toBeChecked();
+    expect(await screen.findByText(/Quiz completado/i)).toBeInTheDocument();
 
     rerender(<ArtifactWorkspace artifactId={secondQuiz.id} />);
 
     expect(await screen.findByText("Pregunta del segundo quiz")).toBeInTheDocument();
     expect(screen.getByDisplayValue("a")).not.toBeChecked();
     expect(screen.queryByText("Explicación propia del primer quiz")).not.toBeInTheDocument();
+  });
+
+  it("centra la pregunta después de responderla para mantener visible el feedback", async () => {
+    const user = userEvent.setup();
+    const quiz: QuizArtifact = {
+      kind: "quiz",
+      id: "quiz-scroll",
+      title: "Quiz con scroll",
+      questions: [
+        {
+          type: "multiple-choice",
+          id: "q1",
+          prompt: "Pregunta que se responde",
+          options: [{ id: "a", text: "Primera opción" }, { id: "b", text: "Segunda opción" }],
+          correctOptionId: "b",
+          explanation: "Explicación"
+        },
+        {
+          type: "true-false",
+          id: "q2",
+          prompt: "Pregunta siguiente",
+          correctAnswer: true,
+          explanation: "Explicación siguiente"
+        }
+      ]
+    };
+
+    mocks.artifactResults.set(quiz.id, AsyncResult.success(quiz));
+    mocks.submitAttempt.mockResolvedValue({});
+
+    render(<ArtifactWorkspace artifactId={quiz.id} />);
+    await user.click(screen.getByText("Primera opción"));
+
+    await vi.waitFor(() => {
+      expect(HTMLElement.prototype.scrollIntoView).toHaveBeenCalledWith({
+        behavior: "smooth",
+        block: "center",
+        inline: "nearest"
+      });
+    });
   });
 });

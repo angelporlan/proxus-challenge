@@ -180,7 +180,9 @@ export function ChatMessageList({
             index === groupedItems.length - 1 &&
             item.message.content === assistantReveal?.content;
 
-          const artifactIds = extractArtifactIds(item.message.content, item.associatedTools);
+          const artifactIds = item.hideArtifactWidgets
+            ? []
+            : extractArtifactIds(item.message.content, item.associatedTools);
 
           return (
             <article key={index} className="ui-enter flex max-w-3xl self-start items-start gap-2.5">

@@ -31,6 +31,9 @@ describe("CreateExerciseModal", () => {
       pageSelection: "3-7",
       material
     }));
+    expect(onGenerate.mock.calls[0]?.[0].displayPrompt).toContain("Genera un simulacro de examen de 10 preguntas");
+    expect(onGenerate.mock.calls[0]?.[0].displayPrompt).toContain("páginas 3-7");
+    expect(onGenerate.mock.calls[0]?.[0].displayPrompt).not.toContain("artifacts create");
     expect(onGenerate.mock.calls[0]?.[0].prompt).toContain("exactamente 10 preguntas");
     expect(onGenerate.mock.calls[0]?.[0].prompt).toContain("páginas 3-7");
   });

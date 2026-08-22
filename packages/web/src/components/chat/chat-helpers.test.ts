@@ -34,6 +34,22 @@ describe("groupChatItems", () => {
     const grouped = groupChatItems(messages);
     expect(grouped.map((item) => item.kind)).toEqual(["user", "tools"]);
   });
+
+  it("marks mistake follow-ups so their artifact widgets stay hidden", () => {
+    const id = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
+    const messages: AgentMessage[] = [
+      { role: "user", content: "He fallado esta pregunta y necesito entender el error:\n\nPregunta: ¿Qué opción es correcta?" },
+      { role: "tool-result", name: "cli", result: { kind: "quiz", id }, isFailure: false },
+      { role: "assistant", content: `Te explico el fallo. ${id}` }
+    ];
+
+    const grouped = groupChatItems(messages);
+    const assistant = grouped.find((item) => item.kind === "assistant");
+    expect(assistant?.kind).toBe("assistant");
+    if (assistant?.kind === "assistant") {
+      expect(assistant.hideArtifactWidgets).toBe(true);
+    }
+  });
 });
 
 describe("extractArtifactIds", () => {

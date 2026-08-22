@@ -1,9 +1,12 @@
 import type { AgentMessage } from "@proxus/shared";
 
+export const MISTAKE_TUTOR_PROMPT_PREFIX = "He fallado esta pregunta y necesito entender el error:";
+
 export type TutorMode = "socratic" | "explanatory";
 
 export interface ChatProps {
   readonly prefillPrompt?: string | null | undefined;
+  readonly autoSubmitPrompt?: string | null | undefined;
   readonly prefillAttachments?: readonly {
     readonly id: string;
     readonly title: string;
@@ -26,6 +29,7 @@ export type ChatItem =
       readonly kind: "assistant";
       readonly message: AgentMessage & { readonly role: "assistant" };
       readonly associatedTools?: readonly AgentMessage[] | undefined;
+      readonly hideArtifactWidgets?: boolean | undefined;
     };
 
 export interface AssistantReveal {
