@@ -702,13 +702,6 @@ export function App() {
                 onAskTutorAboutConcept={(concept, notes) => openTutor(`Explica detalladamente el concepto "${concept}" en el contexto de mis apuntes: ${notes || ""}`)}
                 onGenerateQuizForBranch={(branch) => openTutor(`Crea un quiz de 3 preguntas de opción múltiple centrado en el apartado "${branch}".`)}
                 onOpenPdfPage={(materialId, page) => handleSelectMaterial(materialId, page)}
-                onGenerateAiMap={(title, matId) => {
-                  const targetMat = materialsList.find((m) => m.id === matId || m.title === title);
-                  openTutor(
-                    `Genera una nota de estudio estructurada con el esquema conceptual detallado del documento "${title}".`,
-                    targetMat ? [{ id: targetMat.id, title: targetMat.title, pageCount: targetMat.pageCount }] : undefined
-                  );
-                }}
               />
             </Suspense>
           ) : activeTab === "pdf" && selectedMaterialId ? (
@@ -780,11 +773,6 @@ export function App() {
           }}
           onSelectArtifact={(id) => {
             handleSelectArtifact(id);
-            if (isChatMaximized) handleCloseFullscreenChat();
-            else if (!isWideLayout) setIsTutorOpen(false);
-          }}
-          onOpenMindMap={() => {
-            setActiveTab("mindmap");
             if (isChatMaximized) handleCloseFullscreenChat();
             else if (!isWideLayout) setIsTutorOpen(false);
           }}

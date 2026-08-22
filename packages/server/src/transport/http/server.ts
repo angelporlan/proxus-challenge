@@ -1,5 +1,6 @@
 import { Effect, FileSystem, Layer, Schema, Stream } from "effect";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
+import * as NodeServices from "@effect/platform-node/NodeServices";
 import { createServer } from "node:http";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/unstable/http";
 import { HttpApiBuilder, HttpApiScalar } from "effect/unstable/httpapi";
@@ -12,6 +13,7 @@ import { FileKnowledgeRepository } from "../../infra/knowledge/file-knowledge-re
 import { FileMaterialRepository } from "../../infra/materials/file-material-repository.ts";
 import { FileUserProfileRepository } from "../../infra/user-profile/file-user-profile-repository.ts";
 import { MaterialRepository } from "../../domain/materials/material.ts";
+import { MindMapServiceLive } from "../../domain/materials/mindmap-service.ts";
 import { PopplerPdfService } from "../../infra/materials/poppler-pdf-service.ts";
 import { HttpHandlersLive } from "./handlers.ts";
 import { httpErrorResponse } from "./http-errors.ts";
@@ -75,6 +77,10 @@ const Routes = Layer.mergeAll(ApiRoutes, DocsRoute, TutorStreamRoute, RawPdfRout
 
 const DomainLive = Layer.mergeAll(
   TutorChatServiceLive,
+  MindMapServiceLive.pipe(
+    Layer.provide(PopplerPdfService.layer),
+    Layer.provide(NodeServices.layer)
+  ),
   GeminiModel
 );
 

@@ -58,18 +58,3 @@ export function extractArtifactIds(
   }
   return Array.from(new Set([...textMatches, ...toolMatches]));
 }
-
-export function conversationHasNoteArtifact(messages: readonly AgentMessage[]): boolean {
-  return messages.some(
-    (message) =>
-      (message.role === "tool-result" &&
-        typeof message.result === "object" &&
-        message.result !== null &&
-        "kind" in message.result &&
-        (message.result as { kind?: unknown }).kind === "note") ||
-      (message.role === "tool-call" &&
-        typeof message.input === "object" &&
-        message.input !== null &&
-        JSON.stringify(message.input).includes('"kind":"note"'))
-  );
-}

@@ -1,10 +1,7 @@
-import type { NoteArtifact } from "@proxus/shared";
-
 export interface MindMapNode {
   readonly id: string;
   readonly label: string;
   readonly notes?: string | undefined;
-  readonly references?: readonly string[] | undefined;
   readonly page?: number | undefined;
   readonly color?: string | undefined;
   readonly icon?: string | undefined;
@@ -158,22 +155,10 @@ export function parseMarkdownToMindMap(title: string, markdown: string, rootId =
   return result;
 }
 
-export function resolveMindMap(
-  _selectedId: string | null | undefined,
-  _materials: readonly { readonly id: string; readonly title: string; readonly pageCount: number }[],
-  noteArtifactDetail?: NoteArtifact | null
-): MindMapNode | null {
-  if (noteArtifactDetail && noteArtifactDetail.markdown) {
-    return parseMarkdownToMindMap(noteArtifactDetail.title, noteArtifactDetail.markdown, noteArtifactDetail.id);
-  }
-  return null;
-}
-
 export interface PositionedNode {
   readonly id: string;
   readonly label: string;
   readonly notes?: string | undefined;
-  readonly references?: readonly string[] | undefined;
   readonly page?: number | undefined;
   readonly color: string;
   readonly icon?: string | undefined;
@@ -321,7 +306,6 @@ export function layoutSubtree(
     id: node.id,
     label: node.label,
     notes: node.notes,
-    references: node.references,
     page: node.page,
     color,
     icon: node.icon,

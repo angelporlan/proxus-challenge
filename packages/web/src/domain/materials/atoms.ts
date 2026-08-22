@@ -22,6 +22,16 @@ export const materialQuery = Atom.family((id: string) =>
     .pipe(Atom.keepAlive, Atom.withReactivity({ materials: [id] }))
 );
 
+export const materialMindMapQuery = Atom.family((id: string) =>
+  apiRuntime
+    .atom(
+      ApiClient.use((client) =>
+        client.materials.getMindMap({ params: { id } })
+      ).pipe(Effect.withSpan("materials.getMindMap", { kind: "client" }))
+    )
+    .pipe(Atom.keepAlive, Atom.withReactivity(["materials", id, "mindmap"]))
+);
+
 export const uploadMaterialAction = apiRuntime.fn(
   (input: UploadMaterialInput) =>
     ApiClient.use((client) =>
@@ -42,6 +52,14 @@ export const deleteMaterialAction = apiRuntime.fn(
   { reactivityKeys: ["materials"] }
 );
 
+export const generateMaterialMindMapAction = apiRuntime.fn(
+  (id: string) =>
+    ApiClient.use((client) =>
+      client.materials.generateMindMap({ params: { id } })
+    ).pipe(Effect.withSpan("materials.generateMindMap", { kind: "client" })),
+  { reactivityKeys: ["materials"] }
+);
+
 export const renderMaterialPagesAction = apiRuntime.fn(
   (input: { readonly id: string; readonly pages: readonly number[] }) =>
     ApiClient.use((client) =>
@@ -51,4 +69,3 @@ export const renderMaterialPagesAction = apiRuntime.fn(
       })
     ).pipe(Effect.withSpan("materials.renderPages", { kind: "client" }))
 );
-

@@ -55,6 +55,31 @@ export const MaterialListResponse = Schema.Struct({
 });
 export type MaterialListResponse = typeof MaterialListResponse.Type;
 
+export interface MindMapNode {
+  readonly id: string;
+  readonly label: string;
+  readonly notes?: string | undefined;
+  readonly page?: number | undefined;
+  readonly color?: string | undefined;
+  readonly icon?: string | undefined;
+  readonly children?: readonly MindMapNode[] | undefined;
+}
+
+export const MindMapNode: Schema.Codec<MindMapNode> = Schema.Struct({
+  id: Schema.String,
+  label: Schema.String,
+  notes: Schema.optional(Schema.String),
+  page: Schema.optional(Schema.Number),
+  color: Schema.optional(Schema.String),
+  icon: Schema.optional(Schema.String),
+  children: Schema.optional(Schema.Array(Schema.suspend((): Schema.Codec<MindMapNode> => MindMapNode)))
+});
+
+export const MindMapResponse = Schema.Struct({
+  mindMap: Schema.NullOr(MindMapNode)
+});
+export type MindMapResponse = typeof MindMapResponse.Type;
+
 export const UploadMaterialInput = Schema.Struct({
   fileName: Schema.String,
   contentBase64: Schema.String,
@@ -72,4 +97,3 @@ export const RenderPagesInput = Schema.Struct({
   pages: Schema.Array(Schema.Number)
 });
 export type RenderPagesInput = typeof RenderPagesInput.Type;
-

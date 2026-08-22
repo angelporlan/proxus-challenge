@@ -4,6 +4,7 @@ import { ProxusApi } from "@proxus/shared";
 import { TutorChatService } from "../../domain/agents/academic-tutor/tutor-chat-service.ts";
 import { ArtifactRepository, type Artifact } from "../../domain/artifacts/artifact.ts";
 import { MaterialRepository } from "../../domain/materials/material.ts";
+import { MindMapService } from "../../domain/materials/mindmap-service.ts";
 import { KnowledgeRepository } from "../../domain/knowledge/knowledge-profile.ts";
 import { UserProfileRepository } from "../../domain/user-profile/user-profile.ts";
 import { failAsHttpError, failAsServiceHttpError, failAsTutorHttpError } from "./http-errors.ts";
@@ -31,6 +32,7 @@ export const MaterialsHttpHandlers = HttpApiBuilder.group(
   "materials",
   Effect.fn(function* (handlers) {
     const materials = yield* MaterialRepository;
+    const mindMaps = yield* MindMapService;
 
     return handlers
       .handle("list", () => materials.list().pipe(
@@ -52,6 +54,18 @@ export const MaterialsHttpHandlers = HttpApiBuilder.group(
       })
       .handle("renderPages", ({ params, payload }) =>
         materials.renderPages(params.id, payload.pages).pipe(
+          Effect.catch(failAsHttpError)
+        )
+      )
+      .handle("getMindMap", ({ params }) =>
+        materials.getMindMap(params.id).pipe(
+          Effect.map((mindMap) => ({ mindMap })),
+          Effect.catch(failAsHttpError)
+        )
+      )
+      .handle("generateMindMap", ({ params }) =>
+        mindMaps.generate(params.id).pipe(
+          Effect.map((mindMap) => ({ mindMap })),
           Effect.catch(failAsHttpError)
         )
       )

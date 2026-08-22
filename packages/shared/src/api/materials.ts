@@ -5,6 +5,7 @@ import {
   DeleteMaterialResponse,
   MaterialListResponse,
   MaterialPageImages,
+  MindMapResponse,
   PdfMaterial,
   RenderPagesInput,
   UploadMaterialInput
@@ -34,6 +35,20 @@ export class MaterialsApi extends HttpApiGroup.make("materials")
       },
       payload: RenderPagesInput,
       success: MaterialPageImages,
+      error: ResourceHttpErrors
+    }),
+    HttpApiEndpoint.get("getMindMap", "/:id/mindmap", {
+      params: {
+        id: Schema.String
+      },
+      success: MindMapResponse,
+      error: ResourceHttpErrors
+    }),
+    HttpApiEndpoint.post("generateMindMap", "/:id/mindmap/generate", {
+      params: {
+        id: Schema.String
+      },
+      success: MindMapResponse,
       error: ResourceHttpErrors
     }),
     HttpApiEndpoint.delete("delete", "/:id", {

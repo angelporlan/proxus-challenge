@@ -1,13 +1,15 @@
-import { useAtomRefresh, useAtomValue } from "@effect/atom-react";
+import { useAtomRefresh, useAtomSet, useAtomValue } from "@effect/atom-react";
 import * as AsyncResult from "effect/unstable/reactivity/AsyncResult";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { artifactQuery, artifactsQuery } from "../domain/artifacts/atoms.ts";
-import { materialsQuery } from "../domain/materials/atoms.ts";
+import {
+  generateMaterialMindMapAction,
+  materialMindMapQuery,
+  materialsQuery
+} from "../domain/materials/atoms.ts";
 import {
   type MindMapNode,
   type PositionedNode,
   type ConnectorLine,
-  resolveMindMap,
   layoutSubtree,
   getNodeDimensions,
   computeSubtreeHeight
@@ -22,7 +24,6 @@ export interface MindMapViewerProps {
   readonly onAskTutorAboutConcept?: ((concept: string, context?: string) => void) | undefined;
   readonly onGenerateQuizForBranch?: ((branchName: string) => void) | undefined;
   readonly onOpenPdfPage?: ((materialId: string, page: number) => void) | undefined;
-  readonly onGenerateAiMap?: ((materialTitle: string, materialId?: string) => void) | undefined;
   readonly theme?: "dark" | "light" | undefined;
 }
 
@@ -37,11 +38,13 @@ export function MindMapViewer({
   onAskTutorAboutConcept,
   onGenerateQuizForBranch,
   onOpenPdfPage,
-  onGenerateAiMap,
   theme = "dark"
 }: MindMapViewerProps) {
   const materialsResult = useAtomValue(materialsQuery);
   const refreshMaterials = useAtomRefresh(materialsQuery);
+  const generateMindMap = useAtomSet(generateMaterialMindMapAction, { mode: "promise" });
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generationError, setGenerationError] = useState<string | null>(null);
 
   const materialsList = useMemo(() => {
     return AsyncResult.match(materialsResult, {
@@ -63,58 +66,34 @@ export function MindMapViewer({
 
   const activeMaterialId = selectedMaterialId ?? materialsList[0]?.id ?? null;
 
-  const artifactsResult = useAtomValue(artifactsQuery);
-  const allArtifacts = useMemo(() => {
-    return AsyncResult.match(artifactsResult, {
-      onInitial: () => [],
-      onFailure: () => [],
-      onSuccess: ({ value }) => value.artifacts
-    });
-  }, [artifactsResult]);
-
   const activeMaterial = useMemo(
     () => materialsList.find((m) => m.id === activeMaterialId),
     [materialsList, activeMaterialId]
   );
 
-  const matchingNoteSummary = useMemo(() => {
-    if (allArtifacts.length === 0) return null;
-    const matTitle = (activeMaterial?.title ?? activeMaterialId ?? "").toLowerCase();
-    const cleanMatTitle = matTitle.replace(/\.pdf$/i, "").replace(/[-_]/g, " ").trim();
-
-    const noteArtifacts = allArtifacts.filter((a) => a.kind === "note");
-    if (noteArtifacts.length === 0) return null;
-
-    const matched = noteArtifacts.find((a) => {
-      const aTitle = a.title.toLowerCase().replace(/[-_]/g, " ").trim();
-      return (
-        aTitle.includes(cleanMatTitle) ||
-        cleanMatTitle.includes(aTitle) ||
-        (activeMaterialId && aTitle.includes(activeMaterialId.toLowerCase()))
-      );
-    });
-
-    if (matched) return matched;
-
-    return null;
-  }, [activeMaterialId, activeMaterial, allArtifacts]);
-
-  const noteQuery = artifactQuery(matchingNoteSummary?.id ?? "");
-  const noteQueryResult = useAtomValue(noteQuery);
-
-  const activeNoteDetail = useMemo(() => {
-    if (!matchingNoteSummary) return null;
-    return AsyncResult.match(noteQueryResult, {
+  const mindMapQuery = materialMindMapQuery(activeMaterialId ?? "");
+  const mindMapResult = useAtomValue(mindMapQuery);
+  const mindMapStatus = useMemo(
+    () => AsyncResult.match(mindMapResult, {
+      onInitial: () => "loading" as const,
+      onFailure: () => "error" as const,
+      onSuccess: ({ value }) => value.mindMap ? "ready" as const : "empty" as const
+    }),
+    [mindMapResult]
+  );
+  const storedMindMap = useMemo(
+    () => AsyncResult.match(mindMapResult, {
       onInitial: () => null,
       onFailure: () => null,
-      onSuccess: ({ value }) => (value.kind === "note" ? value : null)
-    });
-  }, [matchingNoteSummary, noteQueryResult]);
+      onSuccess: ({ value }) => value.mindMap
+    }),
+    [mindMapResult]
+  );
 
   const currentMindMap = useMemo(() => {
     if (initialData) return initialData;
-    return resolveMindMap(activeMaterialId, materialsList, activeNoteDetail);
-  }, [activeMaterialId, initialData, materialsList, activeNoteDetail]);
+    return storedMindMap;
+  }, [initialData, storedMindMap]);
 
   const [selectedNode, setSelectedNode] = useState<MindMapNode | null>(currentMindMap);
   const [isDrawerOpen, setIsDrawerOpen] = useState<boolean>(true);
@@ -131,6 +110,19 @@ export function MindMapViewer({
   const drawerToggleRef = useRef<HTMLButtonElement>(null);
 
   const isLight = theme === "light";
+
+  const handleGenerateMindMap = async () => {
+    if (!activeMaterialId || isGenerating) return;
+    setIsGenerating(true);
+    setGenerationError(null);
+    try {
+      await generateMindMap(activeMaterialId);
+    } catch (error: unknown) {
+      setGenerationError(error instanceof Error ? error.message : "No se pudo generar el esquema.");
+    } finally {
+      setIsGenerating(false);
+    }
+  };
 
   useEffect(() => {
     setSelectedNode(currentMindMap);
@@ -217,7 +209,6 @@ export function MindMapViewer({
       id: currentMindMap.id,
       label: currentMindMap.label,
       notes: currentMindMap.notes,
-      references: currentMindMap.references,
       page: currentMindMap.page,
       color: currentMindMap.color || "#06b6d4",
       icon: currentMindMap.icon || "auto_stories",
@@ -440,22 +431,25 @@ export function MindMapViewer({
                 ))}
               </select>
 
-              {onGenerateAiMap && (
+              {currentMindMap && activeMaterial && (
                 <button
                   type="button"
-                  onClick={() => onGenerateAiMap(currentMindMap?.label ?? activeMaterial?.title ?? "este documento", activeMaterial?.id)}
-                  className="ui-primary-action"
-                  title="Pedir al tutor que profundice en el esquema"
+                  onClick={() => void handleGenerateMindMap()}
+                  disabled={isGenerating}
+                  className="ui-primary-action disabled:cursor-wait disabled:opacity-60"
+                  title="Regenerar el esquema visual con inteligencia artificial"
                 >
-                  <span className="material-symbols-outlined text-[16px]">account_tree</span>
-                  <span className="hidden sm:inline">Profundizar</span>
+                  <span className={`material-symbols-outlined text-[16px] ${isGenerating ? "animate-spin" : ""}`}>
+                    {isGenerating ? "progress_activity" : "auto_awesome"}
+                  </span>
+                  <span className="hidden sm:inline">{isGenerating ? "Generando…" : "Regenerar con IA"}</span>
                 </button>
               )}
 
-              {activeNoteDetail && (
+              {currentMindMap && (
                 <span className="hidden md:inline-flex items-center gap-1.5 bg-purple-500/15 border border-purple-500/30 text-purple-700 dark:text-purple-300 rounded-full px-2.5 py-1 text-[11px] font-semibold animate-in fade-in">
                   <span className="material-symbols-outlined text-[14px] text-purple-500">auto_awesome</span>
-                  <span>Esquema IA</span>
+                  <span>Esquema guardado</span>
                 </span>
               )}
             </div>
@@ -570,8 +564,39 @@ export function MindMapViewer({
           </div>
         </header>
 
+        {generationError && (
+          <div
+            role="alert"
+            className={`shrink-0 border-b px-4 py-2 text-xs ${
+              isLight ? "border-red-200 bg-red-50 text-red-700" : "border-red-900/60 bg-red-950/30 text-red-300"
+            }`}
+          >
+            {generationError}
+          </div>
+        )}
+
         {/* 2. Interactive Infinite Canvas OR Specific Document Empty State */}
-        {!currentMindMap ? (
+        {!initialData && (mindMapStatus === "loading" || isGenerating) ? (
+          <div
+            className="flex-1 w-full h-full relative overflow-hidden flex items-center justify-center p-6"
+            style={{
+              backgroundImage: isLight
+                ? "radial-gradient(#cbd5e1 1px, transparent 1px)"
+                : "radial-gradient(rgba(148, 163, 184, 0.15) 1px, transparent 1px)",
+              backgroundSize: "24px 24px"
+            }}
+          >
+            <div className="flex max-w-md flex-col items-center text-center p-8 rounded-2xl border bg-white/90 dark:bg-slate-900/90 backdrop-blur shadow-lg">
+              <span className="ui-spinner mx-auto" aria-hidden="true" />
+              <h3 className="mt-4 text-base font-bold text-slate-900 dark:text-slate-100">
+                {isGenerating ? "Analizando PDF y estructurando conceptos…" : "Cargando esquema…"}
+              </h3>
+              <p className="mt-2 text-xs leading-relaxed text-slate-500 dark:text-slate-400">
+                Proxo está preparando el mapa conceptual visual del documento.
+              </p>
+            </div>
+          </div>
+        ) : !currentMindMap ? (
           <div
             className="flex-1 w-full h-full relative overflow-hidden flex items-center justify-center p-6"
             style={{
@@ -589,18 +614,24 @@ export function MindMapViewer({
                 {activeMaterial ? activeMaterial.title : "Documento sin esquema"}
               </h3>
               <p className="text-xs text-slate-500 dark:text-slate-400 mb-6 leading-relaxed">
-                Este archivo aún no tiene un esquema conceptual generado. Pídele al tutor inteligente que analice el documento y genere su mapa mental interactivo.
+                Este archivo aún no tiene un esquema conceptual. Genera un mapa visual interactivo directamente a partir del PDF.
               </p>
               <div className="flex flex-wrap gap-2.5 justify-center">
-                {onGenerateAiMap && activeMaterial && (
+                {activeMaterial && (
                   <button
                     type="button"
-                    onClick={() => onGenerateAiMap(activeMaterial.title, activeMaterial.id)}
-                    className="ui-primary-action"
+                    onClick={() => void handleGenerateMindMap()}
+                    className="ui-primary-action disabled:cursor-wait disabled:opacity-60"
+                    disabled={isGenerating}
                   >
                     <span className="material-symbols-outlined text-[17px]">auto_awesome</span>
                     <span>Generar Esquema con IA</span>
                   </button>
+                )}
+                {(mindMapStatus === "error" || generationError) && (
+                  <p className="basis-full text-xs text-red-600 dark:text-red-400">
+                    {generationError ?? "No se pudo cargar el esquema guardado."}
+                  </p>
                 )}
                 {onOpenPdfPage && activeMaterial && (
                   <button
@@ -807,16 +838,6 @@ export function MindMapViewer({
                             </span>
                           </div>
 
-                          {pNode.references && pNode.references[0] && (
-                            <span
-                              title={pNode.references[0]}
-                              className={`block text-[9px] font-mono break-words line-clamp-1 mt-0.5 ${
-                                isLight ? "text-slate-500" : "text-slate-400"
-                              }`}
-                            >
-                              {pNode.references[0]}
-                            </span>
-                          )}
                         </div>
                       )}
                     </button>
@@ -978,11 +999,6 @@ export function MindMapViewer({
                     Pág. {selectedNode.page}
                   </span>
                 )}
-                {selectedNode.references && selectedNode.references[0] && (
-                  <span className="text-[10px] font-mono text-slate-400">
-                    {selectedNode.references[0]}
-                  </span>
-                )}
               </div>
               <h3
                 className={`font-display font-bold text-xl leading-snug ${
@@ -1009,32 +1025,6 @@ export function MindMapViewer({
                   Explicación
                 </span>
                 <p className="text-sm font-normal">{selectedNode.notes}</p>
-              </div>
-            )}
-
-            {selectedNode.references && selectedNode.references.length > 0 && (
-              <div>
-                <span
-                  className={`block font-semibold text-[10px] uppercase font-mono mb-2 ${
-                    isLight ? "text-slate-500" : "text-slate-400"
-                  }`}
-                >
-                  Referencias
-                </span>
-                <div className="flex flex-wrap gap-1.5">
-                  {selectedNode.references.map((ref, idx) => (
-                    <span
-                      key={idx}
-                      className={`px-2.5 py-1 rounded-xl border text-[11px] font-mono font-medium ${
-                        isLight
-                          ? "bg-indigo-50 border-indigo-200 text-indigo-700"
-                          : "bg-indigo-950/60 border-indigo-800/40 text-indigo-300"
-                      }`}
-                    >
-                      {ref}
-                    </span>
-                  ))}
-                </div>
               </div>
             )}
 

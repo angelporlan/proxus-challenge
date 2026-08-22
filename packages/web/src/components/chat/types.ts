@@ -14,7 +14,6 @@ export interface ChatProps {
   }[] | undefined;
   readonly onClearPrefill?: (() => void) | undefined;
   readonly onSelectArtifact?: ((id: string) => void) | undefined;
-  readonly onOpenMindMap?: (() => void) | undefined;
   readonly theme?: "dark" | "light" | undefined;
   readonly isMaximized?: boolean | undefined;
   readonly onToggleMaximize?: (() => void) | undefined;

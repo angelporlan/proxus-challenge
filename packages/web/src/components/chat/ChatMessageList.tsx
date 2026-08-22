@@ -1,18 +1,16 @@
-import type { AgentMessage } from "@proxus/shared";
 import type { RefObject } from "react";
 import { Streamdown } from "streamdown";
 import "streamdown/styles.css";
 import { splitMentionParts } from "../../hooks/useMentions.ts";
 import { ArtifactChatCard } from "../ArtifactChatCard.tsx";
 import { ProxoFrameAnimation } from "../ProxoFrameAnimation.tsx";
-import { conversationHasNoteArtifact, extractArtifactIds } from "./group-chat-items.ts";
+import { extractArtifactIds } from "./group-chat-items.ts";
 import { cleanAssistantContent, parseUserContent } from "./parse-user-content.ts";
 import { ReasoningFlowBox, TutorThinkingBubble } from "./ChatReasoning.tsx";
 import { starterPrompts, type AssistantReveal, type ChatItem, type ChatMaterial, type TutorMode } from "./types.ts";
 
 export function ChatMessageList({
   groupedItems,
-  messages,
   availableMaterials,
   isSending,
   isTutorWriting,
@@ -23,10 +21,8 @@ export function ChatMessageList({
   onSubmit,
   onSetTutorMode,
   onSelectArtifact,
-  onOpenMindMap
 }: {
   readonly groupedItems: readonly ChatItem[];
-  readonly messages: readonly AgentMessage[];
   readonly availableMaterials: readonly ChatMaterial[];
   readonly isSending: boolean;
   readonly isTutorWriting: boolean;
@@ -37,7 +33,6 @@ export function ChatMessageList({
   readonly onSubmit: (prompt: string) => void;
   readonly onSetTutorMode: (mode: TutorMode) => void;
   readonly onSelectArtifact?: ((id: string) => void) | undefined;
-  readonly onOpenMindMap?: (() => void) | undefined;
 }) {
   return (
     <section
@@ -46,7 +41,7 @@ export function ChatMessageList({
       }`}
       aria-live="polite"
     >
-      {messages.length === 0 ? (
+      {groupedItems.length === 0 ? (
         <div className="m-auto w-full max-w-2xl text-center py-6">
           <div className="relative mx-auto mb-3 inline-block">
             <ProxoFrameAnimation
@@ -242,7 +237,6 @@ export function ChatMessageList({
                           key={artId}
                           artifactId={artId}
                           onOpenInWorkspace={(id) => onSelectArtifact?.(id)}
-                          onOpenMindMap={onOpenMindMap}
                           isLight={isLight}
                         />
                       ))}
@@ -255,32 +249,6 @@ export function ChatMessageList({
                         isLight ? "border-slate-100" : "border-slate-800/80"
                       }`}
                     >
-                      <span className="mr-1 text-[11px] font-medium text-slate-400">Continuar con</span>
-                      {onOpenMindMap && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (conversationHasNoteArtifact(messages)) {
-                              onOpenMindMap();
-                            } else {
-                              void onSubmit(
-                                "Genera una nota de estudio estructurada con el esquema conceptual detallado de este tema."
-                              );
-                              onOpenMindMap();
-                            }
-                          }}
-                          className={`flex min-h-9 items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold shadow-sm transition ${
-                            isLight
-                              ? "border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100"
-                              : "border-indigo-800/50 bg-indigo-950/60 text-indigo-300 hover:bg-indigo-900/60"
-                          }`}
-                        >
-                          <span className="material-symbols-outlined text-xs" aria-hidden="true">
-                            schema
-                          </span>
-                          <span>Ver esquema</span>
-                        </button>
-                      )}
                       <button
                         type="button"
                         onClick={() => void onSubmit("Genera un quiz de 5 preguntas basado en esta explicación.")}

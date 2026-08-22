@@ -19,7 +19,8 @@ const AI_FAILURE_TAGS = new Set([
   "AuthenticationError",
   "ContentPolicyError",
   "UnknownError",
-  "GeminiConfigError"
+  "GeminiConfigError",
+  "MindMapGenerationError"
 ]);
 
 const REPOSITORY_FAILURE_TAGS = new Set([

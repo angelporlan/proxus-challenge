@@ -1,4 +1,5 @@
-import { Effect, FileSystem, Layer, Option, Path } from "effect";
+import { Effect, FileSystem, Layer, Option, Path, Schema } from "effect";
+import { MindMapNode as MindMapNodeSchema, type MindMapNode } from "@proxus/shared";
 import {
   InvalidMaterialError,
   MaterialNotFound,
@@ -27,6 +28,8 @@ export const FileMaterialRepository = {
     const pdfPath = (fileName: string) => path.join(directory, fileName);
     const metaPath = (fileName: string) =>
       path.join(directory, `${path.basename(fileName, ".pdf")}.meta.json`);
+    const mindMapPath = (fileName: string) =>
+      path.join(directory, `${path.basename(fileName, ".pdf")}.mindmap.json`);
 
     const sanitizeFileName = (rawName: string) => {
       const base = path.basename(rawName).trim();
@@ -176,6 +179,9 @@ export const FileMaterialRepository = {
       yield* fs.remove(metaFilePath, { force: true }).pipe(
         Effect.catch(() => Effect.void)
       );
+      yield* fs.remove(mindMapPath(file.material.fileName), { force: true }).pipe(
+        Effect.catch(() => Effect.void)
+      );
     });
 
     const renderPages = (
@@ -249,7 +255,38 @@ export const FileMaterialRepository = {
       return results.sort((a, b) => b.score - a.score);
     });
 
-    return { list, get, upload, delete: remove, renderPages, getFilePath, searchText };
+    const getMindMap = (id: string): Effect.Effect<MindMapNode | null, MaterialNotFound | MaterialRepositoryError> => Effect.gen(function* () {
+      const file = yield* getFile(id);
+      const storedPath = mindMapPath(file.material.fileName);
+      const exists = yield* fs.exists(storedPath).pipe(Effect.mapError(mapError));
+      if (!exists) return null;
+
+      const content = yield* fs.readFileString(storedPath).pipe(Effect.mapError(mapError));
+      return yield* Effect.try({
+        try: () => Schema.decodeUnknownSync(MindMapNodeSchema)(JSON.parse(content)),
+        catch: (reason) => new MaterialRepositoryError({ reason })
+      });
+    });
+
+    const saveMindMap = (id: string, mindMap: MindMapNode): Effect.Effect<void, MaterialNotFound | MaterialRepositoryError> => Effect.gen(function* () {
+      const file = yield* getFile(id);
+      const encoded = yield* Effect.try({
+        try: () => JSON.stringify(Schema.encodeSync(MindMapNodeSchema)(mindMap), null, 2),
+        catch: (reason) => new MaterialRepositoryError({ reason })
+      });
+      yield* fs.writeFileString(mindMapPath(file.material.fileName), encoded).pipe(
+        Effect.mapError(mapError)
+      );
+    });
+
+    const deleteMindMap = (id: string): Effect.Effect<void, MaterialNotFound | MaterialRepositoryError> => Effect.gen(function* () {
+      const file = yield* getFile(id);
+      yield* fs.remove(mindMapPath(file.material.fileName), { force: true }).pipe(
+        Effect.mapError(mapError)
+      );
+    });
+
+    return { list, get, upload, delete: remove, renderPages, getFilePath, searchText, getMindMap, saveMindMap, deleteMindMap };
   }),
   layer: (directory: string) => Layer.effect(MaterialRepository)(FileMaterialRepository.make(directory))
 };

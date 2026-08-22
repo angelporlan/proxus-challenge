@@ -71,6 +71,9 @@ export const runSearchThenViewEval = Effect.gen(function* () {
       });
     },
     getFilePath: () => Effect.succeed("/tmp/constitucion.pdf"),
+    getMindMap: () => Effect.succeed(null),
+    saveMindMap: () => Effect.void,
+    deleteMindMap: () => Effect.void,
     searchText: (id, query) => {
       searchCallCount++;
       const qLower = query.toLowerCase();

@@ -29,7 +29,6 @@ export function Chat({
   prefillAttachments,
   onClearPrefill,
   onSelectArtifact,
-  onOpenMindMap,
   theme = "dark",
   isMaximized = false,
   onToggleMaximize
@@ -186,7 +185,6 @@ export function Chat({
 
       <ChatMessageList
         groupedItems={groupedItems}
-        messages={messages}
         availableMaterials={availableMaterials}
         isSending={isSending}
         isTutorWriting={isTutorWriting}
@@ -197,7 +195,6 @@ export function Chat({
         onSubmit={(prompt) => void submit(prompt)}
         onSetTutorMode={setTutorMode}
         onSelectArtifact={onSelectArtifact}
-        onOpenMindMap={onOpenMindMap}
       />
 
       {error !== undefined && (

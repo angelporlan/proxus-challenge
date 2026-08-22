@@ -387,7 +387,7 @@ export function Sidebar({
             const categoriesConfig = [
               {
                 kind: "note" as const,
-                label: "Notas y Esquemas",
+                label: "Notas de estudio",
                 icon: "description",
                 badgeClass: isLight ? "bg-indigo-50 text-indigo-700 border-indigo-200" : "bg-indigo-500/15 text-indigo-300 border-indigo-500/30",
                 iconColor: "text-indigo-500"

@@ -290,6 +290,9 @@ const makeMaterialRepository = (materials: readonly MaterialFixture[]) => Materi
     });
   },
   getFilePath: (id) => Effect.succeed(`/mock/path/${id}.pdf`),
+  getMindMap: () => Effect.succeed(null),
+  saveMindMap: () => Effect.void,
+  deleteMindMap: () => Effect.void,
   searchText: (id, query) => {
     const material = materials.find((candidate) => candidate.id === id);
     if (material === undefined) {

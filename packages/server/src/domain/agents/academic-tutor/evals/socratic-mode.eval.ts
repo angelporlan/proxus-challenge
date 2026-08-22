@@ -12,7 +12,10 @@ const makeMockMaterialRepo = () => MaterialRepository.of({
   delete: () => Effect.void,
   renderPages: () => Effect.die("Not implemented"),
   getFilePath: () => Effect.succeed("/tmp/demo.pdf"),
-  searchText: () => Effect.succeed([])
+  searchText: () => Effect.succeed([]),
+  getMindMap: () => Effect.succeed(null),
+  saveMindMap: () => Effect.void,
+  deleteMindMap: () => Effect.void
 });
 
 const makeMockArtifactRepo = () => ArtifactRepository.of({

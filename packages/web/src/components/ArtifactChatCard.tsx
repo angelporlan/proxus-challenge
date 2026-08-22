@@ -8,14 +8,12 @@ import { toggleArtifactSaved, useSavedArtifactIds } from "../domain/artifacts/sa
 interface ArtifactChatCardProps {
   readonly artifactId: string;
   readonly onOpenInWorkspace: (artifactId: string) => void;
-  readonly onOpenMindMap?: (() => void) | undefined;
   readonly isLight?: boolean;
 }
 
 export function ArtifactChatCard({
   artifactId,
   onOpenInWorkspace,
-  onOpenMindMap,
   isLight = false
 }: ArtifactChatCardProps) {
   const query = artifactQuery(artifactId);
@@ -48,7 +46,6 @@ export function ArtifactChatCard({
             isSaved={isSaved}
             onToggleSave={toggleSave}
             onOpenInWorkspace={onOpenInWorkspace}
-            onOpenMindMap={onOpenMindMap}
             isLight={isLight}
           />
         )
@@ -62,14 +59,12 @@ function ArtifactCardView({
   isSaved,
   onToggleSave,
   onOpenInWorkspace,
-  onOpenMindMap,
   isLight
 }: {
   readonly artifact: Artifact;
   readonly isSaved: boolean;
   readonly onToggleSave: (e: React.MouseEvent) => void;
   readonly onOpenInWorkspace: (id: string) => void;
-  readonly onOpenMindMap?: (() => void) | undefined;
   readonly isLight: boolean;
 }) {
   const getTheme = () => {
@@ -161,7 +156,7 @@ function ArtifactCardView({
         {artifact.kind === "quiz" ? (
           <InlineQuizSolver quiz={artifact} isLight={isLight} onOpenFull={() => onOpenInWorkspace(artifact.id)} />
         ) : artifact.kind === "note" ? (
-          <InlineNotePreview note={artifact} isLight={isLight} onOpenMindMap={onOpenMindMap} onOpenFull={() => onOpenInWorkspace(artifact.id)} />
+          <InlineNotePreview note={artifact} isLight={isLight} onOpenFull={() => onOpenInWorkspace(artifact.id)} />
         ) : (
           <InlineTestPreview test={artifact} isLight={isLight} onOpenFull={() => onOpenInWorkspace(artifact.id)} />
         )}
@@ -428,12 +423,10 @@ function InlineQuizSolver({
 function InlineNotePreview({
   note,
   isLight,
-  onOpenMindMap,
   onOpenFull
 }: {
   readonly note: NoteArtifact;
   readonly isLight: boolean;
-  readonly onOpenMindMap?: (() => void) | undefined;
   readonly onOpenFull: () => void;
 }) {
   const snippet = note.markdown
@@ -450,21 +443,6 @@ function InlineNotePreview({
       </p>
 
       <div className="flex flex-wrap items-center gap-2 pt-1">
-        {onOpenMindMap && (
-          <button
-            type="button"
-            onClick={onOpenMindMap}
-            className={`flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-semibold transition ${
-              isLight
-                ? "border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100"
-                : "border-indigo-800/50 bg-indigo-950/60 text-indigo-300 hover:bg-indigo-900/60"
-            }`}
-          >
-            <span className="material-symbols-outlined text-[15px]">schema</span>
-            <span>Ver en Mapa Mental</span>
-          </button>
-        )}
-
         <button
           type="button"
           onClick={onOpenFull}
@@ -475,7 +453,7 @@ function InlineNotePreview({
           }`}
         >
           <span className="material-symbols-outlined text-[15px]">menu_book</span>
-          <span>Leer nota completa</span>
+          <span>Ver nota en el espacio de estudio</span>
         </button>
       </div>
     </div>

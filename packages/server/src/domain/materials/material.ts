@@ -1,4 +1,5 @@
 import { Context, Data, Effect } from "effect";
+import type { MindMapNode } from "@proxus/shared";
 
 export interface PdfMaterial {
   readonly id: string;
@@ -93,6 +94,16 @@ export interface MaterialRepository {
     id: string,
     query: string
   ) => Effect.Effect<readonly TextSearchResult[], MaterialNotFound | MaterialRepositoryError>;
+  readonly getMindMap: (
+    id: string
+  ) => Effect.Effect<MindMapNode | null, MaterialNotFound | MaterialRepositoryError>;
+  readonly saveMindMap: (
+    id: string,
+    mindMap: MindMapNode
+  ) => Effect.Effect<void, MaterialNotFound | MaterialRepositoryError>;
+  readonly deleteMindMap: (
+    id: string
+  ) => Effect.Effect<void, MaterialNotFound | MaterialRepositoryError>;
 }
 
 export const MaterialRepository = Context.Service<MaterialRepository>(
