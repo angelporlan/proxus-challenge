@@ -924,6 +924,23 @@ function ResponsivePanel({ side, label, open, onClose, width, laptopWidth, isWid
   readonly children: ReactNode;
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
+  const isDesktopChat = isWide && side === "right";
+  const [isDesktopChatMounted, setIsDesktopChatMounted] = useState(open);
+  const [isDesktopChatVisible, setIsDesktopChatVisible] = useState(open);
+
+  useEffect(() => {
+    if (!isDesktopChat) return;
+
+    if (open) {
+      setIsDesktopChatMounted(true);
+      const frame = window.requestAnimationFrame(() => setIsDesktopChatVisible(true));
+      return () => window.cancelAnimationFrame(frame);
+    }
+
+    setIsDesktopChatVisible(false);
+    const timeout = window.setTimeout(() => setIsDesktopChatMounted(false), 260);
+    return () => window.clearTimeout(timeout);
+  }, [isDesktopChat, open]);
 
   useEffect(() => {
     if (isWide || !open) return;
@@ -977,9 +994,11 @@ function ResponsivePanel({ side, label, open, onClose, width, laptopWidth, isWid
     };
   }, [fallbackFocusRef, isWide, onClose, open, returnFocusRef]);
 
-  if (isWide && side === "right" && !open) {
+  if (isDesktopChat && !isDesktopChatMounted) {
     return null;
   }
+
+  const panelIsOpen = isDesktopChat ? isDesktopChatVisible : open;
 
   return (
     <>
@@ -992,7 +1011,7 @@ function ResponsivePanel({ side, label, open, onClose, width, laptopWidth, isWid
         aria-hidden={!isWide && !open ? true : undefined}
         inert={!isWide && !open ? true : undefined}
         style={{ width: `${isWide ? width : laptopWidth}px` }}
-        className={`fixed inset-y-0 z-50 h-full max-w-[calc(100vw-3rem)] shrink-0 overflow-hidden bg-[var(--panel-bg)] transition-transform duration-200 min-[1440px]:static min-[1440px]:z-auto min-[1440px]:max-w-none min-[1440px]:translate-x-0 ${side === "left" ? "left-0" : "right-0"} ${open ? "translate-x-0" : side === "left" ? "-translate-x-full" : "translate-x-full"}`}
+        className={`fixed inset-y-0 z-50 h-full max-w-[calc(100vw-3rem)] shrink-0 overflow-hidden bg-[var(--panel-bg)] transition-transform duration-[240ms] ease-out will-change-transform min-[1440px]:static min-[1440px]:z-auto min-[1440px]:max-w-none ${side === "left" ? "left-0 min-[1440px]:translate-x-0" : "right-0"} ${panelIsOpen ? "translate-x-0" : side === "left" ? "-translate-x-full" : "translate-x-full"}`}
       >
         <IconButton label={`Cerrar ${label.toLowerCase()}`} variant="ghost" onClick={onClose} className="absolute right-3 top-3 z-[60] min-[1440px]:hidden"><span className="material-symbols-outlined text-[18px]">close</span></IconButton>
         {children}
