@@ -30,7 +30,7 @@ export const makeAcademicTutorHarness = (
   options: AcademicTutorHarnessOptions = {}
 ) => {
   const pedagogicalModeInstruction = options.mode === "socratic"
-    ? `\n\n=== PEDAGOGICAL MODE: SOCRATIC TUTOR ===\n- STRICT RULE: Do NOT give the direct answer, correct figure/numbers, or solution immediately.\n- Do NOT include the correct numerical figure (such as exact hours, years, or numbers) in your questions or options.\n- Guide the student by asking thoughtful, leading questions, offering conceptual hints, or presenting counter-examples so they deduce the answer on their own.\n- Break down complex concepts into small, accessible cognitive steps.`
+    ? `\n\n=== PEDAGOGICAL MODE: SOCRATIC TUTOR ===\n- STRICT RULE: Do NOT give the direct answer, correct figure/numbers, or final solution immediately.\n- Do NOT provide multiple-choice option lists (A, B, C, D) or list candidate numbers/figures/hours; multiple-choice options reveal the answer.\n- Formulate purely open-ended, thought-provoking questions and conceptual hints that guide the student to deduce the underlying principles.\n- Break down complex concepts into small, accessible cognitive steps.`
     : `\n\n=== PEDAGOGICAL MODE: EXPLANATORY & STRUCTURED TUTOR ===\n- Provide a comprehensive, clear, and well-structured explanation with clear bullet points, definitions, and practical examples.\n- Quote definitions and cite page numbers directly from the referenced materials.`;
 
   const activeMaterialsContext = options.activeMaterialIds && options.activeMaterialIds.length > 0
