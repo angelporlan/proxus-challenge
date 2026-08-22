@@ -55,6 +55,17 @@ const makeInMemoryKnowledgeRepo = (initialGaps = sampleGaps) => Effect.gen(funct
         ...curr,
         gaps: curr.gaps.filter((gap) => gap.sourceArtifactId !== artifactId)
       })),
+    removeGapsByMaterialId: (materialId) =>
+      Ref.update(stateRef, (curr) => ({
+        ...curr,
+        gaps: curr.gaps.filter((gap) => gap.sourceMaterialId !== materialId)
+      })),
+    recordCompletedAttempt: () =>
+      Ref.updateAndGet(stateRef, (curr) => ({
+        ...curr,
+        totalAttempts: curr.totalAttempts + 1,
+        lastAttemptAt: new Date().toISOString()
+      })),
     clearProfile: () => Ref.set(stateRef, { gaps: [], totalAttempts: 0 }),
     listActiveGaps: () =>
       Ref.get(stateRef).pipe(

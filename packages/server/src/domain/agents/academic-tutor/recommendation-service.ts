@@ -152,14 +152,15 @@ const buildPrompt = (context: TutorRecommendationContext): string => [
   `Conversación reciente:\n${renderRecentMessages(context.recentMessages)}`
 ].join("\n");
 
+export const shouldRequestRecommendations = (context: TutorRecommendationContext): boolean =>
+  context.mode === "explanatory" &&
+  !context.createdArtifact &&
+  context.assistantOutput.trim().length >= 80;
+
 export const generateTutorRecommendations = (
   context: TutorRecommendationContext
 ) => Effect.gen(function* () {
-  if (
-    context.mode === undefined ||
-    context.assistantOutput.trim().length < 80 ||
-    context.createdArtifact
-  ) {
+  if (!shouldRequestRecommendations(context)) {
     return [] as readonly TutorRecommendationType[];
   }
 

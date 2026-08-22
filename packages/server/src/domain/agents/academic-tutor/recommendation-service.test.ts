@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   hasCreatedArtifact,
-  normalizeRecommendations
+  normalizeRecommendations,
+  shouldRequestRecommendations
 } from "./recommendation-service.ts";
 
 describe("tutor recommendations", () => {
@@ -49,6 +50,38 @@ describe("tutor recommendations", () => {
     }, "explanatory", true);
 
     expect(recommendations).toEqual([]);
+  });
+
+  it("does not call the model for socratic, short, or artifact turns", () => {
+    const longOutput = "A".repeat(80);
+    expect(shouldRequestRecommendations({
+      mode: "socratic",
+      userInput: "hola",
+      assistantOutput: longOutput,
+      recentMessages: [],
+      createdArtifact: false
+    })).toBe(false);
+    expect(shouldRequestRecommendations({
+      mode: "explanatory",
+      userInput: "hola",
+      assistantOutput: "corto",
+      recentMessages: [],
+      createdArtifact: false
+    })).toBe(false);
+    expect(shouldRequestRecommendations({
+      mode: "explanatory",
+      userInput: "crea un quiz",
+      assistantOutput: longOutput,
+      recentMessages: [],
+      createdArtifact: true
+    })).toBe(false);
+    expect(shouldRequestRecommendations({
+      mode: "explanatory",
+      userInput: "explica",
+      assistantOutput: longOutput,
+      recentMessages: [],
+      createdArtifact: false
+    })).toBe(true);
   });
 
   it("detects artifacts in successful CLI results", () => {

@@ -127,14 +127,57 @@ export const normalizeMindMapResponse = (value: unknown, fallbackLabel: string):
   return Schema.decodeUnknownSync(MindMapNodeSchema)(sanitizeMindMap(normalizeMindMap(value, fallbackLabel)));
 };
 
-const buildPrompt = (title: string, pages: readonly { readonly page: number; readonly text: string }[]): string => {
+export const MINDMAP_MAX_PAGES = 12;
+export const MINDMAP_MAX_CHARS_PER_PAGE = 1800;
+
+export const selectMindMapPages = (
+  pages: readonly { readonly page: number; readonly text: string }[]
+): readonly { readonly page: number; readonly text: string }[] => {
+  const clip = (page: { readonly page: number; readonly text: string }) => ({
+    page: page.page,
+    text: page.text.slice(0, MINDMAP_MAX_CHARS_PER_PAGE)
+  });
+
+  if (pages.length <= MINDMAP_MAX_PAGES) {
+    return pages.map(clip);
+  }
+
+  const headCount = Math.min(8, MINDMAP_MAX_PAGES);
+  const selected = new Map<number, { readonly page: number; readonly text: string }>();
+  for (const page of pages.slice(0, headCount)) {
+    selected.set(page.page, clip(page));
+  }
+
+  const rest = pages.slice(headCount);
+  const extraNeeded = MINDMAP_MAX_PAGES - selected.size;
+  if (extraNeeded > 0 && rest.length > 0) {
+    for (let index = 0; index < extraNeeded; index++) {
+      const restIndex = Math.min(
+        rest.length - 1,
+        Math.floor(((index + 1) * rest.length) / (extraNeeded + 1))
+      );
+      const page = rest[restIndex];
+      if (page !== undefined) {
+        selected.set(page.page, clip(page));
+      }
+    }
+  }
+
+  return [...selected.values()].sort((left, right) => left.page - right.page);
+};
+
+const buildPrompt = (title: string, pages: readonly { readonly page: number; readonly text: string }[], totalPages: number): string => {
   const documentText = pages
     .map((page) => `\n=== PÁGINA ${page.page} ===\n${page.text.trim()}`)
     .join("\n");
+  const extractNote = totalPages > pages.length
+    ? `Este extracto cubre ${pages.length} de ${totalPages} páginas (inicio del documento más una muestra). No inventes apartados de páginas que no aparecen.`
+    : `El extracto cubre las ${totalPages} páginas del documento.`;
 
   return [
     "Eres un experto en transformar documentos de estudio en mapas conceptuales visuales.",
-    `Analiza completamente el PDF «${title}» y construye su jerarquía conceptual completa.`,
+    `Analiza el PDF «${title}» a partir de este extracto y construye su jerarquía conceptual.`,
+    extractNote,
     "Devuelve únicamente un objeto JSON válido, sin Markdown ni bloques de código.",
     "La raíz debe representar el documento y cada children debe contener conceptos, apartados y subapartados relacionados.",
     "Cada nodo debe tener id único, label breve y claro, notes con una explicación útil, page con la primera página donde aparece, color hexadecimal e icono Material Symbols.",
@@ -154,8 +197,9 @@ export const MindMapServiceLive = Layer.effect(
       const material = yield* materials.get(materialId);
       const filePath = yield* materials.getFilePath(materialId);
       const pages = yield* pdf.extractDocumentText(filePath);
+      const extract = selectMindMapPages(pages);
       const response = yield* LanguageModel.generateText({
-        prompt: buildPrompt(material.title, pages)
+        prompt: buildPrompt(material.title, extract, pages.length)
       }).pipe(
         Effect.mapError((reason) => new MindMapGenerationError({ reason }))
       );

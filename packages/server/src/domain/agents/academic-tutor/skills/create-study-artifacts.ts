@@ -41,8 +41,9 @@ export const CreateStudyArtifactsSkill = AgentSkill.make({
     "Workflow:",
     "1. For artifacts based on uploaded materials, inspect the uploaded material first.",
     "2. Create a compact artifact that directly matches the user's request.",
-    "3. Use unique stable question ids like `q1`, `q2`, `q3` within each artifact.",
-    "4. For quizzes, prefer true-false and multiple-choice because grading is deterministic.",
-    "5. When a user submits answers, save the attempt and then grade it."
+    "3. When the artifact is based on an uploaded PDF, include `sourceMaterialId` with that material's id.",
+    "4. Use unique stable question ids like `q1`, `q2`, `q3` within each artifact.",
+    "5. For quizzes, prefer true-false and multiple-choice because grading is deterministic.",
+    "6. When a user submits answers, save the attempt and then grade it."
   ].join("\n")
 });

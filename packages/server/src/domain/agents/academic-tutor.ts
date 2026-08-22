@@ -95,7 +95,7 @@ Core Capabilities & Workflow:
 5. Conclude every non-artifact turn with a rich, formatted, natural language explanation. For artifact creation, follow the shorter presentation rule above.${pedagogicalModeInstruction}${activeMaterialsContext}${libraryStatusContext}${knowledgeContext}`;
 
   const commands = [
-    makeMaterialCommands(materialRepository),
+    makeMaterialCommands(materialRepository, artifactRepository, knowledgeRepository),
     makeArtifactCommands(artifactRepository),
     ...(knowledgeRepository ? [makeKnowledgeCommands(knowledgeRepository)] : [])
   ];

@@ -1,11 +1,15 @@
-import { Effect } from "effect";
+import { Effect, Layer } from "effect";
 import * as AgentCli from "../harness/index.ts";
 import {
   InvalidPageRange,
   MaterialNotFound,
+  MaterialRepository,
   parsePageSelection,
-  type MaterialRepository
+  type MaterialRepository as MaterialRepositoryType
 } from "../../materials/material.ts";
+import { ArtifactRepository, type ArtifactRepository as ArtifactRepositoryType } from "../../artifacts/artifact.ts";
+import { KnowledgeRepository, type KnowledgeRepository as KnowledgeRepositoryType } from "../../knowledge/knowledge-profile.ts";
+import { deleteMaterialCascade } from "../../materials/delete-material-cascade.ts";
 
 const renderMaterialError = (error: MaterialNotFound | InvalidPageRange | { readonly _tag: "MaterialRepositoryError"; readonly reason: unknown }) => {
   switch (error._tag) {
@@ -18,7 +22,11 @@ const renderMaterialError = (error: MaterialNotFound | InvalidPageRange | { read
   }
 };
 
-export const makeMaterialCommands = (repository: MaterialRepository) => {
+export const makeMaterialCommands = (
+  repository: MaterialRepositoryType,
+  artifactRepository: ArtifactRepositoryType,
+  knowledgeRepository?: KnowledgeRepositoryType
+) => {
   const list = AgentCli.Command.withExamples([
     { command: "materials list", description: "List all uploaded PDF materials" }
   ])(
@@ -96,17 +104,42 @@ export const makeMaterialCommands = (repository: MaterialRepository) => {
   const remove = AgentCli.Command.withExamples([
     { command: "materials delete algebra-notes", description: "Delete a material by its ID" }
   ])(
-    AgentCli.Command.withDescription("Delete an uploaded PDF material by ID")(
+    AgentCli.Command.withDescription("Delete a PDF and its related artifacts, mind map, and knowledge gaps")(
       AgentCli.Command.exec("delete", {
         materialId: AgentCli.Argument.string("materialId").pipe(
           AgentCli.Argument.withDescription("Material id from `materials list`")
         )
-      }, ({ materialId }) =>
-        repository.delete(materialId).pipe(
+      }, ({ materialId }) => {
+        const cascade = knowledgeRepository !== undefined
+          ? deleteMaterialCascade(materialId).pipe(
+            Effect.provide(Layer.mergeAll(
+              Layer.succeed(MaterialRepository, repository),
+              Layer.succeed(ArtifactRepository, artifactRepository),
+              Layer.succeed(KnowledgeRepository, knowledgeRepository)
+            ))
+          )
+          : Effect.gen(function* () {
+            const related = (yield* artifactRepository.listArtifacts({})).filter(
+              (artifact) => artifact.sourceMaterialId === materialId
+            );
+            yield* Effect.forEach(
+              related,
+              (artifact) => artifactRepository.deleteArtifact(artifact.id),
+              { concurrency: 1 }
+            );
+            yield* repository.delete(materialId);
+            return { success: true as const, id: materialId };
+          });
+
+        return cascade.pipe(
           Effect.map(() => `Material deleted: ${materialId}`),
-          Effect.catch((error) => Effect.succeed(renderMaterialError(error)))
-        )
-      )
+          Effect.catch((error) => Effect.succeed(
+            error._tag === "MaterialNotFound" || error._tag === "MaterialRepositoryError"
+              ? renderMaterialError(error)
+              : `Failed to delete material ${materialId}: ${error._tag}`
+          ))
+        );
+      })
     )
   );
 
