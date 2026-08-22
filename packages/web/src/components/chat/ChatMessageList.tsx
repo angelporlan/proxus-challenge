@@ -7,7 +7,8 @@ import { ProxoFrameAnimation } from "../ProxoFrameAnimation.tsx";
 import { extractArtifactIds } from "./group-chat-items.ts";
 import { cleanAssistantContent, parseUserContent } from "./parse-user-content.ts";
 import { ReasoningFlowBox, TutorThinkingBubble } from "./ChatReasoning.tsx";
-import { starterPrompts, type AssistantReveal, type ChatItem, type ChatMaterial, type TutorMode } from "./types.ts";
+import { RecommendationChips } from "./RecommendationChips.tsx";
+import { starterPrompts, type AssistantReveal, type ChatItem, type ChatMaterial, type TutorMode, type TutorRecommendation } from "./types.ts";
 
 export function ChatMessageList({
   groupedItems,
@@ -16,6 +17,7 @@ export function ChatMessageList({
   isTutorWriting,
   assistantReveal,
   tutorMode,
+  recommendations,
   isLight,
   messagesEndRef,
   onSubmit,
@@ -30,7 +32,8 @@ export function ChatMessageList({
   readonly tutorMode: TutorMode;
   readonly isLight: boolean;
   readonly messagesEndRef: RefObject<HTMLDivElement | null>;
-  readonly onSubmit: (prompt: string) => void;
+  readonly recommendations: readonly TutorRecommendation[];
+  readonly onSubmit: (prompt: string, displayInput?: string) => void;
   readonly onSetTutorMode: (mode: TutorMode) => void;
   readonly onSelectArtifact?: ((id: string) => void) | undefined;
 }) {
@@ -245,26 +248,11 @@ export function ChatMessageList({
                   )}
 
                   {artifactIds.length === 0 && index === groupedItems.length - 1 && !isCurrentlyWriting && (
-                    <div
-                      className={`mt-4 flex flex-wrap items-center gap-2 border-t pt-3 ${
-                        isLight ? "border-slate-100" : "border-slate-800/80"
-                      }`}
-                    >
-                      <button
-                        type="button"
-                        onClick={() => void onSubmit("Genera un quiz de 3 preguntas basado en esta explicación.")}
-                        className={`flex min-h-9 items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition ${
-                          isLight
-                            ? "border-slate-200 bg-slate-100 text-slate-700 hover:bg-slate-200"
-                            : "border-slate-700/60 bg-slate-800/80 text-slate-200 hover:bg-slate-800"
-                        }`}
-                      >
-                        <span className="material-symbols-outlined text-xs" aria-hidden="true">
-                          quiz
-                        </span>
-                        <span>Crear quiz</span>
-                      </button>
-                    </div>
+                    <RecommendationChips
+                      recommendations={recommendations}
+                      isLight={isLight}
+                      onSubmit={onSubmit}
+                    />
                   )}
                 </div>
               </div>

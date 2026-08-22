@@ -16,6 +16,16 @@ export const TutorChatRequest = Schema.Struct({
 });
 export type TutorChatRequest = typeof TutorChatRequest.Type;
 
+export const TutorRecommendation = Schema.Struct({
+  kind: Schema.Union([
+    Schema.Literal("question"),
+    Schema.Literal("quiz")
+  ]),
+  label: Schema.String,
+  prompt: Schema.String
+});
+export type TutorRecommendation = typeof TutorRecommendation.Type;
+
 export const TutorChatResponse = Schema.Struct({
   output: Schema.String,
   newMessages: Schema.Array(AgentMessage),
@@ -27,6 +37,10 @@ export const TutorChatStreamEvent = Schema.Union([
   Schema.Struct({
     type: Schema.Literal("message"),
     message: AgentMessage
+  }),
+  Schema.Struct({
+    type: Schema.Literal("recommendations"),
+    recommendations: Schema.Array(TutorRecommendation)
   }),
   Schema.Struct({
     type: Schema.Literal("done")

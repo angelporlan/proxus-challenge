@@ -59,7 +59,17 @@ export function Chat({
     handleDeleteSession: handleDeleteStoredSession
   } = useChatSessions();
 
-  const { isSending, isTutorWriting, assistantReveal, error, setError, submit, clearReveal } = useTutorTurn({
+  const {
+    isSending,
+    isTutorWriting,
+    assistantReveal,
+    recommendations,
+    error,
+    setError,
+    submit,
+    clearReveal,
+    clearRecommendations
+  } = useTutorTurn({
     messages,
     setMessages,
     tutorMode,
@@ -101,12 +111,14 @@ export function Chat({
   const handleNewChat = () => {
     startNewChat();
     clearReveal();
+    clearRecommendations();
     setIsHistoryOpen(false);
   };
 
   const handleSelectSession = (session: ChatSession) => {
     restoreSession(session);
     clearReveal();
+    clearRecommendations();
     setIsHistoryOpen(false);
   };
 
@@ -186,9 +198,10 @@ export function Chat({
         isTutorWriting={isTutorWriting}
         assistantReveal={assistantReveal}
         tutorMode={tutorMode}
+        recommendations={recommendations}
         isLight={isLight}
         messagesEndRef={messagesEndRef}
-        onSubmit={(prompt) => void submit(prompt)}
+        onSubmit={(prompt, displayInput) => void submit(prompt, displayInput)}
         onSetTutorMode={setTutorMode}
         onSelectArtifact={onSelectArtifact}
       />

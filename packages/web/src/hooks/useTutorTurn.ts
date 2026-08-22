@@ -1,4 +1,4 @@
-import type { AgentMessage } from "@proxus/shared";
+import type { AgentMessage, TutorRecommendation } from "@proxus/shared";
 import { useAtomRefresh } from "@effect/atom-react";
 import { useEffect, useRef, useState, type Dispatch, type RefObject, type SetStateAction } from "react";
 import { artifactsQuery } from "../domain/artifacts/atoms.ts";
@@ -30,9 +30,11 @@ export function useTutorTurn({
 }) {
   const [isSending, setIsSending] = useState(false);
   const [assistantReveal, setAssistantReveal] = useState<AssistantReveal | null>(null);
+  const [recommendations, setRecommendations] = useState<readonly TutorRecommendation[]>([]);
   const [error, setError] = useState<string | undefined>();
   const assistantRevealIdRef = useRef(0);
   const pendingInvalidations = useRef<Array<ReturnType<typeof invalidationsForToolCall>>>([]);
+  const quizCooldownRef = useRef(0);
 
   const refreshArtifacts = useAtomRefresh(artifactsQuery);
   const refreshMaterials = useAtomRefresh(materialsQuery);
@@ -67,6 +69,10 @@ export function useTutorTurn({
   const isTutorWriting = assistantReveal !== null;
 
   const clearReveal = () => setAssistantReveal(null);
+  const clearRecommendations = () => {
+    setRecommendations([]);
+    quizCooldownRef.current = 0;
+  };
 
   const submit = async (
     nextInput: string,
@@ -85,6 +91,10 @@ export function useTutorTurn({
     const controller = new AbortController();
     abortControllerRef.current = controller;
 
+    if (quizCooldownRef.current > 0) {
+      quizCooldownRef.current -= 1;
+    }
+
     const finalPrompt = trimmed || "Explícame los conceptos clave de este documento.";
     const activeMaterialIds = activeAttachedDocs.map((d) => d.id);
     const documentReferences = activeAttachedDocs.map((d) => d.title);
@@ -93,6 +103,7 @@ export function useTutorTurn({
     setAttachedDocs([]);
     setInput("");
     setMessages((current) => [...current, optimisticUserMessage]);
+    setRecommendations([]);
     setIsSending(true);
     setError(undefined);
     pendingInvalidations.current = [];
@@ -110,6 +121,22 @@ export function useTutorTurn({
         controller.signal
       )) {
         if (event.type === "done") {
+          continue;
+        }
+
+        if (event.type === "recommendations") {
+          const visibleRecommendations = event.recommendations
+            .filter((recommendation) => tutorMode !== "socratic" || recommendation.kind === "quiz")
+            .filter((recommendation) => quizCooldownRef.current === 0 || recommendation.kind !== "quiz")
+            .filter((recommendation, index, all) => index === all.findIndex((candidate) =>
+              candidate.kind === recommendation.kind && candidate.prompt === recommendation.prompt
+            ))
+            .slice(0, 2);
+
+          if (visibleRecommendations.some((recommendation) => recommendation.kind === "quiz")) {
+            quizCooldownRef.current = 3;
+          }
+          setRecommendations(visibleRecommendations);
           continue;
         }
 
@@ -169,6 +196,8 @@ export function useTutorTurn({
     error,
     setError,
     submit,
-    clearReveal
+    clearReveal,
+    recommendations,
+    clearRecommendations
   };
 }

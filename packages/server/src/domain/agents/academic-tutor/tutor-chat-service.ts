@@ -1,12 +1,13 @@
-import { Context, Effect, Layer, Stream } from "effect";
+import { Context, Effect, Layer, Queue, Stream } from "effect";
 import { LanguageModel } from "effect/unstable/ai";
 import type { TutorChatRequest, TutorChatResponse, TutorChatStreamEvent, UserProfile } from "@proxus/shared";
 import { ArtifactRepository } from "../../artifacts/artifact.ts";
 import { MaterialRepository } from "../../materials/material.ts";
 import { KnowledgeRepository } from "../../knowledge/knowledge-profile.ts";
 import { UserProfileRepository } from "../../user-profile/user-profile.ts";
-import { AgentSession } from "../harness/index.ts";
+import { AgentSession, type AgentMessage } from "../harness/index.ts";
 import { makeAcademicTutorHarness } from "../academic-tutor.ts";
+import { generateTutorRecommendations, hasCreatedArtifact } from "./recommendation-service.ts";
 
 export interface TutorChatService {
   readonly sendMessage: (
@@ -151,13 +152,43 @@ export const TutorChatServiceLive = Layer.effect(
       streamMessage: (input) =>
         Stream.unwrap(
           buildSession(input).pipe(
-            Effect.map(({ session, harness }) =>
-              session.stream(sessionInput(input)).pipe(
-                Stream.map((message): TutorChatStreamEvent => ({ type: "message", message })),
-                Stream.concat(Stream.succeed({ type: "done" as const })),
-                Stream.provide(harness.layer)
-              )
-            )
+            Effect.map(({ session, harness }) => {
+              const turnMessages: AgentMessage[] = [];
+
+              return Stream.callback<TutorChatStreamEvent, unknown, LanguageModel.LanguageModel>((queue) =>
+                session.stream(sessionInput(input)).pipe(
+                  Stream.provide(harness.layer),
+                  Stream.tap((message) => Effect.gen(function* () {
+                    turnMessages.push(message);
+                    yield* Queue.offer(queue, { type: "message", message });
+                  })),
+                  Stream.runDrain,
+                  Effect.andThen(Effect.gen(function* () {
+                    const assistantMessage = [...turnMessages]
+                      .reverse()
+                      .find((message): message is AgentMessage & { readonly role: "assistant" } => message.role === "assistant");
+
+                    if (assistantMessage !== undefined) {
+                      const recommendations = yield* generateTutorRecommendations({
+                        mode: input.mode,
+                        userInput: input.input,
+                        assistantOutput: assistantMessage.content,
+                        recentMessages: [...(input.messages ?? []), ...turnMessages],
+                        createdArtifact: hasCreatedArtifact(turnMessages)
+                      });
+                      yield* Queue.offer(queue, { type: "recommendations", recommendations });
+                    }
+
+                    yield* Queue.offer(queue, { type: "done" });
+                  })),
+                  Effect.andThen(Queue.end(queue)),
+                  Effect.matchCauseEffect({
+                    onFailure: (cause) => Queue.failCause(queue, cause),
+                    onSuccess: () => Effect.void
+                  })
+                )
+              );
+            })
           )
         )
     };

@@ -1,8 +1,9 @@
-import type { AgentMessage } from "@proxus/shared";
+import type { AgentMessage, TutorRecommendation } from "@proxus/shared";
 
 export const MISTAKE_TUTOR_PROMPT_PREFIX = "He fallado esta pregunta y necesito entender el error:";
 
 export type TutorMode = "socratic" | "explanatory";
+export type { TutorRecommendation };
 
 export interface ChatProps {
   readonly prefillPrompt?: string | null | undefined;
