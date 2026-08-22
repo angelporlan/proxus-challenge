@@ -252,7 +252,7 @@ export function ChatMessageList({
                     >
                       <button
                         type="button"
-                        onClick={() => void onSubmit("Genera un quiz de 5 preguntas basado en esta explicación.")}
+                        onClick={() => void onSubmit("Genera un quiz de 3 preguntas basado en esta explicación.")}
                         className={`flex min-h-9 items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition ${
                           isLight
                             ? "border-slate-200 bg-slate-100 text-slate-700 hover:bg-slate-200"
