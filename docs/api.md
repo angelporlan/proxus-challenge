@@ -23,7 +23,7 @@ POST /api/tutor/chat/stream
 { "type": "done" }
 ```
 
-La ruta streaming está implementada manualmente para soportar eventos incrementales.
+La ruta streaming está implementada a mano (`POST /api/tutor/chat/stream`) porque Effect HttpApi no expone NDJSON incremental. Los errores se mapean con `httpErrorResponse` (los mismos 400/404/503/500 que el resto de la API).
 
 ### Materials
 
@@ -36,7 +36,7 @@ DELETE /api/materials/:id
 
 Los materiales representan PDFs disponibles para el tutor (apuntes, temarios, diapositivas).
 - `POST /api/materials/upload`: Permite la ingesta de documentos subiendo el PDF codificado en Base64 con metadatos (`fileName`, `contentBase64`, `title`). Valida la integridad del PDF y extrae el conteo de páginas.
-- `DELETE /api/materials/:id`: Elimina un documento subido del repositorio y filesystem.
+- `DELETE /api/materials/:id`: Elimina el PDF, su mind map, los artefactos con `sourceMaterialId` de ese material y las lagunas asociadas.
 - El server puede renderizar páginas vía Poppler (`pdftoppm`) para que Gemini las procese como imágenes.
 
 ### Artifacts

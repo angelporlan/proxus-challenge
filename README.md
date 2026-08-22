@@ -40,25 +40,35 @@ $$\text{Subir PDF} \longrightarrow \text{Estudio/Lectura} \longrightarrow \text{
 ### 2. Búsqueda Textual Rápida antes de Inspección Visual (*Search-then-View*)
 * **Extracción e Indexación**: Métodos `extractDocumentText` en `PopplerPdfService` y `searchText` en `MaterialRepository` usando `pdftotext`.
 * **Comando `materials search <materialId> <query>`**: Permite localizar en milisegundos las páginas exactas y snippets relevantes.
-* **Flujo Eficiente**: El tutor busca primero por texto, identifica la página exacta (ej. pág. 18) y únicamente renderiza la imagen de esa página con `materials view`, ahorrando hasta un 85% de tokens de visión.
+* **Flujo Eficiente**: El tutor busca primero por texto, identifica la página exacta y únicamente renderiza esa página con `materials view`. El ahorro de visión depende del documento; no hay un porcentaje fijo.
 
 ### 3. Modos Pedagógicos Formales (*Socrático vs. Explicativo*)
 * Contratos ciudadanos de primer nivel en `packages/shared/src/api/tutor.ts` (`mode: "socratic" | "explanatory"`).
 * **Modo Socrático**: Guía al estudiante mediante preguntas reflexivas, pistas incrementales y contraejemplos sin revelar la solución de golpe.
 * **Modo Explicativo**: Explicaciones estructuradas con citas de página y definiciones claras.
 
-### 4. Esquemas y Mapas Mentales 100% Dinámicos (`MindMapViewer`)
-* Lienzo infinito interactivo con navegación libre (*pan & drag*), zoom con rueda y recentrado.
-* Parser recursivo (`parseMarkdownToMindMap`) que transforma cualquier nota markdown o PDF subido en un grafo conceptual interactivo sin datos hardcodeados.
-* Botón de interacción directa con el tutor sobre cualquier nodo del mapa.
+### 4. Esquemas y Mapas Mentales 100% Dinámicos y Persistentes (`MindMapViewer` + `MindMapService`)
+* **Relación 1:1 por Material**: Generación directa en backend con extracción de texto Poppler + Gemini, persistencia en `.data/materials/{id}.mindmap.json` y endpoints HTTP dedicados (`GET /api/materials/:id/mindmap` y `POST /api/materials/:id/mindmap/generate`).
+* Lienzo infinito interactivo con navegación libre (*pan & drag*), zoom con rueda, recentrado y radar minimapa.
+* Botón de interacción directa con el tutor sobre cualquier nodo del mapa conceptual.
 
-### 5. Visor de PDF con Lectura Activa e Interacción IA
+### 5. Diferenciación Radical: Quizzes de Práctica vs. Simulacros de Examen Oficiales
+* **Quizzes (`quiz`)**: Modo de práctica ágil con feedback y explicación inmediata por pregunta. El resultado y las lagunas se persisten **al completar** el quiz (un attempt por intento).
+* **Simulacros de Examen (`test`)**: Entorno formal de prueba con cronómetro y auto-entrega al expirar, navegación por preguntas con banderas de revisión (icono `flag` en memoria del intento), diálogo de seguridad de entrega y **Acta oficial de calificación sobre 10 con mención académica**.
+* **Modal `CreateExerciseModal`**: Configuración accesible con selector de tipo de ejercicio, número de preguntas (quiz 3–5, simulacro 5–20) y rango de páginas.
+* **Borrado en Cascada**: Al eliminar un PDF se borran el mind map, los artefactos con `sourceMaterialId` de ese PDF y las lagunas asociadas. Al eliminar un artefacto, se limpian sus lagunas.
+
+### 6. Orquestación Agéntica y Flujo de Habilidades (*Agent Skills*)
+* Starter Prompts en el chat con 4 pilares: *Crear un quiz*, *Explicación con ejemplos*, *Rescate de lagunas* (quiz de refuerzo sobre fallos pasados) y *Plan de estudio inteligente* (análisis de biblioteca y Roadmap estructurado).
+* Nuevas skills del agente: `adaptive-study-plan` y `review-knowledge-gaps`.
+
+### 7. Visor de PDF con Lectura Activa e Interacción IA
 * Renderizado a 144 DPI con extracción de líneas y palabras (`pdftotext -bbox-layout`).
 * Subrayado continuo con menú contextual flotante en portal (`[ 🧠 Preguntar a la IA ]` y `[ 📋 Copiar ]`).
 
-### 6. Onboarding Conversacional y Adaptación Implícita
-* Asistente paso a paso para configurar nivel educativo, campo de estudio, principal dificultad y estilo de ayuda preferido.
-* Adaptación silenciosa del formato y analogías del tutor sin frases robóticas tipo *"como dijiste en tu perfil..."*.
+### 8. Onboarding Conversacional y Perfil de Aprendizaje Personalizado
+* Asistente interactivo con Proxo para recopilar nivel, campo de estudio, dificultad y estilo pedagógico.
+* Persistencia en `UserProfileRepository` (`.data/user-profile/profile.json`) con botón de reseteo total de datos.
 
 ---
 
@@ -86,14 +96,20 @@ $$\text{Subir PDF} \longrightarrow \text{Estudio/Lectura} \longrightarrow \text{
    * Observa en el acordeón de razonamiento cómo el agente ejecuta `materials search`, localiza la página exacta y responde citando la fuente.
    * Prueba el botón de micrófono para dictar por voz y las menciones `@documento`.
 
-5. **Resolver Quizzes y Generar Lagunas de Conocimiento**:
-   * Pide al tutor: *"Crea un quiz de 3 preguntas sobre el tema subido"*.
-   * Abre el quiz en la pestaña **«Estudio»**, responde fallando deliberadamente 1 o 2 preguntas y pulsa **«Finalizar y Corregir»**.
-   * Ve a la pestaña **«Lagunas»** y comprueba cómo las preguntas falladas se han registrado automáticamente.
-   * Clic en **«Repasar con Tutor»** sobre una laguna o pregúntale en el chat *"¿Qué debería repasar hoy?"* → el tutor prioriza proactivamente tus debilidades.
+5. **Crear Ejercicios (Quiz de práctica vs. Simulacro de examen)**:
+   * Pulsa **«Crear ejercicio»** en la barra lateral.
+   * Crea un **Quiz de práctica** → observa el feedback inmediato; el resultado se guarda al responder la última pregunta.
+   * Crea un **Simulacro de examen** → observa el temporizador, marca preguntas con la bandera de revisión y revisa el acta oficial de calificación sobre 10.
 
-6. **Explorar el Esquema Conceptual Dinámico**:
-   * Ve a la pestaña **«Esquema»** con un material seleccionado para explorar el mapa conceptual generado dinámicamente.
+6. **Verificar el Knowledge Gap System**:
+   * Ve a la pestaña **«Lagunas»** y comprueba cómo las preguntas falladas se han registrado automáticamente.
+   * Clic en **«Repasar con Tutor»** o usa la tarjeta **«Rescate de lagunas»** en el chat → el tutor prioriza proactivamente tus debilidades.
+
+7. **Explorar el Esquema Conceptual Dinámico**:
+   * Ve a la pestaña **«Esquema»** con un material seleccionado y pulsa **«Generar Esquema con IA»** para explorar el mapa conceptual interactivo.
+
+8. **Plan de Estudio Inteligente**:
+   * En el chat, pulsa **«Plan de estudio inteligente»** para que Proxo analice tus materiales y cree tu hoja de ruta.
 
 ---
 
@@ -103,14 +119,14 @@ $$\text{Subir PDF} \longrightarrow \text{Estudio/Lectura} \longrightarrow \text{
 # 1. Typecheck estricto de TypeScript (4/4 paquetes sin errores)
 pnpm run typecheck
 
-# 2. Tests unitarios frontend y backend (53+ tests pasando)
+# 2. Tests unitarios frontend y backend (CI: typecheck + unitarios + build web)
 pnpm --filter @proxus/server run test
 pnpm --filter @proxus/web run test
 
 # 3. Compilación y optimización de producción (Vite + Tailwind v4)
 pnpm --filter @proxus/web run build
 
-# 4. Suites de AI Evals reproducibles con Effect
+# 4. Suites de AI Evals (manuales; requieren Gemini y no forman parte de CI)
 pnpm --filter @proxus/server run eval:tutor:artifact-authoring
 pnpm --filter @proxus/server run eval:tutor:knowledge-gap
 pnpm --filter @proxus/server run eval:tutor:socratic

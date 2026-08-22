@@ -14,7 +14,7 @@ flowchart LR
 
     subgraph Transport["Transport"]
       Http["HTTP API"]
-      Stream["NDJSON Stream"]
+      Stream["NDJSON Stream (ruta raw)"]
       Handlers["HTTP Handlers"]
     end
 
@@ -207,7 +207,7 @@ Archivos principales:
 - `packages/server/src/domain/artifacts/*`: ciclo de vida de artefactos (`note`, `quiz`, `test`) y motor de corrección (`gradeAttempt`).
 - `packages/server/src/domain/knowledge/*`: modelo de lagunas de conocimiento (`KnowledgeGap`) y seguimiento de debilidades.
 - `packages/server/src/domain/user-profile/*`: perfil de aprendizaje del alumno.
-- `packages/server/src/domain/materials/*`: gestión de PDFs y búsqueda léxica.
+- `packages/server/src/domain/materials/*`: gestión de PDFs, búsqueda léxica y `deleteMaterialCascade` (PDF + mind map + artefactos con `sourceMaterialId` + lagunas).
 
 ### Infraestructura
 
@@ -232,7 +232,7 @@ El tutor está implementado como un harness de agente con herramientas públicas
 
 Entrada:
 
-- `packages/web/src/App.tsx`
+- `packages/web/src/App.tsx` (shell) y `packages/web/src/components/workspace/` (navegación, home, visor PDF seleccionado).
 
 Componentes principales:
 
