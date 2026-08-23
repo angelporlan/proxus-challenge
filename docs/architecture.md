@@ -214,7 +214,7 @@ Archivos principales:
 Archivos principales:
 
 - `packages/server/src/infra/agents/file-session-repository.ts`: sesiones en `.data/agent-sessions`.
-- `packages/server/src/infra/artifacts/file-artifact-repository.ts`: almacenamiento de notas, quizzes, tests e intentos. Extrae automáticamente lagunas de conocimiento hacia `KnowledgeRepository`.
+- `packages/server/src/infra/artifacts/file-artifact-repository.ts`: almacenamiento de notas, quizzes, tests e intentos. Al calificar, `resolveGapTransitions` actualiza el perfil de lagunas.
 - `packages/server/src/infra/knowledge/file-knowledge-repository.ts`: persistencia de lagunas y progreso en `.data/knowledge/profile.json`.
 - `packages/server/src/infra/user-profile/file-user-profile-repository.ts`: configuración del alumno en `.data/user_profile.json`.
 - `packages/server/src/infra/materials/file-material-repository.ts`: documentos PDF en `.data/materials/pdfs/` y búsqueda textual con `pdftotext`.
@@ -226,7 +226,7 @@ Archivos principales:
 El tutor está implementado como un harness de agente con herramientas públicas:
 
 - `load_skill`: carga instrucciones especializadas (`use-uploaded-materials`, `search-materials`, `create-study-artifacts`, `review-knowledge-gaps`, `adaptive-study-plan`).
-- `cli`: ejecuta comandos permitidos (`materials list/search/view/delete`, `artifacts list/show/create/submit/attempts/grade`, `knowledge gaps/summary/review/master`).
+- `cli`: ejecuta comandos permitidos (`materials list/search/view/delete`, `artifacts list/show/create/submit/attempts/grade`, `knowledge gaps/summary/review`). `knowledge master` existe como guardarraíl y rechaza la escritura.
 
 ## Web: estado y UI
 

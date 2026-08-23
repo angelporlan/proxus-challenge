@@ -78,8 +78,9 @@ artifacts grade <attemptId>
 knowledge gaps
 knowledge summary
 knowledge review <gapId>
-knowledge master <gapId>
 ```
+
+`knowledge master <gapId>` exists as a guardrail and always rejects: mastery is derived from graded attempts on questions with `reinforcesGapId`.
 
 ## Modos Pedagógicos
 
