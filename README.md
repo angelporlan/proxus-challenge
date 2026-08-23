@@ -71,8 +71,7 @@ Checks automatizables:
 
 ```sh
 pnpm run typecheck
-pnpm --filter @proxus/server run test
-pnpm --filter @proxus/web run test
+pnpm test                      # 130 tests, server + web
 pnpm --filter @proxus/web run build
 pnpm --filter @proxus/server run eval:tutor:knowledge-gap
 ```
@@ -94,6 +93,8 @@ Los tests de la máquina de estados, del contexto y de retrocompatibilidad no re
 `eval:tutor:knowledge-gap` ejecuta el mismo prompt con y sin contexto de lagunas. La señal esperada debe aparecer en el primer run y no en el control. La misma eval comprueba que un quiz de rescate use anclas válidas y que `knowledge master` sea rechazado.
 
 La evaluación no demuestra que todas las preguntas de rescate sean buenas. Demuestra una separación concreta: el agente puede seleccionar y redactar; el corrector decide el estado.
+
+El repo incluye tres evals adicionales (`eval:tutor:socratic`, `eval:tutor:search`, `eval:tutor:artifact-authoring`) que cubren otras capacidades del agente; no son el foco de esta entrega pero están disponibles con la misma API key.
 
 ## Stack
 
