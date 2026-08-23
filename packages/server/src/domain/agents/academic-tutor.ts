@@ -15,6 +15,7 @@ import { makeMaterialCommands } from "./academic-tutor/material-commands.ts";
 import { makeArtifactCommands } from "./academic-tutor/artifact-commands.ts";
 import { makeKnowledgeCommands } from "./academic-tutor/knowledge-commands.ts";
 import { AcademicTutorSkills } from "./academic-tutor/skills/index.ts";
+import { buildKnowledgeGapContext } from "../knowledge/gap-context.ts";
 
 export interface AcademicTutorHarnessOptions {
   readonly mode?: "socratic" | "explanatory" | undefined;
@@ -87,7 +88,7 @@ Core Capabilities & Workflow:
    - If gaps exist: run \`materials list\`, then \`materials search <id> "<concepto>"\` to locate source pages, then create exactly ONE new focused quiz with a single \`artifacts create\` (never copy the failed question verbatim). Mark targeted gaps with \`knowledge review <gapId>\`.
    - Never run \`artifacts list\` or \`artifacts show\`. Never recreate or resurface existing quizzes. Never create more than one artifact in this turn.
    - If no gaps exist: tell the student their profile is clean and offer a general diagnostic quiz. Do not invent fake gaps.
-   - When the student understands a previously failed concept, mark it resolved with 'knowledge master <gapId>'.
+   - Mastery is derived only from graded attempts on reinforcement questions with \`reinforcesGapId\`; never claim or write mastery directly.
 4. Intelligent Study Plan:
    - When the student asks for a study plan, learning roadmap, syllabus diagnosis, or a structured study note covering their materials, load 'adaptive-study-plan'.
    - Run \`materials list\` (use real titles and page counts) and \`knowledge gaps\`, then persist exactly ONE markdown roadmap (phases, critical concepts, time estimate, checklist) with \`artifacts create\` as a \`note\`.
@@ -96,7 +97,7 @@ Core Capabilities & Workflow:
 
   const commands = [
     makeMaterialCommands(materialRepository, artifactRepository, knowledgeRepository),
-    makeArtifactCommands(artifactRepository),
+    makeArtifactCommands(artifactRepository, knowledgeRepository),
     ...(knowledgeRepository ? [makeKnowledgeCommands(knowledgeRepository)] : [])
   ];
 
@@ -130,11 +131,7 @@ export const academicTutorAgent = Effect.gen(function* () {
   );
 
   const activeGaps = yield* knowledgeRepository.listActiveGaps().pipe(Effect.catch(() => Effect.succeed([])));
-  const knowledgeProfileContext = activeGaps.length > 0
-    ? `=== STUDENT KNOWLEDGE GAPS ===\nThe student has struggled with the following questions:\n` +
-      activeGaps.map((g) => `- [${g.topic}] Question: "${g.question}" (Student answered: "${g.studentAnswer}", Correct: "${g.correctAnswer}")`).join("\n") +
-      `\nProactively address these weak points when relevant.`
-    : "";
+  const knowledgeProfileContext = buildKnowledgeGapContext(activeGaps).text;
 
   const harness = makeAcademicTutorHarness(materialRepository, artifactRepository, knowledgeRepository, {
     knowledgeProfileContext

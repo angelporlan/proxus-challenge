@@ -74,5 +74,4 @@ const isMaterialMutation = (input: string) =>
 
 const isKnowledgeMutation = (input: string) =>
   input.startsWith("knowledge review ") ||
-  input.startsWith("knowledge master ") ||
   input.startsWith("knowledge clear");

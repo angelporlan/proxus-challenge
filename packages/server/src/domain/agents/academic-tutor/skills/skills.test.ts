@@ -39,6 +39,12 @@ describe("ReviewKnowledgeGapsSkill", () => {
     expect(ReviewKnowledgeGapsSkill.content).toContain("If no gaps exist");
     expect(ReviewKnowledgeGapsSkill.content).toContain("general diagnostic quiz");
   });
+
+  it("anchors every rescue question and derives mastery from grading", () => {
+    expect(ReviewKnowledgeGapsSkill.content).toContain("reinforcesGapId");
+    expect(ReviewKnowledgeGapsSkill.content).toContain("two correct graded answers");
+    expect(ReviewKnowledgeGapsSkill.content).not.toContain("knowledge master");
+  });
 });
 
 describe("AdaptiveStudyPlanSkill", () => {

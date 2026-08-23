@@ -1,5 +1,5 @@
 import { useAtomRefresh, useAtomSet, useAtomValue } from "@effect/atom-react";
-import type { KnowledgeGap, KnowledgeGapStatus } from "@proxus/shared";
+import { MASTERY_STREAK, type KnowledgeGap, type KnowledgeGapStatus } from "@proxus/shared";
 import * as AsyncResult from "effect/unstable/reactivity/AsyncResult";
 import { useState } from "react";
 import {
@@ -215,6 +215,11 @@ export function KnowledgeGapsPanel({
                   }`}>
                     {gap.status === "active" ? "Laguna Activa" : gap.status === "reviewing" ? "En Repaso" : "Dominada"}
                   </span>
+                  {gap.status === "mastered" && gap.masteryEvidence !== undefined && (
+                    <span className={`ml-1 inline-block rounded px-2 py-0.5 text-[10px] font-semibold ${gap.masteryEvidence === "graded-attempt" ? "bg-indigo-100 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300" : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300"}`}>
+                      {gap.masteryEvidence === "graded-attempt" ? "Verificada por quiz" : "Marcada manualmente"}
+                    </span>
+                  )}
                   <p className={`text-xs font-mono font-medium ${isLight ? "text-slate-500" : "text-slate-400"}`}>
                     {gap.topic}
                   </p>
@@ -253,6 +258,11 @@ export function KnowledgeGapsPanel({
                   💡 <em>{gap.explanation}</em>
                 </p>
               )}
+
+              <div className={`mb-3 flex flex-wrap gap-x-4 gap-y-1 text-[11px] ${isLight ? "text-slate-500" : "text-slate-400"}`}>
+                <span>Fallada {gap.failCount ?? 1} {(gap.failCount ?? 1) === 1 ? "vez" : "veces"}</span>
+                <span>Progreso {Math.min(gap.correctStreak ?? 0, MASTERY_STREAK)}/{MASTERY_STREAK} aciertos</span>
+              </div>
 
               {/* Status transition actions */}
               <div className="flex items-center justify-between pt-2.5 border-t border-slate-100 dark:border-slate-800/60 text-xs">

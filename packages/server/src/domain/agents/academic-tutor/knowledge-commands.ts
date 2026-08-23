@@ -77,18 +77,15 @@ ${topicsList || "None"}`;
   );
 
   const master = AgentCli.Command.withExamples([
-    { command: "knowledge master gap-abc-q1", description: "Mark a gap as mastered after student understands" }
+    { command: "knowledge master gap-abc-q1", description: "Rejected: mastery is derived from graded attempts" }
   ])(
-    AgentCli.Command.withDescription("Mark a knowledge gap as mastered")(
+    AgentCli.Command.withDescription("Explain why mastery cannot be set by the agent")(
       AgentCli.Command.exec("master", {
         gapId: AgentCli.Argument.string("gapId").pipe(
           AgentCli.Argument.withDescription("Gap ID to mark as mastered")
         )
       }, ({ gapId }) =>
-        repository.updateGapStatus(gapId, "mastered").pipe(
-          Effect.map((gap) => `Congratulations! Marked gap "${gap.id}" (${gap.topic}) as mastered.`),
-          Effect.catch((error) => Effect.succeed(`Error updating gap: ${String(error)}`))
-        )
+        Effect.succeed(`Cannot mark gap "${gapId}" as mastered: mastery is derived from graded attempts; create a reinforcement quiz with reinforcesGapId instead.`)
       )
     )
   );

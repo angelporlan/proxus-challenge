@@ -8,6 +8,7 @@ import { UserProfileRepository } from "../../user-profile/user-profile.ts";
 import { AgentSession, type AgentMessage } from "../harness/index.ts";
 import { makeAcademicTutorHarness } from "../academic-tutor.ts";
 import { generateTutorRecommendations, hasCreatedArtifact } from "./recommendation-service.ts";
+import { buildKnowledgeGapContext } from "../../knowledge/gap-context.ts";
 
 export interface TutorChatService {
   readonly sendMessage: (
@@ -113,14 +114,11 @@ export const TutorChatServiceLive = Layer.effect(
           input.documentReferences.map((ref) => `- ${ref}`).join("\n")
         : "";
 
+      const gapContext = buildKnowledgeGapContext(activeGaps);
       const knowledgeProfileContext = [
         userProfileContext,
         docRefsContext,
-        activeGaps.length > 0
-          ? `=== STUDENT KNOWLEDGE GAPS & ACTIVE WEAKNESSES ===\nThe student recently failed the following question(s) in practice quizzes:\n` +
-            activeGaps.map((g) => `- [${g.topic}] Question: "${g.question}" (Student Answer: "${g.studentAnswer}", Correct: "${g.correctAnswer}")`).join("\n") +
-            `\nWhen the student asks what to review or asks questions related to these concepts, proactively address their misconceptions.`
-          : ""
+        gapContext.text
       ].filter(Boolean).join("\n\n");
 
       const activeMaterialIds = input.activeMaterialIds ?? [];

@@ -265,6 +265,8 @@ function PracticeResult({ attempt, onRetry }: { readonly attempt: Extract<Artifa
         </p>
       )}
 
+      <KnowledgeUpdates updates={attempt.knowledgeUpdates} />
+
       <Button
         variant="secondary"
         className="mt-5"
@@ -275,6 +277,17 @@ function PracticeResult({ attempt, onRetry }: { readonly attempt: Extract<Artifa
       </Button>
     </section>
   );
+}
+
+function KnowledgeUpdates({ updates }: { readonly updates: Extract<ArtifactAttempt, { readonly status: "graded" }>["knowledgeUpdates"] }) {
+  if (updates === undefined) return null;
+  const parts = [
+    updates.masteredGapIds.length > 0 ? `${updates.masteredGapIds.length} laguna(s) dominada(s)` : "",
+    updates.reinforcedGapIds.length > 0 ? `${updates.reinforcedGapIds.length} reforzada(s)` : "",
+    updates.newGapIds.length > 0 ? `${updates.newGapIds.length} nueva(s)` : ""
+  ].filter(Boolean);
+  if (parts.length === 0) return null;
+  return <p className="mt-4 rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs font-semibold text-indigo-800 dark:border-indigo-500/30 dark:bg-indigo-950/30 dark:text-indigo-200">Ciclo de conocimiento: {parts.join(", ")}.</p>;
 }
 
 function ExamWorkspace({ artifact, onAskTutorAboutQuestion, onOpenPdf }: { readonly artifact: TestArtifact; readonly onAskTutorAboutQuestion?: ArtifactWorkspaceProps["onAskTutorAboutQuestion"]; readonly onOpenPdf?: (() => void) | undefined }) {
@@ -344,7 +357,7 @@ function ExamActa({ artifact, attempt, elapsedSeconds }: { readonly artifact: Te
   const scoreOnTen = attempt.maxScore === 0 ? 0 : (attempt.score / attempt.maxScore) * 10;
   const distinction = scoreOnTen < 5 ? "No apto" : scoreOnTen < 7 ? "Aprobado" : scoreOnTen < 9 ? "Notable" : "Sobresaliente";
   const incorrectCount = attempt.corrections.filter((correction) => correction.questionType === "short-answer" ? correction.score < correction.maxScore : !correction.correct).length;
-  return <section className="mt-6 border-2 border-slate-800 bg-white p-5 shadow-sm dark:border-slate-200 dark:bg-slate-950 sm:p-8"><div className="border-b-2 border-slate-800 pb-4 dark:border-slate-200"><p className="text-[11px] font-bold uppercase tracking-[0.22em] text-slate-500">Acta oficial de calificación</p><div className="mt-2 flex flex-wrap items-end justify-between gap-4"><div><h3 className="font-serif text-2xl font-bold text-slate-950 dark:text-slate-50">{distinction}</h3><p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{artifact.title}</p></div><div className="text-right"><span className="block font-serif text-4xl font-bold text-indigo-700 dark:text-indigo-300">{scoreOnTen.toFixed(1)}<small className="text-lg">/10</small></span><span className="text-xs text-slate-500">{percentage}% global</span></div></div></div><div className="grid gap-3 py-4 text-sm text-slate-700 dark:text-slate-300 sm:grid-cols-3"><div><span className="block text-xs uppercase tracking-wider text-slate-500">Tiempo invertido</span><strong>{formatDuration(elapsedSeconds)}</strong></div><div><span className="block text-xs uppercase tracking-wider text-slate-500">Puntuación</span><strong>{attempt.score}/{attempt.maxScore} puntos</strong></div><div><span className="block text-xs uppercase tracking-wider text-slate-500">Lagunas generadas</span><strong>{incorrectCount}</strong></div></div><div className="border-t border-slate-200 pt-4 dark:border-slate-800"><h4 className="mb-3 text-xs font-bold uppercase tracking-widest text-slate-500">Desglose de la prueba</h4><div className="grid gap-2">{artifact.questions.map((question, index) => { const correction = attempt.corrections.find((item) => item.questionId === question.id); const correct = correction !== undefined && (correction.questionType === "short-answer" ? correction.score >= correction.maxScore : correction.correct); return <div key={`${question.id}-${index}`} className="flex items-start gap-3 rounded-lg border border-slate-200 px-3 py-2 text-xs dark:border-slate-800"><span className={`material-symbols-outlined mt-0.5 text-sm ${correct ? "text-emerald-500" : "text-red-500"}`}>{correct ? "check_circle" : "cancel"}</span><span className="flex-1 text-slate-700 dark:text-slate-300">{index + 1}. {question.prompt}</span><span className="font-semibold text-slate-500">{correct ? "Correcta" : "Revisar"}</span></div>; })}</div></div></section>;
+  return <section className="mt-6 border-2 border-slate-800 bg-white p-5 shadow-sm dark:border-slate-200 dark:bg-slate-950 sm:p-8"><div className="border-b-2 border-slate-800 pb-4 dark:border-slate-200"><p className="text-[11px] font-bold uppercase tracking-[0.22em] text-slate-500">Acta oficial de calificación</p><div className="mt-2 flex flex-wrap items-end justify-between gap-4"><div><h3 className="font-serif text-2xl font-bold text-slate-950 dark:text-slate-50">{distinction}</h3><p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{artifact.title}</p></div><div className="text-right"><span className="block font-serif text-4xl font-bold text-indigo-700 dark:text-indigo-300">{scoreOnTen.toFixed(1)}<small className="text-lg">/10</small></span><span className="text-xs text-slate-500">{percentage}% global</span></div></div></div><div className="grid gap-3 py-4 text-sm text-slate-700 dark:text-slate-300 sm:grid-cols-3"><div><span className="block text-xs uppercase tracking-wider text-slate-500">Tiempo invertido</span><strong>{formatDuration(elapsedSeconds)}</strong></div><div><span className="block text-xs uppercase tracking-wider text-slate-500">Puntuación</span><strong>{attempt.score}/{attempt.maxScore} puntos</strong></div><div><span className="block text-xs uppercase tracking-wider text-slate-500">Lagunas generadas</span><strong>{incorrectCount}</strong></div></div><KnowledgeUpdates updates={attempt.knowledgeUpdates} /><div className="border-t border-slate-200 pt-4 dark:border-slate-800"><h4 className="mb-3 text-xs font-bold uppercase tracking-widest text-slate-500">Desglose de la prueba</h4><div className="grid gap-2">{artifact.questions.map((question, index) => { const correction = attempt.corrections.find((item) => item.questionId === question.id); const correct = correction !== undefined && (correction.questionType === "short-answer" ? correction.score >= correction.maxScore : correction.correct); return <div key={`${question.id}-${index}`} className="flex items-start gap-3 rounded-lg border border-slate-200 px-3 py-2 text-xs dark:border-slate-800"><span className={`material-symbols-outlined mt-0.5 text-sm ${correct ? "text-emerald-500" : "text-red-500"}`}>{correct ? "check_circle" : "cancel"}</span><span className="flex-1 text-slate-700 dark:text-slate-300">{index + 1}. {question.prompt}</span><span className="font-semibold text-slate-500">{correct ? "Correcta" : "Revisar"}</span></div>; })}</div></div></section>;
 }
 
 function ExamSubmitDialog({ open, unansweredCount, flaggedCount, onCancel, onConfirm }: { readonly open: boolean; readonly unansweredCount: number; readonly flaggedCount: number; readonly onCancel: () => void; readonly onConfirm: () => void }) {

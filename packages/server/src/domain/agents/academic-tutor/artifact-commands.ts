@@ -7,6 +7,7 @@ import {
   ArtifactRepositoryStorageError,
   ArtifactRepositorySerializationError,
   ArtifactTypeMismatch,
+  KnowledgeGapAnchorNotFound,
   AttemptNotFound,
   CreateArtifactInput,
   QuestionNotFound,
@@ -14,6 +15,7 @@ import {
   SubmitAttemptInput,
   type ArtifactRepository
 } from "../../artifacts/artifact.ts";
+import type { KnowledgeRepository } from "../../knowledge/knowledge-profile.ts";
 
 const UnknownFromJson = Schema.fromJsonString(Schema.Unknown);
 const SubmitAttemptInputFromJson = Schema.fromJsonString(SubmitAttemptInput);
@@ -21,7 +23,7 @@ const SubmitAttemptInputFromJson = Schema.fromJsonString(SubmitAttemptInput);
 const renderArtifact = (artifact: Artifact) => JSON.stringify(artifact, null, 2);
 const renderAttempt = (attempt: ArtifactAttempt) => JSON.stringify(attempt, null, 2);
 
-const renderArtifactError = (error: ArtifactNotFound | AttemptNotFound | ArtifactTypeMismatch | QuestionNotFound | AnswerTypeMismatch | ArtifactRepositoryStorageError | ArtifactRepositorySerializationError) => {
+const renderArtifactError = (error: ArtifactNotFound | AttemptNotFound | ArtifactTypeMismatch | KnowledgeGapAnchorNotFound | QuestionNotFound | AnswerTypeMismatch | ArtifactRepositoryStorageError | ArtifactRepositorySerializationError) => {
   switch (error._tag) {
     case "ArtifactNotFound":
       return `Artifact not found: ${error.artifactId}`;
@@ -33,6 +35,8 @@ const renderArtifactError = (error: ArtifactNotFound | AttemptNotFound | Artifac
       return `Question not found: ${error.questionId}`;
     case "AnswerTypeMismatch":
       return `Answer type mismatch for question ${error.questionId}: expected ${error.expected}, got ${error.actual}`;
+    case "KnowledgeGapAnchorNotFound":
+      return `Knowledge gap anchor not found: ${error.gapId}. Run knowledge gaps first and use a real gap id.`;
     case "ArtifactRepositoryStorageError":
       return `Artifact repository storage error: ${String(error.reason)}`;
     case "ArtifactRepositorySerializationError":
@@ -108,7 +112,7 @@ const decodeSubmitAttemptInput = (json: string) =>
     Effect.mapError((reason) => new ArtifactRepositorySerializationError({ reason }))
   );
 
-export const makeArtifactCommands = (repository: ArtifactRepository) => {
+export const makeArtifactCommands = (repository: ArtifactRepository, knowledgeRepository?: KnowledgeRepository) => {
   const list = AgentCli.Command.withExamples([
     { command: "artifacts list", description: "List all saved artifacts" },
     { command: "artifacts list quiz", description: "List quiz artifacts only" }
@@ -162,6 +166,7 @@ export const makeArtifactCommands = (repository: ArtifactRepository) => {
         )
       }, ({ json }) =>
         decodeCreateArtifactInput(json).pipe(
+          Effect.flatMap((input) => validateKnowledgeAnchors(input, knowledgeRepository)),
           Effect.andThen((input) => repository.createArtifact(input)),
           Effect.map(renderArtifact),
           Effect.catch((error) => Effect.succeed(renderArtifactError(error)))
@@ -229,5 +234,25 @@ export const makeArtifactCommands = (repository: ArtifactRepository) => {
 
   return AgentCli.Command.group("artifacts", [list, show, create, submit, attempts, grade] as const).pipe(
     AgentCli.Command.withDescription("Study artifacts: notes, quizzes, tests, and attempts")
+  );
+};
+
+export const validateKnowledgeAnchors = <T extends CreateArtifactInput>(
+  input: T,
+  knowledgeRepository: KnowledgeRepository | undefined
+): Effect.Effect<T, KnowledgeGapAnchorNotFound | ArtifactRepositoryStorageError> => {
+  if (knowledgeRepository === undefined || (input.kind !== "quiz" && input.kind !== "test")) {
+    return Effect.succeed(input);
+  }
+
+  return knowledgeRepository.getProfile().pipe(
+    Effect.mapError((reason) => new ArtifactRepositoryStorageError({ reason })),
+    Effect.flatMap((profile) => Effect.forEach(
+      input.questions,
+      (question) => question.reinforcesGapId !== undefined && !profile.gaps.some((gap) => gap.id === question.reinforcesGapId)
+        ? Effect.fail(new KnowledgeGapAnchorNotFound({ gapId: question.reinforcesGapId }))
+        : Effect.void,
+      { discard: true }
+    ).pipe(Effect.as(input)))
   );
 };
