@@ -78,4 +78,27 @@ describe("FileKnowledgeRepository", () => {
     const profile = await runWithRepo((repo) => repo.getProfile());
     expect(profile.gaps.map((gap) => gap.id)).toEqual(["gap-other"]);
   });
+
+  it("applies resolved transitions without forcing active status", async () => {
+    await runWithRepo((repo) => repo.recordGaps([makeGap("gap-1", "quiz-1")]));
+    const current = await runWithRepo((repo) => repo.getProfile());
+    const resolved = { ...current.gaps[0]!, status: "mastered" as const, correctStreak: 2, masteryEvidence: "graded-attempt" as const };
+
+    await runWithRepo((repo) => repo.applyTransitions([resolved]));
+    const profile = await runWithRepo((repo) => repo.getProfile());
+    expect(profile.gaps).toEqual([resolved]);
+  });
+
+  it("decodes a legacy profile without deleting its existing history", async () => {
+    const legacyGap = makeGap("legacy-gap", "legacy-quiz");
+    fs.mkdirSync(tempDir, { recursive: true });
+    fs.writeFileSync(path.join(tempDir, "profile.json"), JSON.stringify({
+      gaps: [legacyGap],
+      totalAttempts: 4,
+      lastAttemptAt: "2026-01-01T00:00:00.000Z"
+    }));
+
+    const profile = await runWithRepo((repo) => repo.getProfile());
+    expect(profile).toMatchObject({ gaps: [legacyGap], totalAttempts: 4, lastAttemptAt: "2026-01-01T00:00:00.000Z" });
+  });
 });

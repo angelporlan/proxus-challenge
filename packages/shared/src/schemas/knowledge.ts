@@ -1,5 +1,8 @@
 import { Schema } from "effect";
 
+/** Consecutive linked correct answers required before a gap is mastered. They may land in the same graded attempt. */
+export const MASTERY_STREAK = 2;
+
 export const KnowledgeGapStatus = Schema.Union([
   Schema.Literal("active"),
   Schema.Literal("reviewing"),
@@ -21,9 +24,24 @@ export const KnowledgeGap = Schema.Struct({
   masteredAt: Schema.optional(Schema.String),
   sourceArtifactId: Schema.String,
   sourceQuestionId: Schema.String,
-  sourceMaterialId: Schema.optional(Schema.String)
+  sourceMaterialId: Schema.optional(Schema.String),
+  failCount: Schema.optional(Schema.Number),
+  correctStreak: Schema.optional(Schema.Number),
+  masteryEvidence: Schema.optional(Schema.Union([
+    Schema.Literal("graded-attempt"),
+    Schema.Literal("manual")
+  ])),
+  lastReinforcedByArtifactId: Schema.optional(Schema.String)
 });
 export type KnowledgeGap = typeof KnowledgeGap.Type;
+
+export const KnowledgeUpdateSummary = Schema.Struct({
+  masteredGapIds: Schema.Array(Schema.String),
+  reinforcedGapIds: Schema.Array(Schema.String),
+  newGapIds: Schema.Array(Schema.String),
+  orphanedAnchorIds: Schema.Array(Schema.String)
+});
+export type KnowledgeUpdateSummary = typeof KnowledgeUpdateSummary.Type;
 
 export const KnowledgeProfile = Schema.Struct({
   gaps: Schema.Array(KnowledgeGap),

@@ -93,6 +93,27 @@ export const FileKnowledgeRepository = {
       return updatedProfile;
     });
 
+    const applyTransitions = (transitions: readonly KnowledgeGapType[]) => Effect.gen(function* () {
+      const current = yield* readProfile();
+      const updatedGaps = [...current.gaps];
+
+      for (const transition of transitions) {
+        const existingIndex = updatedGaps.findIndex((gap) => gap.id === transition.id);
+        if (existingIndex === -1) {
+          updatedGaps.push(transition);
+        } else {
+          updatedGaps[existingIndex] = transition;
+        }
+      }
+
+      const updatedProfile: KnowledgeProfileType = {
+        ...current,
+        gaps: updatedGaps
+      };
+      yield* writeProfile(updatedProfile);
+      return updatedProfile;
+    });
+
     const recordCompletedAttempt = () => Effect.gen(function* () {
       const current = yield* readProfile();
       const now = new Date().toISOString();
@@ -118,7 +139,7 @@ export const FileKnowledgeRepository = {
         ...existing,
         status,
         ...(status === "reviewing" ? { reviewedAt: now } : {}),
-        ...(status === "mastered" ? { masteredAt: now } : {})
+        ...(status === "mastered" ? { masteredAt: now, masteryEvidence: "manual" as const } : {})
       };
 
       const updatedGaps = [...current.gaps];
@@ -161,6 +182,7 @@ export const FileKnowledgeRepository = {
     return {
       getProfile,
       recordGaps,
+      applyTransitions,
       recordCompletedAttempt,
       updateGapStatus,
       removeGapsByArtifactId,

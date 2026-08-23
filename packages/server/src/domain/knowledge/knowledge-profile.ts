@@ -12,6 +12,7 @@ export class KnowledgeRepositoryError extends Data.TaggedError("KnowledgeReposit
 export interface KnowledgeRepository {
   readonly getProfile: () => Effect.Effect<KnowledgeProfile, KnowledgeRepositoryError>;
   readonly recordGaps: (gaps: readonly KnowledgeGap[]) => Effect.Effect<KnowledgeProfile, KnowledgeRepositoryError>;
+  readonly applyTransitions: (gaps: readonly KnowledgeGap[]) => Effect.Effect<KnowledgeProfile, KnowledgeRepositoryError>;
   readonly recordCompletedAttempt: () => Effect.Effect<KnowledgeProfile, KnowledgeRepositoryError>;
   readonly updateGapStatus: (id: string, status: KnowledgeGapStatus) => Effect.Effect<KnowledgeGap, GapNotFound | KnowledgeRepositoryError>;
   readonly removeGapsByArtifactId: (artifactId: string) => Effect.Effect<void, KnowledgeRepositoryError>;

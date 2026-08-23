@@ -1,5 +1,4 @@
 import { Effect, FileSystem, Layer, Option, Path, Schema } from "effect";
-import type { KnowledgeGap } from "@proxus/shared";
 import {
   Artifact,
   ArtifactAttempt,
@@ -21,80 +20,10 @@ import {
   type ArtifactRepositoryError
 } from "../../domain/artifacts/artifact.ts";
 import { KnowledgeRepository } from "../../domain/knowledge/knowledge-profile.ts";
+import { resolveGapTransitions } from "../../domain/knowledge/gap-progress.ts";
 
 const ArtifactFromJson = Schema.fromJsonString(Artifact);
 const ArtifactAttemptFromJson = Schema.fromJsonString(ArtifactAttempt);
-
-function extractKnowledgeGaps(artifact: ArtifactType, graded: ArtifactAttemptType): readonly KnowledgeGap[] {
-  if (graded.status !== "graded" || (artifact.kind !== "quiz" && artifact.kind !== "test")) {
-    return [];
-  }
-
-  const now = new Date().toISOString();
-  const gaps: KnowledgeGap[] = [];
-
-  for (const correction of graded.corrections) {
-    // Only process questions that the student actually attempted/answered
-    const studentAnswerProvided = graded.answers.some(
-      (a) => a.questionId === correction.questionId && (
-        a.questionType !== "multiple-choice" || (a.selectedOptionId && a.selectedOptionId.trim() !== "")
-      )
-    );
-    if (!studentAnswerProvided) {
-      continue;
-    }
-
-    let isIncorrect = false;
-    let studentAns = "";
-    let correctAns = "";
-    let expl = "";
-
-    if (correction.questionType === "multiple-choice") {
-      isIncorrect = !correction.correct;
-      const q = artifact.questions.find((item) => item.id === correction.questionId && item.type === "multiple-choice");
-      const chosenOpt = q && "options" in q ? q.options.find((o) => o.id === correction.selectedOptionId)?.text ?? correction.selectedOptionId : correction.selectedOptionId;
-      const correctOpt = q && "options" in q ? q.options.find((o) => o.id === correction.correctOptionId)?.text ?? correction.correctOptionId : correction.correctOptionId;
-      studentAns = chosenOpt;
-      correctAns = correctOpt;
-      expl = correction.explanation;
-    } else if (correction.questionType === "true-false") {
-      isIncorrect = !correction.correct;
-      studentAns = String(correction.answer);
-      correctAns = String(correction.correctAnswer);
-      expl = correction.explanation;
-    } else if (correction.questionType === "short-answer") {
-      isIncorrect = correction.score < correction.maxScore;
-      const studentSub = graded.answers.find((a) => a.questionId === correction.questionId && a.questionType === "short-answer");
-      studentAns = studentSub && "answer" in studentSub ? String(studentSub.answer) : "Respuesta enviada";
-      const q = artifact.questions.find((item) => item.id === correction.questionId && item.type === "short-answer");
-      correctAns = q && "expectedAnswer" in q ? String(q.expectedAnswer) : "Respuesta esperada";
-      expl = correction.feedback;
-    }
-
-    if (isIncorrect) {
-      const q = artifact.questions.find((item) => item.id === correction.questionId);
-      const prompt = q ? q.prompt : `Pregunta ${correction.questionId}`;
-      gaps.push({
-        id: `gap-${artifact.id}-${correction.questionId}`,
-        conceptId: correction.questionId,
-        topic: artifact.title,
-        question: prompt,
-        studentAnswer: studentAns,
-        correctAnswer: correctAns,
-        explanation: expl,
-        status: "active",
-        failedAt: now,
-        sourceArtifactId: artifact.id,
-        sourceQuestionId: correction.questionId,
-        ...(artifact.sourceMaterialId !== undefined
-          ? { sourceMaterialId: artifact.sourceMaterialId }
-          : {})
-      });
-    }
-  }
-
-  return gaps;
-}
 
 export const FileArtifactRepository = {
   make: (directory: string): Effect.Effect<ArtifactRepositoryType, never, FileSystem.FileSystem | Path.Path | KnowledgeRepository> => Effect.gen(function* () {
@@ -217,18 +146,34 @@ export const FileArtifactRepository = {
       const attempt = yield* readAttemptFile(attemptId);
       const artifact = yield* readArtifactFile(attempt.artifactId);
       const graded = yield* gradeAttempt(artifact, attempt);
-      yield* writeAttemptFile(graded);
+
+      const transitions = Option.isSome(knowledgeRepoOption) && attempt.status === "ungraded" && graded.status === "graded"
+        ? yield* knowledgeRepoOption.value.getProfile().pipe(
+          Effect.map((profile) => resolveGapTransitions(artifact, graded, profile.gaps, new Date().toISOString())),
+          Effect.catch(() => Effect.void)
+        )
+        : undefined;
+
+      const persistedAttempt = transitions === undefined || graded.status !== "graded"
+        ? graded
+        : {
+          ...graded,
+          knowledgeUpdates: transitions.summary
+        };
+
+      yield* writeAttemptFile(persistedAttempt);
 
       if (Option.isSome(knowledgeRepoOption)) {
         const knowledge = knowledgeRepoOption.value;
-        const gaps = extractKnowledgeGaps(artifact, graded);
-        if (gaps.length > 0) {
-          yield* knowledge.recordGaps(gaps).pipe(Effect.catch(() => Effect.void));
+        if (transitions !== undefined && transitions.upserts.length > 0) {
+          yield* knowledge.applyTransitions(transitions.upserts).pipe(Effect.catch(() => Effect.void));
         }
-        yield* knowledge.recordCompletedAttempt().pipe(Effect.catch(() => Effect.void));
+        if (attempt.status === "ungraded") {
+          yield* knowledge.recordCompletedAttempt().pipe(Effect.catch(() => Effect.void));
+        }
       }
 
-      return graded;
+      return persistedAttempt;
     });
 
     const deleteArtifact = (id: string) => Effect.gen(function* () {

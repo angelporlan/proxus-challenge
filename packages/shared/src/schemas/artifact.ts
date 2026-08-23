@@ -1,4 +1,5 @@
 import { Schema } from "effect";
+import { KnowledgeUpdateSummary } from "./knowledge.ts";
 
 export const QuestionOption = Schema.Struct({
   id: Schema.String,
@@ -12,7 +13,8 @@ export const MultipleChoiceQuestion = Schema.Struct({
   prompt: Schema.String,
   options: Schema.Array(QuestionOption),
   correctOptionId: Schema.String,
-  explanation: Schema.String
+  explanation: Schema.String,
+  reinforcesGapId: Schema.optional(Schema.String)
 });
 export type MultipleChoiceQuestion = typeof MultipleChoiceQuestion.Type;
 
@@ -21,7 +23,8 @@ export const TrueFalseQuestion = Schema.Struct({
   id: Schema.String,
   prompt: Schema.String,
   correctAnswer: Schema.Boolean,
-  explanation: Schema.String
+  explanation: Schema.String,
+  reinforcesGapId: Schema.optional(Schema.String)
 });
 export type TrueFalseQuestion = typeof TrueFalseQuestion.Type;
 
@@ -30,7 +33,8 @@ export const ShortAnswerQuestion = Schema.Struct({
   id: Schema.String,
   prompt: Schema.String,
   expectedAnswer: Schema.String,
-  maxScore: Schema.Number
+  maxScore: Schema.Number,
+  reinforcesGapId: Schema.optional(Schema.String)
 });
 export type ShortAnswerQuestion = typeof ShortAnswerQuestion.Type;
 
@@ -192,7 +196,8 @@ export const GradedQuizAttempt = Schema.Struct({
   score: Schema.Number,
   maxScore: Schema.Number,
   summary: Schema.String,
-  corrections: Schema.Array(AutoQuestionCorrection)
+  corrections: Schema.Array(AutoQuestionCorrection),
+  knowledgeUpdates: Schema.optional(KnowledgeUpdateSummary)
 });
 export type GradedQuizAttempt = typeof GradedQuizAttempt.Type;
 
@@ -214,7 +219,8 @@ export const GradedTestAttempt = Schema.Struct({
   score: Schema.Number,
   maxScore: Schema.Number,
   summary: Schema.String,
-  corrections: Schema.Array(QuestionCorrection)
+  corrections: Schema.Array(QuestionCorrection),
+  knowledgeUpdates: Schema.optional(KnowledgeUpdateSummary)
 });
 export type GradedTestAttempt = typeof GradedTestAttempt.Type;
 
