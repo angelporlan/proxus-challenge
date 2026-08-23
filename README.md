@@ -67,11 +67,11 @@ cp .env.example .env
 pnpm run dev
 ```
 
-Checks automatizables:
+Checks automatizables (130 tests entre server y web):
 
 ```sh
 pnpm run typecheck
-pnpm test                      # 130 tests, server + web
+pnpm test
 pnpm --filter @proxus/web run build
 pnpm --filter @proxus/server run eval:tutor:knowledge-gap
 ```
