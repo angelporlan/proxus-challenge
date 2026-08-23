@@ -13,9 +13,13 @@ packages/server/.data/
       <artifactId>.json
     attempts/
       <attemptId>.json
+  knowledge/
+    profile.json
   materials/
     pdfs/
       *.pdf
+      <materialId>.mindmap.json
+  user_profile.json
 ```
 
 ## Materials
@@ -29,22 +33,24 @@ packages/server/.data/materials/pdfs/
 ### Ingesta de Documentos
 - **Desde la UI**: El estudiante puede subir apuntes o temarios directamente arrastrando y soltando o seleccionando archivos PDF en la plataforma.
 - **Desde la API**: Mediante `POST /api/materials/upload` con validación de integridad y extracción automática de páginas.
-- **Eliminación**: Directamente desde la UI o mediante `DELETE /api/materials/:id`.
+- **Eliminación**: Directamente desde la UI o mediante `DELETE /api/materials/:id`. Borra en cascada el mind map, los artefactos con ese `sourceMaterialId` y las lagunas asociadas.
 
 El repo espera que Poppler esté instalado para inspeccionar/renderizar PDFs:
 
 - `pdfinfo`
 - `pdftoppm`
+- `pdftotext`
 
 El tutor puede usar:
 
 ```txt
 materials list
+materials search <materialId> "<query>"
 materials view <materialId> <pages>
 materials delete <materialId>
 ```
 
-`materials view` renderiza páginas como imágenes para Gemini multimodal.
+`materials search` localiza páginas por texto. `materials view` renderiza páginas como imágenes para Gemini multimodal.
 
 ## Artifacts
 
@@ -61,7 +67,15 @@ Attempts:
 - `ungraded`
 - `graded`
 
-Las correcciones viven dentro del attempt; no hay entidad `Review` separada.
+Las correcciones viven dentro del attempt; no hay entidad `Review` separada. Un attempt calificado puede incluir `knowledgeUpdates` (`masteredGapIds`, `reinforcedGapIds`, `newGapIds`, `orphanedAnchorIds`).
+
+Las preguntas de quiz/test aceptan `reinforcesGapId` opcional para anclar un rescate a una laguna existente.
+
+## Knowledge
+
+El perfil de lagunas vive en `.data/knowledge/profile.json`.
+
+Al calificar un quiz o test, `resolveGapTransitions` actualiza ese perfil: crea o incrementa lagunas, cuenta `failCount` / `correctStreak`, y deriva `mastered` cuando hay dos aciertos ligados. El agente no escribe dominio.
 
 ## Reset local
 
@@ -70,9 +84,10 @@ Para limpiar datos generados, para el server y borra selectivamente:
 ```bash
 rm -rf packages/server/.data/artifacts
 rm -rf packages/server/.data/agent-sessions
+rm -rf packages/server/.data/knowledge
 ```
 
-No borres `materials/pdfs` si quieres conservar PDFs de prueba.
+No borres `materials/pdfs` si quieres conservar PDFs de prueba. `user_profile.json` es independiente del historial de lagunas.
 
 ## Añadir contenidos para empezar
 

@@ -16,6 +16,12 @@ pnpm --filter @proxus/web run test
 pnpm --filter @proxus/web run build
 ```
 
+Los tests de la máquina de estados de lagunas no requieren LLM:
+
+- `packages/server/src/domain/knowledge/gap-progress.test.ts`
+- `packages/server/src/domain/knowledge/gap-context.test.ts`
+- `packages/server/src/infra/knowledge/file-knowledge-repository.test.ts`
+
 ## 2. Suites de AI Evals Automatizadas
 
 Requieren `.env` con `GOOGLE_GENERATIVE_AI_API_KEY`:
@@ -24,7 +30,7 @@ Requieren `.env` con `GOOGLE_GENERATIVE_AI_API_KEY`:
 # 1. Creación estructurada de artefactos (note, quiz, test)
 pnpm --filter @proxus/server run eval:tutor:artifact-authoring
 
-# 2. Detección e integración proactiva de lagunas de conocimiento
+# 2. A/B con y sin contexto de lagunas, anclas de rescate y rechazo de knowledge master
 pnpm --filter @proxus/server run eval:tutor:knowledge-gap
 
 # 3. Adherencia al modo socrático (preguntas guía, sin revelar respuestas directas)
@@ -33,6 +39,8 @@ pnpm --filter @proxus/server run eval:tutor:socratic
 # 4. Flujo Search-then-View (búsqueda léxica antes de renderizado visual)
 pnpm --filter @proxus/server run eval:tutor:search
 ```
+
+Las evals no corren en CI. El rechazo de `knowledge master` también está cubierto por un test unitario.
 
 ## 3. QA Manual Paso a Paso
 
@@ -44,25 +52,26 @@ pnpm --filter @proxus/server run eval:tutor:search
 
 2. **Onboarding conversacional**:
    * Configura nivel educativo, campo de estudio y estilo de ayuda.
-   * Verifica que las preferencias se guardan en `.data/user_profile.json` y se reflejan en el modal de perfil (`🧠`).
+   * Verifica que las preferencias se guardan en `.data/user_profile.json` y se reflejan en el modal de perfil.
 
-3. **Ingesta y Visor de PDF**:
+3. **Ingesta y visor de PDF**:
    * Sube un documento PDF de prueba.
    * Navega por páginas y prueba los modos de ajuste (página / ancho / zoom).
-   * Selecciona texto con el cursor → comprueba que el menú contextual flotante permite **«Preguntar a la IA»** y **«Copiar»**.
+   * Selecciona texto con el cursor → el menú contextual permite **Preguntar a la IA** y **Copiar**.
 
-4. **Interacción con el Tutor y Búsqueda en PDF**:
-   * Abre el panel del tutor (`forum`).
-   * Pregunta sobre un artículo o concepto del PDF (ej: *"¿Qué dice el artículo 17 del temario?"*).
-   * Abre el acordeón de razonamiento para verificar que ejecutó `materials search` y citó la página correcta.
+4. **Interacción con el tutor y búsqueda en PDF**:
+   * Abre el panel del tutor.
+   * Pregunta sobre un artículo o concepto del PDF.
+   * Abre el acordeón de razonamiento y comprueba `materials search` antes de `materials view`.
    * Prueba el dictado por voz y las menciones `@`.
 
-5. **Resolución de Ejercicios y Knowledge Gap Loop**:
-   * Pide al tutor crear un quiz: *"Crea un quiz de 3 preguntas"*.
-   * Abre el quiz en la pestaña **«Estudio»**, falla una pregunta deliberadamente y pulsa **«Finalizar y Corregir»**.
-   * Ve a la pestaña **«Lagunas»** → comprueba que la pregunta fallada aparece listada como activa.
-   * Clic en **«Repasar con Tutor»** o pregunta en el chat *"¿Qué debería repasar?"* → el tutor aborda proactivamente la laguna.
-   * Tras comprenderla, el concepto se actualiza a dominado.
+5. **Ciclo de lagunas**:
+   * Crea un quiz de 3 preguntas, fállalo y abre **Lagunas**. Cada fallo aparece como activa, con `Fallada 1 vez` y progreso `0/2`.
+   * Pulsa **Reintentar quiz**, vuelve a fallar lo mismo: el contador sube a 2 y no se duplica la laguna.
+   * En un chat vacío, pulsa **Rescate de lagunas** (no uses **Repasar con Tutor**: eso pide una explicación, no crea el quiz).
+   * El artefacto nuevo debe incluir `reinforcesGapId` (visible en `.data/artifacts/artifacts/`).
+   * Un acierto ligado pasa la laguna a **En repaso** (`1/2`). El segundo la marca **Dominada** con *Verificada por quiz*.
+   * Un fallo ligado posterior la reabre. `knowledge master` desde el agente debe rechazarse.
 
-6. **Esquemas y Mapas Conceptuales Dinámicos**:
-   * En la pestaña **«Esquema»**, explora el árbol de conceptos interactivo generado a partir de tus notas o PDFs con pan y zoom.
+6. **Esquemas**:
+   * En la pestaña **Esquema**, genera el mapa del material seleccionado y explóralo con pan y zoom.

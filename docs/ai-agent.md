@@ -1,58 +1,43 @@
 # Tutor AI agent
 
-## Objetivo
+Proxo es un tutor académico local. Trabaja con PDFs, crea artefactos de estudio y mantiene un perfil de lagunas. La tesis del agente es concreta: declara intención (`knowledge review`); no declara veredictos. El dominio lo deriva el corrector.
 
-El tutor ayuda a estudiar usando materiales locales y creando artefactos de aprendizaje:
+Capacidades:
 
-- `note`: apunte/explicación.
-- `quiz`: ejercicio corto, cerrado y autocorregible.
-- `test`: evaluación más completa; puede incluir respuesta corta.
-
-## Archivos principales
-
-- `packages/server/src/domain/agents/academic-tutor.ts`
-- `packages/server/src/domain/agents/academic-tutor/tutor-chat-service.ts`
-- `packages/server/src/domain/agents/harness/session.ts`
-- `packages/server/src/domain/agents/gemini.ts`
-
-# Tutor AI Agent — Proxo
-
-## Objetivo
-
-Proxo es un tutor académico adaptativo diseñado para aprendizaje activo. Sus capacidades nucleares incluyen:
-
-- `note`: apunte estructurado con conceptos clave y formato markdown.
-- `quiz`: cuestionario autocorregible (preguntas tipo test o verdadero/falso) con retroalimentación explicativa.
-- `test`: simulacro de examen con preguntas cerradas y de desarrollo (`short-answer`).
-- `knowledge gaps`: memoria continua de debilidades y errores cometidos por el alumno en ejercicios.
-- `search-then-view`: búsqueda textual rápida antes de inspeccionar visualmente páginas PDF.
-- `modos pedagógicos`: socrático (inductivo/guiado) vs. explicativo (deductivo/estructurado).
+- `note`: apunte en markdown.
+- `quiz`: ejercicio cerrado autocorregible.
+- `test`: simulacro con preguntas cerradas o `short-answer`.
+- `knowledge gaps`: memoria de fallos; el rescate ancla preguntas con `reinforcesGapId`.
+- `search-then-view`: búsqueda textual antes de renderizar páginas.
+- modos pedagógicos: `socratic` o `explanatory`, pasados en `TutorChatRequest`.
 
 ## Archivos principales
 
-- `packages/server/src/domain/agents/academic-tutor.ts`: Definición del harness y system prompt adaptativo.
-- `packages/server/src/domain/agents/academic-tutor.cli.ts`: Entrypoint CLI para ejecución manual con `pnpm run agent:tutor`.
-- `packages/server/src/domain/agents/academic-tutor/tutor-chat-service.ts`: Servicio Effect para procesar peticiones web y streaming NDJSON.
-- `packages/server/src/domain/agents/harness/session.ts`: Orquestador de sesiones de chat y ejecución de tools.
-- `packages/server/src/domain/agents/gemini.ts`: Adaptador REST resiliente contra Gemini 2.5 Flash.
+- `packages/server/src/domain/agents/academic-tutor.ts`: harness y system prompt.
+- `packages/server/src/domain/agents/academic-tutor.cli.ts`: CLI `pnpm run agent:tutor`.
+- `packages/server/src/domain/agents/academic-tutor/tutor-chat-service.ts`: chat web y stream NDJSON.
+- `packages/server/src/domain/agents/harness/session.ts`: bucle de tools. El system prompt, incluido el bloque de lagunas, se reenvía en cada step.
+- `packages/server/src/domain/knowledge/gap-progress.ts`: transiciones de lagunas a partir del attempt calificado.
+- `packages/server/src/domain/knowledge/gap-context.ts`: contexto acotado (top 5) inyectado en el prompt.
+- `packages/server/src/domain/agents/gemini.ts`: adaptador Gemini.
 
-### Skills Especializadas
+### Skills
 
-1. `packages/server/src/domain/agents/academic-tutor/skills/use-uploaded-materials.ts`: Inspección visual de páginas PDF.
-2. `packages/server/src/domain/agents/academic-tutor/skills/search-materials.ts`: Búsqueda léxica y localización de páginas en PDFs.
-3. `packages/server/src/domain/agents/academic-tutor/skills/create-study-artifacts.ts`: Creación de notas, quizzes y exámenes.
-4. `packages/server/src/domain/agents/academic-tutor/skills/review-knowledge-gaps.ts`: Detección de lagunas y quiz de refuerzo (rescate).
-5. `packages/server/src/domain/agents/academic-tutor/skills/adaptive-study-plan.ts`: Diagnóstico del temario y nota-roadmap de estudio.
+1. `use-uploaded-materials`: inspección visual de páginas PDF.
+2. `search-materials`: búsqueda léxica y localización de páginas.
+3. `create-study-artifacts`: notas, quizzes y tests.
+4. `review-knowledge-gaps`: rescate. Cada pregunta del quiz de refuerzo debe llevar `reinforcesGapId`. No llama a `knowledge master`.
+5. `adaptive-study-plan`: nota-roadmap a partir de la biblioteca y las lagunas.
 
-### Comandos CLI del Dominio
+### Comandos de dominio
 
 - `packages/server/src/domain/agents/academic-tutor/material-commands.ts`
-- `packages/server/src/domain/agents/academic-tutor/artifact-commands.ts`
+- `packages/server/src/domain/agents/academic-tutor/artifact-commands.ts` — valida `reinforcesGapId` contra el perfil.
 - `packages/server/src/domain/agents/academic-tutor/knowledge-commands.ts`
 
 ## Comandos disponibles
 
-### 1. Materiales (`materials`)
+### Materiales
 
 ```txt
 materials list
@@ -61,7 +46,7 @@ materials view <materialId> <pages: 10 o 13-20 o 10,13-20>
 materials delete <materialId>
 ```
 
-### 2. Artefactos de estudio (`artifacts`)
+### Artefactos
 
 ```txt
 artifacts list [note|quiz|test]
@@ -72,7 +57,7 @@ artifacts attempts [artifactId]
 artifacts grade <attemptId>
 ```
 
-### 3. Lagunas de conocimiento (`knowledge`)
+### Lagunas
 
 ```txt
 knowledge gaps
@@ -80,37 +65,36 @@ knowledge summary
 knowledge review <gapId>
 ```
 
-`knowledge master <gapId>` exists as a guardrail and always rejects: mastery is derived from graded attempts on questions with `reinforcesGapId`.
+`knowledge master <gapId>` existe como guardarraíl y siempre rechaza. El dominio sale de dos aciertos ligados (`reinforcesGapId` o reintento de la pregunta original). El panel web puede marcar dominio a mano; queda como `masteryEvidence: "manual"`.
 
-## Modos Pedagógicos
+## Ciclo esperado
 
-El agente soporta dos modos de instrucción formales pasados en `TutorChatRequest`:
+1. El alumno falla un quiz o test. `gradeAttempt` registra la laguna.
+2. El tutor, si hay lagunas activas, recibe un bloque acotado en el system prompt. Puede cargar `review-knowledge-gaps` y crear un quiz con `reinforcesGapId`.
+3. Al calificar ese quiz (o un reintento de la pregunta original), `resolveGapTransitions` actualiza `correctStreak`. Con `MASTERY_STREAK = 2` pasa a `mastered`.
+4. Un fallo ligado reabre la laguna. El agente no puede cerrarla por su cuenta.
 
-1. **Modo Socrático (`socratic`)**:
-   - Directiva estricta: No proporcionar la respuesta directa de inmediato.
-   - Formular preguntas reflexivas, pistas incrementales o contraejemplos para que el alumno deduzca la solución.
-2. **Modo Explicativo (`explanatory`)**:
-   - Explicaciones estructuradas, citas exactas de páginas de los materiales y analogías pedagógicas.
+Límite conocido: si hay lagunas, el bloque se inyecta en todos los turnos y se reenvía en cada step del tool loop. El tope de cinco recorta tamaño, no repeticiones.
 
-## AI Evals (Evaluación Automatizada)
+## Modos pedagógicos
 
-Se incluyen 4 suites de evaluación reproducibles basadas en Effect:
+1. **Socrático (`socratic`)**: no da la respuesta de golpe; guía con preguntas y pistas.
+2. **Explicativo (`explanatory`)**: explicaciones estructuradas y citas de página.
+
+## AI Evals
 
 ```bash
-# Evalúa la creación de notas y quizzes estructurados con formato JSON válido
 pnpm --filter @proxus/server run eval:tutor:artifact-authoring
-
-# Evalúa que el tutor priorice proactivamente las lagunas de conocimiento del alumno
 pnpm --filter @proxus/server run eval:tutor:knowledge-gap
-
-# Evalúa que en modo socrático el agente guíe con preguntas y no dé la respuesta directa
 pnpm --filter @proxus/server run eval:tutor:socratic
-
-# Evalúa que el agente busque texto antes de renderizar páginas en PDFs extensos
 pnpm --filter @proxus/server run eval:tutor:search
 ```
 
-## Smoke Test Manual CLI
+`eval:tutor:knowledge-gap` compara el mismo prompt con y sin contexto de lagunas, comprueba que un quiz de rescate use anclas válidas y que `knowledge master` se rechace.
+
+Los tests deterministas del corrector están en `packages/server/src/domain/knowledge/gap-progress.test.ts`.
+
+## Smoke test CLI
 
 ```bash
 pnpm --filter @proxus/server run agent:tutor "list my uploaded materials"

@@ -148,8 +148,9 @@ Y documenta cómo copiarlos o generarlos hacia `.data`, por ejemplo con un scrip
 3. En la web, comprueba que aparecen en la sidebar.
 4. Pide al tutor que liste materiales.
 5. Pide una nota, quiz o test basado en páginas concretas.
-6. Abre el artifact generado y prueba resolverlo.
-7. Antes de entregar cambios, ejecuta los checks de [`docs/testing.md`](./testing.md).
+6. Abre el artifact generado, fállalo y comprueba la pestaña **Lagunas**.
+7. Pide un rescate desde el chat vacío y verifica `reinforcesGapId` en el JSON.
+8. Antes de entregar cambios, ejecuta los checks de [`docs/testing.md`](./testing.md).
 
 ## Problemas frecuentes
 

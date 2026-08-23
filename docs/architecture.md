@@ -142,7 +142,7 @@ flowchart TB
     Harness["domain/agents/harness\nAgentSession / tools / skills"]
     MaterialsDomain["domain/materials\nMaterialRepository / PdfService ports"]
     ArtifactsDomain["domain/artifacts\nArtifactRepository / grading"]
-    KnowledgeDomain["domain/knowledge\nKnowledgeRepository / gap tracking"]
+    KnowledgeDomain["domain/knowledge\nresolveGapTransitions / gap context"]
     UserProfileDomain["domain/user-profile\nUserProfileRepository"]
   end
 
@@ -205,7 +205,7 @@ Archivos principales:
 - `packages/server/src/domain/agents/*`: orquestación de tutor, skills y comandos.
 - `packages/server/src/domain/agents/harness/*`: motor de ejecución de tools y sesiones.
 - `packages/server/src/domain/artifacts/*`: ciclo de vida de artefactos (`note`, `quiz`, `test`) y motor de corrección (`gradeAttempt`).
-- `packages/server/src/domain/knowledge/*`: modelo de lagunas de conocimiento (`KnowledgeGap`) y seguimiento de debilidades.
+- `packages/server/src/domain/knowledge/*`: perfil de lagunas, `resolveGapTransitions` (veredicto) y `buildKnowledgeGapContext` (inyección acotada).
 - `packages/server/src/domain/user-profile/*`: perfil de aprendizaje del alumno.
 - `packages/server/src/domain/materials/*`: gestión de PDFs, búsqueda léxica y `deleteMaterialCascade` (PDF + mind map + artefactos con `sourceMaterialId` + lagunas).
 
@@ -239,8 +239,8 @@ Componentes principales:
 - `packages/web/src/components/Sidebar.tsx`: navegación de biblioteca de PDFs, apuntes, quizzes y exámenes.
 - `packages/web/src/components/Chat.tsx`: interfaz del tutor con dictado de voz, menciones `@`, selector de modos e historial.
 - `packages/web/src/components/ArtifactWorkspace.tsx`: visor de notas y simulador interactivo de quizzes/tests con temporizador.
-- `packages/web/src/components/KnowledgeGapsPanel.tsx`: panel de control de lagunas de aprendizaje y tasa de dominio.
-- `packages/web/src/components/MindMapViewer.tsx`: esquemas y mapas mentales 100% dinámicos con zoom y pan espacial.
+- `packages/web/src/components/KnowledgeGapsPanel.tsx`: lagunas con `failCount`, racha `MASTERY_STREAK` y badge de evidencia (`graded-attempt` vs `manual`).
+- `packages/web/src/components/MindMapViewer.tsx`: mapa conceptual por material, con pan y zoom.
 - `packages/web/src/components/PdfSplitViewer.tsx`: visor de PDF con subrayado vectorial y menú contextual flotante para consultar a la IA.
 - `packages/web/src/components/ConversationalOnboarding.tsx`: onboarding guiado para personalización pedagógica.
 - `packages/web/src/components/UserProfileModal.tsx`: gestión de memoria y perfil del estudiante.

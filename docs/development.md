@@ -52,6 +52,7 @@ pnpm run typecheck
 pnpm --filter @proxus/web run build
 pnpm --filter @proxus/server run typecheck
 pnpm --filter @proxus/server run eval:tutor:artifact-authoring
+pnpm --filter @proxus/server run eval:tutor:knowledge-gap
 ```
 
 ## CLI del tutor

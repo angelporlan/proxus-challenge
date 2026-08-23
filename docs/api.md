@@ -31,6 +31,9 @@ La ruta streaming está implementada a mano (`POST /api/tutor/chat/stream`) porq
 GET /api/materials/
 GET /api/materials/:id
 POST /api/materials/upload
+POST /api/materials/:id/pages
+GET /api/materials/:id/mindmap
+POST /api/materials/:id/mindmap/generate
 DELETE /api/materials/:id
 ```
 
@@ -47,7 +50,25 @@ GET /api/artifacts/:id
 POST /api/artifacts/:id/submit
 ```
 
-`submit` crea y corrige un intento, devolviendo un attempt con estado `graded` cuando aplica.
+`submit` crea y corrige un intento, devolviendo un attempt con estado `graded` cuando aplica. El attempt calificado puede incluir `knowledgeUpdates`.
+
+### Knowledge
+
+```http
+GET /api/knowledge/profile
+POST /api/knowledge/gaps/:id/status
+DELETE /api/knowledge/profile
+```
+
+`POST /gaps/:id/status` es el override manual del panel (`masteryEvidence: "manual"`). El dominio verificado por quiz lo escribe el corrector, no este endpoint.
+
+### User profile
+
+```http
+GET /api/user-profile/
+POST /api/user-profile/
+DELETE /api/user-profile/
+```
 
 ## Tipos de artifact
 
@@ -60,6 +81,8 @@ Tipos de pregunta:
 - `multiple-choice`
 - `true-false`
 - `short-answer` solo para tests.
+
+Campo opcional por pregunta: `reinforcesGapId`, para anclar un quiz de rescate a una laguna existente. `artifacts create` rechaza un id que no exista en el perfil.
 
 Formato correcto para multiple choice:
 
