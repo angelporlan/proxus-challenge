@@ -192,4 +192,37 @@ describe("resolveGapTransitions", () => {
       summary: { masteredGapIds: [], reinforcedGapIds: [], newGapIds: [], orphanedAnchorIds: [] }
     });
   });
+
+  it("counts a later correct retry of the original question toward mastery", () => {
+    const failed = resolveGapTransitions(quiz("quiz-1"), graded("quiz-1", false), [], "2026-01-01T00:00:00.000Z");
+    const gapId = failed.upserts[0]!.id;
+
+    const firstRetry = resolveGapTransitions(quiz("quiz-1"), graded("quiz-1", true), failed.upserts, "2026-01-02T00:00:00.000Z");
+    expect(firstRetry.upserts[0]).toMatchObject({ id: gapId, status: "reviewing", correctStreak: 1, failCount: 1 });
+    expect(firstRetry.summary.reinforcedGapIds).toEqual([gapId]);
+    expect(firstRetry.summary.newGapIds).toEqual([]);
+
+    const secondRetry = resolveGapTransitions(quiz("quiz-1"), graded("quiz-1", true), firstRetry.upserts, "2026-01-03T00:00:00.000Z");
+    expect(secondRetry.upserts[0]).toMatchObject({
+      id: gapId,
+      status: "mastered",
+      correctStreak: MASTERY_STREAK,
+      masteryEvidence: "graded-attempt"
+    });
+    expect(secondRetry.summary.masteredGapIds).toEqual([gapId]);
+    expect(secondRetry.summary.reinforcedGapIds).toEqual([]);
+  });
+
+  it("does not credit a correct answer from a different quiz without reinforcesGapId", () => {
+    const failed = resolveGapTransitions(quiz("quiz-1"), graded("quiz-1", false), [], "2026-01-01T00:00:00.000Z");
+    const result = resolveGapTransitions(quiz("quiz-2"), graded("quiz-2", true), failed.upserts, "2026-01-02T00:00:00.000Z");
+
+    expect(result.upserts).toEqual([]);
+    expect(result.summary).toEqual({
+      masteredGapIds: [],
+      reinforcedGapIds: [],
+      newGapIds: [],
+      orphanedAnchorIds: []
+    });
+  });
 });

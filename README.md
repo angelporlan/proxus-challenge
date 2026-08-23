@@ -27,6 +27,7 @@ flowchart TD
 Cada pregunta de quiz o test puede llevar `reinforcesGapId`. Las preguntas ligadas al mismo gap se agregan antes de transicionar, así que el veredicto no depende del orden de las correcciones. Al corregir:
 
 - un fallo sin ancla crea una laguna o incrementa la existente;
+- un acierto posterior en la misma pregunta original (mismo artifact y `questionId`) incrementa `correctStreak`;
 - un fallo con ancla actualiza la laguna original (un intento cuenta como una sola regresión);
 - un acierto anclado incrementa `correctStreak` (varios aciertos en el mismo intento se suman);
 - si el mismo intento mezcla acierto y fallo anclados, gana el fallo y la racha se reinicia;
@@ -42,12 +43,13 @@ El umbral exportado es `MASTERY_STREAK = 2`. Un solo acierto no cierra una lagun
 
 Los campos de progreso de `KnowledgeGap` son opcionales. Así, un `profile.json` anterior sigue decodificando sin caer al perfil vacío. El wrapper de grading añade `knowledgeUpdates` al intento corregido para que el ciclo sea visible en el resultado del quiz y en el acta del simulacro.
 
-El contexto del tutor se construye en `buildKnowledgeGapContext`: ordena por `failCount` descendente, después por `failedAt`, incluye cinco lagunas por defecto, recorta la pregunta a unos 120 caracteres y deja una salida explícita hacia `knowledge gaps`. El bloque se reenvía en cada paso del bucle de herramientas, por lo que el límite tiene impacto multiplicativo en el coste.
+El contexto del tutor se construye en `buildKnowledgeGapContext`: ordena por `failCount` descendente, después por `failedAt`, incluye cinco lagunas por defecto, recorta la pregunta a unos 120 caracteres y deja una salida explícita hacia `knowledge gaps`.
 
 El comando `knowledge master` permanece como guardarraíl, pero rechaza la escritura con una explicación. El panel web sí puede marcar una laguna manualmente; ese estado queda identificado como `masteryEvidence: "manual"`.
 
 ## Límites conocidos
 
+- La inyección de lagunas no está condicionada al tipo de turno. Si hay lagunas activas, el bloque entra en el system prompt y se reenvía en cada paso del bucle de herramientas. El tope de cinco recorta el tamaño, no el número de veces que se paga. Con más tiempo la limitaría a turnos de estudio o repaso, y no la reenviaría en cada step del tool loop.
 - `profile.json` no tiene escrituras transaccionales: dos procesos concurrentes pueden pisarse. Es aceptable para el modo local monousuario; los nuevos campos opcionales evitan perder perfiles antiguos.
 - El qué preguntar sigue siendo criterio del LLM. El sistema hace determinista el veredicto, no la calidad pedagógica de la pregunta.
 - No hay SRS/FSRS. `correctStreak` es un proxy de dominio y no modela la curva de olvido.
@@ -75,7 +77,7 @@ pnpm --filter @proxus/web run build
 pnpm --filter @proxus/server run eval:tutor:knowledge-gap
 ```
 
-Los tests de la máquina de estados, del contexto y de retrocompatibilidad no requieren LLM. La eval sí requiere la clave de Gemini.
+Los tests de la máquina de estados, del contexto y de retrocompatibilidad no requieren LLM. Están en `packages/server/src/domain/knowledge/gap-progress.test.ts` (incluye la mezcla acierto/fallo en el mismo intento), `gap-context.test.ts` y `file-knowledge-repository.test.ts`. La eval sí requiere la clave de Gemini.
 
 ## Demostración manual
 

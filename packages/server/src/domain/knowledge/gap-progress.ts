@@ -31,7 +31,9 @@ interface AnchoredBucket {
  *
  * Linked questions for the same gap are aggregated first so mixed or
  * out-of-order answers in one attempt produce a single, order-independent
- * transition. The optional timestamp is injected by the repository boundary.
+ * transition. A later correct answer on the original source question counts
+ * as evidence, same as a rescue question with `reinforcesGapId`.
+ * The optional timestamp is injected by the repository boundary.
  */
 export const resolveGapTransitions = (
   artifact: Artifact,
@@ -63,6 +65,26 @@ export const resolveGapTransitions = (
     if (!bucket.includes(id)) bucket.push(id);
   };
 
+  const findSourceGap = (questionId: string) =>
+    gapsById.get(`gap-${artifact.id}-${questionId}`)
+    ?? existing.find((gap) => gap.sourceArtifactId === artifact.id && gap.sourceQuestionId === questionId);
+
+  const addToBucket = (gap: KnowledgeGap, isCorrect: boolean, correction: Correction, answer: Answer | undefined) => {
+    const bucket = anchored.get(gap.id) ?? {
+      gap,
+      correctCount: 0,
+      failed: false,
+      lastFailure: undefined
+    };
+    if (isCorrect) {
+      bucket.correctCount += 1;
+    } else {
+      bucket.failed = true;
+      bucket.lastFailure = correctionDetails(artifact, correction, answer);
+    }
+    anchored.set(gap.id, bucket);
+  };
+
   for (const correction of graded.corrections) {
     const answer = graded.answers.find((candidate) => candidate.questionId === correction.questionId);
     if (!isStudentAnswerProvided(answer)) continue;
@@ -83,25 +105,19 @@ export const resolveGapTransitions = (
         continue;
       }
 
-      const bucket = anchored.get(anchorId) ?? {
-        gap: anchoredGap,
-        correctCount: 0,
-        failed: false,
-        lastFailure: undefined
-      };
-      if (isCorrect) {
-        bucket.correctCount += 1;
-      } else {
-        bucket.failed = true;
-        bucket.lastFailure = correctionDetails(artifact, correction, answer);
-      }
-      anchored.set(anchorId, bucket);
+      addToBucket(anchoredGap, isCorrect, correction, answer);
       continue;
     }
 
-    if (!isCorrect) {
-      unanchoredFailures.push({ correction, answer });
+    const sourceGap = findSourceGap(correction.questionId);
+    if (isCorrect) {
+      if (sourceGap !== undefined) {
+        addToBucket(sourceGap, true, correction, answer);
+      }
+      continue;
     }
+
+    unanchoredFailures.push({ correction, answer });
   }
 
   for (const bucket of anchored.values()) {

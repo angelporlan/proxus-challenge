@@ -192,6 +192,35 @@ describe("FileArtifactRepository", () => {
     expect(graded.status === "graded" ? graded.knowledgeUpdates?.reinforcedGapIds : []).toEqual([profile.gaps[0]?.id]);
   });
 
+  it("credits a correct retry of the original quiz toward the existing gap", async () => {
+    const result = await runWithRepositories((artifacts, knowledge) => Effect.gen(function* () {
+      const quiz = yield* artifacts.createArtifact({
+        kind: "quiz",
+        title: "Quiz original",
+        questions: [{ type: "true-false", id: "q1", prompt: "2+2=4", correctAnswer: true, explanation: "Aritmética" }]
+      });
+      const failed = yield* artifacts.submitAttempt({
+        artifactKind: "quiz",
+        artifactId: quiz.id,
+        answers: [{ questionType: "true-false", questionId: "q1", answer: false }]
+      });
+      yield* artifacts.gradeAttempt(failed.id);
+
+      const retry = yield* artifacts.submitAttempt({
+        artifactKind: "quiz",
+        artifactId: quiz.id,
+        answers: [{ questionType: "true-false", questionId: "q1", answer: true }]
+      });
+      const graded = yield* artifacts.gradeAttempt(retry.id);
+      return { graded, profile: yield* knowledge.getProfile() };
+    }));
+
+    const { graded, profile } = result;
+    expect(profile.gaps).toHaveLength(1);
+    expect(profile.gaps[0]).toMatchObject({ status: "reviewing", correctStreak: 1, failCount: 1 });
+    expect(graded.status === "graded" ? graded.knowledgeUpdates?.reinforcedGapIds : []).toEqual([profile.gaps[0]?.id]);
+  });
+
   it("persists orphaned anchors on the graded attempt and still records the failure", async () => {
     const result = await runWithRepositories((artifacts, knowledge) => Effect.gen(function* () {
       const quiz = yield* artifacts.createArtifact({
